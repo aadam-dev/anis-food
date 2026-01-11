@@ -1,0 +1,65 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@400;500;600;700;800;900&family=Playfair+Display:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+:root {
+  /* Brand Colors */
+  --color-primary-red: #DC2626;
+  --color-accent-orange: #F97316;
+  --color-neutral-black: #1F2937;
+  --color-success-cta: #10B981;
+  --color-background: #FFFFFF;
+  --color-background-light: #F9FAFB;
+  
+  /* Typography */
+  --font-heading: 'Poppins', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-display: 'Playfair Display', serif;
+}
+
+@theme inline {
+  --color-primary-red: var(--color-primary-red);
+  --color-accent-orange: var(--color-accent-orange);
+  --color-neutral-black: var(--color-neutral-black);
+  --color-success-cta: var(--color-success-cta);
+  --color-background: var(--color-background);
+  --color-background-light: var(--color-background-light);
+  
+  --font-heading: var(--font-heading);
+  --font-body: var(--font-body);
+  --font-display: var(--font-display);
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-neutral-black);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+}
+
+.display-font {
+  font-family: var(--font-display);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-background-light);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-primary-red);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-accent-orange);
+}
