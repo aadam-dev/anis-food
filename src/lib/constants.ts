@@ -7,10 +7,10 @@ export const BUSINESS_INFO = {
     lat: 5.681335700000001,
     lng: -0.1284039,
   },
-  // Social media handles - update with actual handles when available
+  // Social media handles
   socialMedia: {
-    instagram: null, // Update with actual Instagram handle (e.g., "https://instagram.com/anisfoodanddrink")
-    facebook: null, // Update with actual Facebook page URL
+    instagram: "https://www.instagram.com/anisfooddrink/",
+    facebook: "https://www.facebook.com/anisfooddrink/",
     whatsapp: "https://wa.me/233501600160",
     twitter: null, // Update if Twitter account exists
   },
