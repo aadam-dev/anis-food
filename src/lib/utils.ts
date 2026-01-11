@@ -1,20 +1,45 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 
+/**
+ * Utility function to merge Tailwind CSS classes
+ * Handles conflicts and conditional classes
+ */
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/**
+ * Formats a price value as Ghana Cedis (GHS)
+ * @param price - The price value to format
+ * @returns Formatted price string (e.g., "GHS 50.00")
+ */
 export function formatPrice(price: number): string {
   return `GHS ${price.toFixed(2)}`;
 }
 
+/**
+ * Removes all non-digit characters from a phone number string
+ * @param phone - The phone number string to format
+ * @returns Phone number with only digits
+ */
 export function formatPhoneNumber(phone: string): string {
-  // Remove all non-digit characters
   const digits = phone.replace(/\D/g, "");
   return digits;
 }
 
+/**
+ * Generates a formatted WhatsApp message for order submission
+ * The message includes customer details, order items, and total
+ * @param name - Customer name
+ * @param phone - Customer phone number
+ * @param address - Delivery or pickup address
+ * @param items - Array of ordered items with quantity and price
+ * @param deliveryType - "pickup" or "delivery"
+ * @param total - Total order amount
+ * @param notes - Optional additional notes from customer
+ * @returns URL-encoded WhatsApp message string
+ */
 export function generateWhatsAppOrderMessage(
   name: string,
   phone: string,

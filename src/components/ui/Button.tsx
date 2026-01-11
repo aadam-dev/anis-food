@@ -1,6 +1,10 @@
 import { ButtonHTMLAttributes, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
+/**
+ * Button component with multiple variants and sizes
+ * Supports all standard HTML button attributes
+ */
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary" | "outline" | "ghost" | "success";
   size?: "sm" | "md" | "lg";
