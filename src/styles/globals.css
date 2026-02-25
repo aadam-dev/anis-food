@@ -1,0 +1,124 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@400;500;600;700;800;900&family=Playfair+Display:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+:root {
+  /* Brand Colors */
+  --color-primary-red: #DC2626;
+  --color-accent-orange: #F97316;
+  --color-neutral-black: #1F2937;
+  --color-success-cta: #10B981;
+  --color-background: #FFFFFF;
+  --color-background-light: #F9FAFB;
+  
+  /* Typography */
+  --font-heading: 'Poppins', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-display: 'Playfair Display', serif;
+}
+
+@theme inline {
+  --color-primary-red: var(--color-primary-red);
+  --color-accent-orange: var(--color-accent-orange);
+  --color-neutral-black: var(--color-neutral-black);
+  --color-neutral-gray: var(--color-neutral-gray);
+  --color-success-cta: var(--color-success-cta);
+  --color-background: var(--color-background);
+  --color-background-light: var(--color-background-light);
+  
+  --font-heading: var(--font-heading);
+  --font-body: var(--font-body);
+  --font-display: var(--font-display);
+
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-scale-in: scale-in 0.2s ease-out;
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-20px); }
+  }
+  @keyframes scale-in {
+    0% { transform: scale(0.95); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+}
+
+:root {
+  /* Brand Colors - Sophisticated Palette */
+  --color-primary-red: #D21F3C; /* Slightly deeper, more premium red */
+  --color-accent-orange: #FF8c42; /* Vibrant orange for highlights */
+  --color-neutral-black: #1A1A1A; /* Rich black */
+  --color-neutral-gray: #4A4A4A; /* Soft text gray */
+  --color-success-cta: #059669; /* Profound green */
+  --color-background: #FFFFFF;
+  --color-background-light: #FAFAFA; /* Warm off-white */
+  
+  /* Typography */
+  --font-heading: 'Poppins', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-display: 'Playfair Display', serif;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-neutral-black);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+}
+
+.display-font {
+  font-family: var(--font-display);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-background-light);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-primary-red);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-accent-orange);
+}
+
+/* Tactile Modernism: subtle grain overlay for hero and key sections. Use on a child of a position-relative container. */
+.grain-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.04;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+}
+
+/* Print: hide shell, show only receipt area for clean print/save as PDF */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  [data-receipt],
+  [data-receipt] * {
+    visibility: visible;
+  }
+  [data-receipt] {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    max-width: none;
+    box-shadow: none;
+    border: none;
+  }
+}
