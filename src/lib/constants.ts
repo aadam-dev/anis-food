@@ -30,7 +30,7 @@ export const BUSINESS_INFO = {
   hours: {
     weekdays: "8:00 AM - 10:00 PM",
     saturday: "9:00 AM - 11:00 PM",
-    sunday: "12:00 PM - 12:00 AM",
+    sunday: "12:00 PM - 10:00 PM",
   },
   // Timezone for live Open/Closed (IANA)
   timezone: "Africa/Accra",
@@ -38,7 +38,7 @@ export const BUSINESS_INFO = {
   hoursStructured: {
     weekdays: { open: "08:00", close: "22:00" }, // Mon–Fri
     saturday: { open: "09:00", close: "23:00" },
-    sunday: { open: "12:00", close: "24:00" }, // 12 PM – midnight
+    sunday: { open: "12:00", close: "22:00" }, // 12 PM – 10 PM
   },
   // Optional hero video path (e.g. "/videos/hero.mp4"). Set to enable video background; image used as poster and fallback.
   heroVideoPath: null as string | null,
