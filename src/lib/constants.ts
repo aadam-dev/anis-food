@@ -29,14 +29,16 @@ export const BUSINESS_INFO = {
   // Operating hours (display strings)
   hours: {
     weekdays: "8:00 AM - 10:00 PM",
-    weekends: "9:00 AM - 11:00 PM",
+    saturday: "9:00 AM - 11:00 PM",
+    sunday: "12:00 PM - 12:00 AM",
   },
   // Timezone for live Open/Closed (IANA)
   timezone: "Africa/Accra",
   // Machine-readable hours for live status (24h "HH:mm")
   hoursStructured: {
     weekdays: { open: "08:00", close: "22:00" }, // Mon–Fri
-    weekends: { open: "09:00", close: "23:00" }, // Sat–Sun
+    saturday: { open: "09:00", close: "23:00" },
+    sunday: { open: "12:00", close: "24:00" }, // 12 PM – midnight
   },
   // Optional hero video path (e.g. "/videos/hero.mp4"). Set to enable video background; image used as poster and fallback.
   heroVideoPath: null as string | null,

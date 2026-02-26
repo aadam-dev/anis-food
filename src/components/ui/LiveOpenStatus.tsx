@@ -35,7 +35,8 @@ export default function LiveOpenStatus({
       <div className={className}>
         <p className="text-gray-600">
           <span className="block">Mon-Fri: {BUSINESS_INFO.hours.weekdays}</span>
-          <span className="block">Sat-Sun: {BUSINESS_INFO.hours.weekends}</span>
+          <span className="block">Sat: {BUSINESS_INFO.hours.saturday}</span>
+          <span className="block">Sun: {BUSINESS_INFO.hours.sunday}</span>
         </p>
       </div>
     );
@@ -62,7 +63,8 @@ export default function LiveOpenStatus({
     <div className={className}>
       <p className="text-gray-600">
         <span className="block">Mon-Fri: {BUSINESS_INFO.hours.weekdays}</span>
-        <span className="block">Sat-Sun: {BUSINESS_INFO.hours.weekends}</span>
+        <span className="block">Sat: {BUSINESS_INFO.hours.saturday}</span>
+        <span className="block">Sun: {BUSINESS_INFO.hours.sunday}</span>
       </p>
       <p className="mt-2 text-sm font-medium">
         <span

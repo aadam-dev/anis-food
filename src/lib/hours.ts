@@ -2,12 +2,26 @@
  * Live Open/Closed status based on business hours and timezone.
  */
 
-const WEEKEND_IDS = [0, 6]; // Sun, Sat
-
 export type HoursStructured = {
   weekdays: { open: string; close: string };
-  weekends: { open: string; close: string };
+  saturday: { open: string; close: string };
+  sunday: { open: string; close: string };
 };
+
+export type HoursDisplay = {
+  weekdays: string;
+  saturday: string;
+  sunday: string;
+};
+
+function getHoursForDay(
+  dayOfWeek: number,
+  hoursStructured: HoursStructured
+): { open: string; close: string } {
+  if (dayOfWeek === 0) return hoursStructured.sunday;
+  if (dayOfWeek === 6) return hoursStructured.saturday;
+  return hoursStructured.weekdays;
+}
 
 export interface OpenStatus {
   isOpen: boolean;
@@ -55,11 +69,13 @@ function getLocalTimeInZone(timezone: string): {
 
 function parseTimeHHmm(s: string): number {
   const [h, m] = s.split(":").map(Number);
-  return (h ?? 0) * 60 + (m ?? 0);
+  const hours = h ?? 0;
+  const mins = m ?? 0;
+  return (hours === 24 ? 24 * 60 : hours * 60) + mins;
 }
 
 function formatMinutesToDisplay(totalMinutes: number): string {
-  const h = Math.floor(totalMinutes / 60);
+  const h = Math.floor(totalMinutes / 60) % 24; // 24:00 → 0 for display
   const m = totalMinutes % 60;
   if (h === 0) return `12:${String(m).padStart(2, "0")} AM`;
   if (h < 12) return `${h}:${String(m).padStart(2, "0")} AM`;
@@ -72,17 +88,13 @@ function formatMinutesToDisplay(totalMinutes: number): string {
  */
 export function getOpenStatus(
   timezone: string,
-  hoursDisplay: { weekdays: string; weekends: string },
+  hoursDisplay: HoursDisplay,
   hoursStructured: HoursStructured
 ): OpenStatus {
   const { hour, minute, dayOfWeek } = getLocalTimeInZone(timezone);
   const currentMinutes = hour * 60 + minute;
 
-  const isWeekend = WEEKEND_IDS.includes(dayOfWeek);
-  const { open, close } = isWeekend
-    ? hoursStructured.weekends
-    : hoursStructured.weekdays;
-
+  const { open, close } = getHoursForDay(dayOfWeek, hoursStructured);
   const openMinutes = parseTimeHHmm(open);
   const closeMinutes = parseTimeHHmm(close);
 
@@ -91,8 +103,12 @@ export function getOpenStatus(
     // e.g. open 22:00, close 02:00 next day
     isOpen = currentMinutes >= openMinutes || currentMinutes < closeMinutes;
   }
-
-  const todayLabel = isWeekend ? hoursDisplay.weekends : hoursDisplay.weekdays;
+  const todayLabel =
+    dayOfWeek === 0
+      ? hoursDisplay.sunday
+      : dayOfWeek === 6
+        ? hoursDisplay.saturday
+        : hoursDisplay.weekdays;
 
   return {
     isOpen,
