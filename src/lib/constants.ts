@@ -19,7 +19,7 @@ export const BUSINESS_INFO = {
     facebook: "https://www.facebook.com/anisfooddrink/",
     whatsapp: "https://wa.me/233552501280",
     x: null as string | null,
-    tiktok: "https://www.tiktok.com/@anisfood",
+    tiktok: "https://www.tiktok.com/@anisfood", // @anisfood
   },
   // Delivery platforms
   deliveryPlatforms: {
