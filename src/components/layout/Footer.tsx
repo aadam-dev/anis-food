@@ -4,8 +4,9 @@
  * Site footer: brand, nav links, address, hours, phone, newsletter, and order links.
  */
 import Link from "next/link";
-import { Phone, MapPin, Clock, Instagram, Facebook, MessageCircle, Video } from "lucide-react";
+import { Phone, MapPin, Clock, Instagram, Facebook, MessageCircle, Video, LogIn } from "lucide-react";
 import { BUSINESS_INFO, NAVIGATION_ITEMS } from "@/lib/constants";
+import { DEVELOPER_CREDIT } from "@/lib/developer-credit";
 import LiveOpenStatus from "@/components/ui/LiveOpenStatus";
 
 export default function Footer() {
@@ -112,11 +113,34 @@ export default function Footer() {
           <p className="text-gray-500 text-sm">
             © {currentYear} Anis Food and Drink. All rights reserved.
           </p>
-          <div className="flex gap-6">
+          <div className="flex flex-wrap justify-center gap-6">
             <Link href="/privacy" className="text-gray-500 hover:text-white text-sm">Privacy Policy</Link>
             <Link href="/terms" className="text-gray-500 hover:text-white text-sm">Terms of Service</Link>
+            {/* Staff door. Deliberately labelled "Staff" and kept out of the main
+                nav: an unqualified "Sign in" up there reads to a customer as
+                "you need an account to order", which is not true and would cost
+                orders. Here it is on every page for the people who need it. */}
+            <Link
+              href="/login"
+              className="text-gray-500 hover:text-white text-sm inline-flex items-center gap-1.5"
+            >
+              <LogIn className="w-3.5 h-3.5" aria-hidden />
+              Staff sign in
+            </Link>
           </div>
         </div>
+
+        {/* Sits below the copyright so it reads as a signature, not an ad. */}
+        <p className="pt-6 text-center text-gray-600 text-xs">
+          <a
+            href={DEVELOPER_CREDIT.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-gray-400 transition-colors"
+          >
+            {DEVELOPER_CREDIT.label}
+          </a>
+        </p>
       </div>
     </footer>
   );

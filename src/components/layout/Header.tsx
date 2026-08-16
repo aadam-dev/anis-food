@@ -7,7 +7,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Menu, X, Phone, ShoppingCart } from "lucide-react";
+import { Menu, X, Phone, ShoppingCart, LogIn } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Navigation from "./Navigation";
 import Button from "@/components/ui/Button";
@@ -166,6 +166,25 @@ export default function Header() {
                         {cartCount}
                       </span>
                     )}
+                  </Link>
+                </motion.div>
+
+                {/* Staff, not customers. Set apart at the bottom and clearly
+                    labelled, so it never competes with Order Now — but it is
+                    one tap away on the phone the cashier is already holding. */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.25 }}
+                  className="pt-3 border-t border-gray-100"
+                >
+                  <Link
+                    href="/login"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-3 text-neutral-gray hover:text-primary-red py-3 px-4 rounded-xl hover:bg-gray-50 transition-colors text-sm font-medium"
+                  >
+                    <LogIn className="w-5 h-5 shrink-0" />
+                    <span>Staff sign in</span>
                   </Link>
                 </motion.div>
               </div>

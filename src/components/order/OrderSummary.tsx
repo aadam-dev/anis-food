@@ -10,7 +10,10 @@ interface OrderSummaryProps {
   items: OrderItem[];
   onUpdateQuantity: (itemId: string, quantity: number) => void;
   onRemoveItem: (itemId: string) => void;
-  /** If true, show VAT breakdown (Subtotal, VAT, Total). Default true. */
+  /**
+   * Show the VAT breakdown. Only ever rendered when the configured rate is
+   * above zero — Anis charges none, so the customer just sees a total.
+   */
   showVat?: boolean;
 }
 
@@ -97,7 +100,7 @@ export default function OrderSummary({
         ))}
       </div>
       <div className="border-t border-gray-200 pt-4 space-y-2">
-        {showVat && (
+        {showVat && totals.vatRate > 0 && (
           <>
             <div className="flex justify-between text-sm text-gray-600">
               <span>Subtotal (ex-VAT):</span>

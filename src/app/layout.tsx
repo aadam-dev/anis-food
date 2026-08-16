@@ -31,10 +31,13 @@ const playfair = Playfair_Display({
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://aniseatery.com";
 
 export const viewport: Viewport = {
-  themeColor: "#DC2626",
+  themeColor: "#F70E07",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
+  // Deliberately no maximumScale here. Blocking pinch-zoom on a public page
+  // stops anyone with poor eyesight from reading the menu, which is the one
+  // thing the site exists to show. The till locks zoom in its own layout, where
+  // a stray two-finger touch mid-service is the real risk.
 };
 
 export const metadata: Metadata = {
@@ -48,6 +51,13 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: "default",
     title: "Anis",
+  },
+  icons: {
+    icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
   formatDetection: {
     telephone: false,

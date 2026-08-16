@@ -116,7 +116,7 @@ export function generateWhatsAppOrderMessage(
   deliveryType: "pickup" | "delivery",
   total: number,
   notes?: string,
-  options?: { orderRef?: string; subtotal?: number; vat?: number }
+  options?: { orderRef?: string; subtotal?: number; vat?: number; vatRate?: number }
 ): string {
   const itemList = items
     .map((item) => `${item.quantity}x ${item.name} - GHS ${(item.price * item.quantity).toFixed(2)}`)
@@ -126,9 +126,12 @@ export function generateWhatsAppOrderMessage(
   message += `📞 Phone: ${phone}\n`;
   message += `📍 ${deliveryType === "delivery" ? "Delivery" : "Pickup"}: ${address}\n\n`;
   message += `*Order Details:*\n${itemList}\n\n`;
-  if (options?.subtotal != null && options?.vat != null) {
+  // Anis charges no VAT, so the message the kitchen receives is just a total.
+  // The rate is read from config rather than hardcoded, so these lines come back
+  // correctly labelled if VAT is ever switched on.
+  if (options?.subtotal != null && options?.vat != null && (options.vatRate ?? 0) > 0) {
     message += `Subtotal (ex-VAT): GHS ${options.subtotal.toFixed(2)}\n`;
-    message += `VAT (12.5%): GHS ${options.vat.toFixed(2)}\n`;
+    message += `VAT (${(options.vatRate! * 100).toFixed(1)}%): GHS ${options.vat.toFixed(2)}\n`;
   }
   message += `💰 *Total: GHS ${total.toFixed(2)}*\n\n`;
   if (notes) {

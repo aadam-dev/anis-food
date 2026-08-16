@@ -89,6 +89,7 @@ export default function OrderForm({
         orderRef: ref,
         subtotal: totals.subtotal,
         vat: totals.vat,
+        vatRate: totals.vatRate,
       }
     );
     const whatsappUrl = `https://wa.me/${BUSINESS_INFO.phoneSecondary.replace(/\D/g, "")}?text=${message}`;
@@ -207,16 +208,18 @@ export default function OrderForm({
               </div>
             ))}
           </div>
-          <div className="mt-3 pt-3 border-t border-gray-300 space-y-1 text-sm text-gray-600">
-            <div className="flex justify-between">
-              <span>Subtotal (ex-VAT):</span>
-              <span>{formatPrice(totals.subtotal)}</span>
+          {totals.vatRate > 0 && (
+            <div className="mt-3 pt-3 border-t border-gray-300 space-y-1 text-sm text-gray-600">
+              <div className="flex justify-between">
+                <span>Subtotal (ex-VAT):</span>
+                <span>{formatPrice(totals.subtotal)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>VAT ({(totals.vatRate * 100).toFixed(1)}%):</span>
+                <span>{formatPrice(totals.vat)}</span>
+              </div>
             </div>
-            <div className="flex justify-between">
-              <span>VAT ({(totals.vatRate * 100).toFixed(1)}%):</span>
-              <span>{formatPrice(totals.vat)}</span>
-            </div>
-          </div>
+          )}
           <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-300">
             <span className="font-bold text-lg">Total:</span>
             <span className="font-bold text-xl text-[#DC2626]">

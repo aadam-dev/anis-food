@@ -1,45 +1,53 @@
 {
+  "id": "/",
   "name": "Anis Food and Drink",
   "short_name": "Anis",
-  "description": "Restaurant management: POS, admin, and financial reports for Anis Food and Drink, Accra.",
-  "start_url": "/admin",
+  "description": "Authentic Ghanaian cuisine in Madina, Accra. Browse the menu, order on WhatsApp, book a table.",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "theme_color": "#DC2626",
+  "theme_color": "#F70E07",
   "background_color": "#FFFFFF",
-  "categories": ["business", "food"],
+  "categories": ["food", "lifestyle"],
   "icons": [
     {
-      "src": "/icons/icon-192.svg",
+      "src": "/icons/icon-192.png",
       "sizes": "192x192",
-      "type": "image/svg+xml",
-      "purpose": "maskable any"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
-      "src": "/icons/icon-512.svg",
+      "src": "/icons/icon-512.png",
       "sizes": "512x512",
-      "type": "image/svg+xml"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "shortcuts": [
     {
-      "name": "Open POS",
-      "short_name": "POS",
-      "url": "/pos",
-      "icons": [{ "src": "/icons/icon-192.svg", "sizes": "192x192" }]
+      "name": "See the menu",
+      "short_name": "Menu",
+      "url": "/menu",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
-      "name": "Admin Dashboard",
-      "short_name": "Admin",
-      "url": "/admin",
-      "icons": [{ "src": "/icons/icon-192.svg", "sizes": "192x192" }]
-    },
-    {
-      "name": "Financial Reports",
-      "short_name": "Finance",
-      "url": "/admin/financial",
-      "icons": [{ "src": "/icons/icon-192.svg", "sizes": "192x192" }]
+      "name": "Book a table",
+      "short_name": "Book",
+      "url": "/reservations",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]
 }

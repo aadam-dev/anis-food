@@ -1,33 +1,53 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@400;500;600;700;800;900&family=Playfair+Display:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
+/**
+ * Brand tokens, sampled from public/images/logo-brand.png.
+ *
+ * There used to be two :root blocks here declaring different palettes, with the
+ * second silently overriding the first — and components hardcoding a third set
+ * of hexes that matched neither. One block now, and components consume these
+ * variables rather than literals.
+ *
+ * --anis-red is the logo red. It is deliberately not used for anything carrying
+ * small text: white on #F70E07 is 4.18:1, which fails WCAG AA for body copy and
+ * is genuinely hard to read on a phone in Accra daylight. --anis-red-ui is the
+ * same hue darkened to 5.4:1 and is what buttons, links and badges use.
+ */
 :root {
-  /* Brand Colors */
-  --color-primary-red: #DC2626;
-  --color-accent-orange: #F97316;
-  --color-neutral-black: #1F2937;
-  --color-success-cta: #10B981;
+  /* Brand */
+  --color-primary-red: #F70E07;      /* logo red — large areas, accents, never text-on */
+  --color-primary-red-ui: #D40D06;   /* AA-compliant red — buttons, links, text-on */
+  --color-primary-red-dark: #A80A05; /* hover/active */
+  --color-accent-orange: #F07704;    /* logo spoon — highlights, attention states only */
+  --color-neutral-black: #060807;    /* logo wordmark — ink */
+  --color-neutral-gray: #4A4A4A;
+  --color-success-cta: #059669;
   --color-background: #FFFFFF;
-  --color-background-light: #F9FAFB;
-  
+  --color-background-light: #FAFAFA;
+
   /* Typography */
   --font-heading: 'Poppins', sans-serif;
   --font-body: 'Inter', sans-serif;
   --font-display: 'Playfair Display', serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 @theme inline {
   --color-primary-red: var(--color-primary-red);
+  --color-primary-red-ui: var(--color-primary-red-ui);
+  --color-primary-red-dark: var(--color-primary-red-dark);
   --color-accent-orange: var(--color-accent-orange);
   --color-neutral-black: var(--color-neutral-black);
   --color-neutral-gray: var(--color-neutral-gray);
   --color-success-cta: var(--color-success-cta);
   --color-background: var(--color-background);
   --color-background-light: var(--color-background-light);
-  
+
   --font-heading: var(--font-heading);
   --font-body: var(--font-body);
   --font-display: var(--font-display);
+  --font-mono: var(--font-mono);
 
   --animate-float: float 6s ease-in-out infinite;
   --animate-scale-in: scale-in 0.2s ease-out;
@@ -39,22 +59,6 @@
     0% { transform: scale(0.95); opacity: 0; }
     100% { transform: scale(1); opacity: 1; }
   }
-}
-
-:root {
-  /* Brand Colors - Sophisticated Palette */
-  --color-primary-red: #D21F3C; /* Slightly deeper, more premium red */
-  --color-accent-orange: #FF8c42; /* Vibrant orange for highlights */
-  --color-neutral-black: #1A1A1A; /* Rich black */
-  --color-neutral-gray: #4A4A4A; /* Soft text gray */
-  --color-success-cta: #059669; /* Profound green */
-  --color-background: #FFFFFF;
-  --color-background-light: #FAFAFA; /* Warm off-white */
-  
-  /* Typography */
-  --font-heading: 'Poppins', sans-serif;
-  --font-body: 'Inter', sans-serif;
-  --font-display: 'Playfair Display', serif;
 }
 
 body {
@@ -92,6 +96,90 @@ h1, h2, h3, h4, h5, h6 {
   background: var(--color-accent-orange);
 }
 
+/* ===========================================================================
+   Back office (/admin) and till (/pos)
+   ---------------------------------------------------------------------------
+   A separate surface palette from the public site. Applied by putting
+   data-surface="admin" or "pos" on the route group's wrapper, with
+   data-theme="light" | "dark" chosen from Settings.
+
+   Defaults: the till is dark (less glare across a long shift, easier on the
+   eyes at a counter, kinder to an OLED phone battery) and the admin is light
+   (reports are read, not glanced at). Both are switchable in Settings, which is
+   why every colour below is a token rather than a literal.
+   =========================================================================== */
+
+[data-surface] {
+  --s-radius: 0.625rem;
+  --s-brand: var(--color-primary-red-ui);
+  --s-brand-strong: var(--color-primary-red);
+  --s-accent: var(--color-accent-orange);
+  --s-good: #059669;
+  --s-bad: #DC2626;
+  --s-warn: #B45309;
+
+  background: var(--s-bg);
+  color: var(--s-ink);
+  font-family: var(--font-body);
+}
+
+/* Light surface — the default for /admin */
+[data-surface][data-theme="light"] {
+  --s-bg: #F7F6F4;
+  --s-panel: #FFFFFF;
+  --s-panel-alt: #FBFAF9;
+  --s-ink: #1A1614;
+  --s-ink-muted: #6B635E;
+  --s-ink-faint: #9A918B;
+  --s-border: #E4E0DB;
+  --s-border-strong: #CFC9C2;
+  --s-hover: #F2EFEC;
+}
+
+/* Dark surface — the default for /pos */
+[data-surface][data-theme="dark"] {
+  --s-bg: #121110;
+  --s-panel: #1B1A18;
+  --s-panel-alt: #232120;
+  --s-ink: #F5F2F0;
+  --s-ink-muted: #A39C97;
+  --s-ink-faint: #736C67;
+  --s-border: #2E2B29;
+  --s-border-strong: #423E3B;
+  --s-hover: #252322;
+  /* The logo red is too dark to read against #121110, so the dark surface
+     brightens it back toward the logo rather than dimming further. */
+  --s-brand: #FF3B2F;
+  --s-good: #34D399;
+  --s-bad: #F87171;
+  --s-warn: #FBBF24;
+}
+
+/* Logo variants. The public site has no [data-theme], so it gets the standard
+   dark-wordmark logo by default; the back office swaps per theme. */
+.logo-for-dark {
+  display: none;
+}
+[data-theme="dark"] .logo-for-light {
+  display: none;
+}
+[data-theme="dark"] .logo-for-dark {
+  display: block;
+}
+
+/* Money must line up column to column. Tabular figures, always. */
+.money {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Touch targets at the till: a mis-tap during service costs a real correction. */
+[data-surface="pos"] button,
+[data-surface="pos"] [role="button"] {
+  min-height: 2.75rem;
+}
+
 /* Tactile Modernism: subtle grain overlay for hero and key sections. Use on a child of a position-relative container. */
 .grain-overlay {
   position: absolute;
@@ -103,22 +191,103 @@ h1, h2, h3, h4, h5, h6 {
   background-repeat: repeat;
 }
 
-/* Print: hide shell, show only receipt area for clean print/save as PDF */
+/* ===========================================================================
+   Thermal receipt — 80mm paper, 72mm printable
+   ---------------------------------------------------------------------------
+   Always black on white regardless of the till's theme: thermal paper has one
+   colour, and a "dark mode" receipt prints as a solid black rectangle that eats
+   a roll and comes out unreadable.
+   =========================================================================== */
+.anis-receipt {
+  width: 72mm;
+  background: #fff;
+  color: #000;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.35;
+  padding: 2mm 0;
+}
+
+.anis-receipt--preview {
+  margin: 0 auto;
+  border: 1px solid var(--s-border, #ddd);
+  border-radius: 6px;
+  padding: 4mm 3mm;
+  max-width: 100%;
+}
+
+.anis-receipt .r-center { text-align: center; }
+.anis-receipt .r-title { font-size: 15px; font-weight: 700; letter-spacing: 0.02em; }
+.anis-receipt .r-small { font-size: 10px; }
+.anis-receipt .r-note { font-size: 9px; padding-left: 1mm; }
+.anis-receipt .r-spacer { height: 2mm; }
+
+/* The call number. Deliberately oversized — it is read from across a room. */
+.anis-receipt .r-callno {
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.05;
+}
+
+.anis-receipt .r-rule {
+  border-top: 1px dashed #000;
+  margin: 1.5mm 0;
+}
+
+.anis-receipt .r-table { width: 100%; border-collapse: collapse; }
+.anis-receipt .r-table td { vertical-align: top; padding: 0.4mm 0; }
+.anis-receipt .r-qty { width: 6mm; }
+.anis-receipt .r-amt { text-align: right; white-space: nowrap; padding-left: 2mm; }
+
+.anis-receipt .r-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 3mm;
+}
+.anis-receipt .r-total { font-size: 14px; font-weight: 700; margin: 1mm 0; }
+.anis-receipt .r-change { font-weight: 700; }
+
+/* Print: show only the receipt.
+   Two selectors because the public site's WhatsApp order receipt uses
+   [data-receipt] and the till uses [data-anis-receipt]. They must not hide
+   each other when both stylesheets are loaded. */
 @media print {
+  @page {
+    size: 80mm auto;
+    margin: 0;
+  }
+
   body * {
     visibility: hidden;
   }
+
   [data-receipt],
-  [data-receipt] * {
+  [data-receipt] *,
+  [data-anis-receipt],
+  [data-anis-receipt] * {
     visibility: visible;
   }
-  [data-receipt] {
+
+  [data-receipt],
+  [data-anis-receipt] {
     position: absolute;
     left: 0;
     top: 0;
-    width: 100%;
-    max-width: none;
     box-shadow: none;
     border: none;
+  }
+
+  [data-receipt] {
+    width: 100%;
+    max-width: none;
+  }
+
+  /* The thermal receipt keeps its exact width; stretching it to the page would
+     wrap every line in the wrong place. */
+  [data-anis-receipt] {
+    width: 72mm;
+    border-radius: 0;
+    padding: 0;
+    margin: 0;
   }
 }

@@ -1,0 +1,461 @@
+// Anis Food and Drink — back office & POS schema.
+//
+// Money is always Decimal(10,2). Never store a JS float: 0.1 + 0.2 is not 0.3,
+// and a till that drifts by a pesewa a day is a till nobody trusts by Christmas.
+// All arithmetic goes through src/lib/money.ts and src/lib/cash.ts.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------------------------------------------------------------------------
+// People & access
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  OWNER // Karim — the founder
+  SUPER_ADMIN // IT@anis.com — everything, plus user management. Audited.
+  MANAGER
+  ACCOUNTANT
+  CASHIER
+}
+
+model User {
+  id                    String    @id @default(cuid())
+  email                 String    @unique
+  name                  String
+  passwordHash          String
+  /// bcrypt hash of the 4-digit till PIN. Null until the staff member sets one.
+  pinHash               String?
+  role                  UserRole  @default(CASHIER)
+  isActive              Boolean   @default(true)
+  /// Forces a password change on next sign-in (set by an admin reset).
+  passwordResetRequired Boolean   @default(false)
+  lastLoginAt           DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  staffProfile   StaffProfile?
+  openedSessions PosSession[]    @relation("SessionOpenedBy")
+  closedSessions PosSession[]    @relation("SessionClosedBy")
+  cashMovements  CashMovement[]
+  orders         Order[]         @relation("OrderStaff")
+  orderEvents    OrderEvent[]
+  payrollRecords PayrollRecord[]
+  auditLogs      AuditLog[]
+
+  @@index([role, isActive])
+}
+
+enum SalaryType {
+  MONTHLY
+  DAILY
+  HOURLY
+}
+
+model StaffProfile {
+  id           String     @id @default(cuid())
+  userId       String     @unique
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  phone        String?
+  salaryType   SalaryType @default(MONTHLY)
+  salaryAmount Decimal    @default(0) @db.Decimal(10, 2)
+  bankName     String?
+  bankAccount  String?
+  momoNumber   String?
+  startedAt    DateTime?
+  notes        String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// The shift / cash drawer — the spine of the accounting
+// ---------------------------------------------------------------------------
+
+enum SessionStatus {
+  OPEN
+  CLOSED
+}
+
+model PosSession {
+  id       String        @id @default(cuid())
+  status   SessionStatus @default(OPEN)
+  openedAt DateTime      @default(now())
+  closedAt DateTime?
+
+  openedById String
+  openedBy   User    @relation("SessionOpenedBy", fields: [openedById], references: [id])
+  closedById String?
+  closedBy   User?   @relation("SessionClosedBy", fields: [closedById], references: [id])
+
+  /// Cash placed in the drawer at open.
+  openingFloat Decimal  @db.Decimal(10, 2)
+  /// Opening MoMo float. Null means "never recorded" — which is NOT the same as
+  /// zero, and the reports must keep saying so rather than quietly showing 0.00.
+  openingMomo  Decimal? @db.Decimal(10, 2)
+
+  closingCash Decimal? @db.Decimal(10, 2)
+  closingMomo Decimal? @db.Decimal(10, 2)
+
+  /// What the drawer *should* hold, snapshotted at close so a later menu-price
+  /// edit can never retroactively change a reconciled shift.
+  expectedCash Decimal? @db.Decimal(10, 2)
+  expectedMomo Decimal? @db.Decimal(10, 2)
+
+  /// Denomination breakdown from the counter, e.g. { "50": 3, "20": 11 }.
+  cashCount Json?
+
+  notes String?
+
+  orders        Order[]
+  cashMovements CashMovement[]
+
+  @@index([status, openedAt])
+  @@index([openedById, openedAt])
+}
+
+enum CashDirection {
+  IN
+  OUT
+}
+
+/// Money entering or leaving the drawer that is not a sale — a gas refill, a
+/// float top-up, change fetched from the bank. The reason is required: an
+/// unexplained movement is the exact thing this table exists to prevent.
+model CashMovement {
+  id          String        @id @default(cuid())
+  sessionId   String
+  session     PosSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  direction   CashDirection
+  amount      Decimal       @db.Decimal(10, 2)
+  reason      String
+  createdById String
+  createdBy   User          @relation(fields: [createdById], references: [id])
+  createdAt   DateTime      @default(now())
+
+  @@index([sessionId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Menu
+// ---------------------------------------------------------------------------
+
+model MenuCategory {
+  id          String     @id
+  name        String
+  description String?
+  sortOrder   Int        @default(0)
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  items       MenuItem[]
+
+  @@index([isActive, sortOrder])
+}
+
+model MenuItem {
+  id          String       @id @default(cuid())
+  /// Stable human-readable key carried over from menu.json, so the seed is
+  /// re-runnable and the public site's old anchors keep working.
+  slug        String       @unique
+  name        String
+  description String       @default("")
+  price       Decimal      @db.Decimal(10, 2)
+  /// What the plate costs to make. Optional — reports show a coverage % so a
+  /// partial picture is never mistaken for a complete one.
+  costPrice   Decimal?     @db.Decimal(10, 2)
+  categoryId  String
+  category    MenuCategory @relation(fields: [categoryId], references: [id])
+  imageUrl    String?
+  isPopular   Boolean      @default(false)
+  isAvailable Boolean      @default(true)
+  tags        String[]     @default([])
+  sortOrder   Int          @default(0)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  orderItems OrderItem[]
+
+  @@index([categoryId, sortOrder])
+  @@index([isAvailable, isPopular])
+}
+
+// ---------------------------------------------------------------------------
+// Customers
+// ---------------------------------------------------------------------------
+
+model Customer {
+  id        String   @id @default(cuid())
+  phone     String   @unique
+  name      String
+  /// Lower-cased, punctuation-stripped name used to spot duplicates when the
+  /// same regular is entered as "Ama", "ama k." and "Ama  K".
+  nameKey   String
+  address   String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders Order[]
+
+  @@index([nameKey])
+}
+
+// ---------------------------------------------------------------------------
+// Orders
+// ---------------------------------------------------------------------------
+
+enum OrderStatus {
+  PENDING
+  PREPARING
+  READY
+  COMPLETED
+  CANCELLED
+}
+
+enum OrderSource {
+  POS
+  ONLINE
+  BOLT
+  WALK_IN
+}
+
+enum DeliveryType {
+  DINE_IN
+  TAKEAWAY
+  DELIVERY
+}
+
+enum PaymentMethod {
+  CASH
+  MOMO
+  CARD
+  BANK_TRANSFER
+  BOLT_FOOD
+  /// Sent to the kitchen, not yet paid — an open ticket.
+  UNPAID
+  /// Legs live in Order.splitPayments.
+  SPLIT
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  REFUNDED
+}
+
+enum VoidReason {
+  MISTAKE
+  CUSTOMER_CANCELLED
+  KITCHEN_ERROR
+  DUPLICATE
+  OTHER
+}
+
+model Order {
+  id          String @id @default(cuid())
+  /// ANIS-YYYYMMDD-NNNN. The last block doubles as the customer's call number.
+  orderNumber String @unique
+  /// Idempotency key minted on the device before the request leaves it. A retry
+  /// after a flaky connection returns the original order instead of a twin —
+  /// this single column is what stops a bad network becoming double revenue.
+  clientRef   String @unique
+
+  sessionId String?
+  session   PosSession? @relation(fields: [sessionId], references: [id])
+
+  status       OrderStatus  @default(COMPLETED)
+  source       OrderSource  @default(POS)
+  deliveryType DeliveryType @default(DINE_IN)
+
+  paymentMethod    PaymentMethod
+  paymentStatus    PaymentStatus @default(PAID)
+  paymentReference String?
+  /// [{ method, amount, ref? }] — only set when paymentMethod is SPLIT.
+  splitPayments    Json?
+
+  subtotal       Decimal  @db.Decimal(10, 2)
+  discountAmount Decimal  @default(0) @db.Decimal(10, 2)
+  /// Ani's does not show VAT. Kept at 0 so the column exists if that changes,
+  /// rather than needing a migration mid-trading.
+  taxAmount      Decimal  @default(0) @db.Decimal(10, 2)
+  total          Decimal  @db.Decimal(10, 2)
+  tenderedAmount Decimal? @db.Decimal(10, 2)
+  changeAmount   Decimal? @db.Decimal(10, 2)
+
+  customerId      String?
+  customer        Customer? @relation(fields: [customerId], references: [id])
+  /// Deliberately denormalised: the receipt must keep showing the name and
+  /// number as they were on the day, even if the customer record changes later.
+  customerName    String?
+  customerPhone   String?
+  customerAddress String?
+
+  staffId String?
+  staff   User?   @relation("OrderStaff", fields: [staffId], references: [id])
+
+  /// Frozen copy of the whole sale — items, prices, totals — as sold.
+  transactionSnapshot Json?
+
+  /// Training and demo orders. Excluded from every revenue figure.
+  isDemo Boolean @default(false)
+
+  voidReason VoidReason?
+  voidNote   String?
+  voidedAt   DateTime?
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items  OrderItem[]
+  events OrderEvent[]
+
+  @@index([createdAt, isDemo])
+  @@index([sessionId, isDemo])
+  @@index([staffId, createdAt])
+  @@index([status, createdAt])
+  @@index([customerId])
+  @@index([paymentStatus, status])
+}
+
+model OrderItem {
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  menuItemId String?
+  menuItem   MenuItem? @relation(fields: [menuItemId], references: [id])
+
+  /// Name, price and cost are snapshotted. A price rise next month must not
+  /// rewrite what last month's customer actually paid.
+  name      String
+  unitPrice Decimal  @db.Decimal(10, 2)
+  unitCost  Decimal? @db.Decimal(10, 2)
+  quantity  Int
+  lineTotal Decimal  @db.Decimal(10, 2)
+  notes     String?
+
+  @@index([orderId])
+  @@index([menuItemId])
+}
+
+enum OrderEventType {
+  CREATED
+  STATUS_CHANGED
+  SETTLED
+  VOIDED
+  REFUNDED
+  NOTE_ADDED
+}
+
+/// Append-only timeline. Orders are never deleted; a void is an event.
+model OrderEvent {
+  id        String         @id @default(cuid())
+  orderId   String
+  order     Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  type      OrderEventType
+  detail    Json?
+  actorId   String?
+  actor     User?          @relation(fields: [actorId], references: [id])
+  createdAt DateTime       @default(now())
+
+  @@index([orderId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Expenses & payroll
+// ---------------------------------------------------------------------------
+
+model ExpenseCategory {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  /// Recurring overhead (rent, wifi) rather than variable spend (tomatoes).
+  isFixed   Boolean   @default(false)
+  sortOrder Int       @default(0)
+  createdAt DateTime  @default(now())
+  expenses  Expense[]
+}
+
+model Expense {
+  id            String          @id @default(cuid())
+  categoryId    String
+  category      ExpenseCategory @relation(fields: [categoryId], references: [id])
+  description   String
+  amount        Decimal         @db.Decimal(10, 2)
+  /// The day the money left the business, which is not always the day it was
+  /// entered — reports group on this.
+  incurredOn    DateTime        @db.Date
+  paymentMethod PaymentMethod   @default(CASH)
+  receiptUrl    String?
+  createdById   String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([incurredOn])
+  @@index([categoryId, incurredOn])
+}
+
+enum PayrollStatus {
+  DRAFT
+  APPROVED
+  PAID
+}
+
+model PayrollRecord {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  /// First day of the pay period, e.g. 2026-08-01.
+  periodStart DateTime @db.Date
+  periodEnd   DateTime @db.Date
+
+  baseAmount Decimal @default(0) @db.Decimal(10, 2)
+  bonuses    Decimal @default(0) @db.Decimal(10, 2)
+  deductions Decimal @default(0) @db.Decimal(10, 2)
+  netAmount  Decimal @db.Decimal(10, 2)
+
+  status PayrollStatus @default(DRAFT)
+  paidAt DateTime?
+  notes  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, periodStart])
+  @@index([status, periodStart])
+}
+
+// ---------------------------------------------------------------------------
+// Audit & settings
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id])
+  action     String
+  resource   String
+  resourceId String?
+  detail     Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([actorId, createdAt])
+  @@index([resource, resourceId])
+}
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}

@@ -1,83 +1,97 @@
-/**
- * Shared API utilities: error handling, validation helpers, and DB error detection.
- * Used by all API routes and server components for consistent behaviour.
- */
 import { NextResponse } from "next/server";
+import { ZodError, type ZodType } from "zod";
+import { Prisma } from "@/generated/prisma";
 
-// ---------------------------------------------------------------------------
-// Error response helpers
-// ---------------------------------------------------------------------------
+/**
+ * Shared shapes for route handlers, so every endpoint fails in the same
+ * predictable way and the client only has one error contract to understand.
+ */
 
-/** Return a consistent JSON error response. */
-export function errorResponse(message: string, status: number, details?: unknown) {
-  return NextResponse.json(
-    { error: message, ...(details ? { details } : {}) },
-    { status }
-  );
+export function ok<T>(data: T, init?: ResponseInit): NextResponse {
+  return NextResponse.json(data, init);
 }
 
-/** Detect Prisma / network connection errors. */
-export function isDatabaseConnectionError(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err);
-  return (
-    msg.includes("Can't reach database") ||
-    msg.includes("Connection refused") ||
-    msg.includes("ETIMEDOUT") ||
-    msg.includes("ENOTFOUND") ||
-    msg.includes("P1001") ||
-    msg.includes("P1002")
-  );
+export function badRequest(error: string, detail?: unknown): NextResponse {
+  return NextResponse.json({ error, detail }, { status: 400 });
 }
 
-/** Detect Prisma validation / constraint errors. */
-export function isPrismaValidationError(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err);
-  return (
-    msg.includes("P2002") || // Unique constraint
-    msg.includes("P2003") || // Foreign key constraint
-    msg.includes("P2025") || // Record not found
-    msg.includes("P2011") || // Null constraint
-    msg.includes("P2012")    // Missing required value
-  );
+export function notFound(error = "Not found"): NextResponse {
+  return NextResponse.json({ error }, { status: 404 });
 }
 
-/** Map a caught error to an appropriate API response. */
-export function handlePrismaError(err: unknown): NextResponse {
-  if (isDatabaseConnectionError(err)) {
-    return errorResponse("Database unavailable. Please try again later.", 503);
+export function conflict(error: string, detail?: unknown): NextResponse {
+  return NextResponse.json({ error, detail }, { status: 409 });
+}
+
+export function serverError(error = "Something went wrong"): NextResponse {
+  return NextResponse.json({ error }, { status: 500 });
+}
+
+/** Parses and validates a JSON body, returning a response on failure. */
+export async function parseBody<T>(
+  request: Request,
+  schema: ZodType<T>,
+): Promise<{ data: T } | NextResponse> {
+  let raw: unknown;
+  try {
+    raw = await request.json();
+  } catch {
+    return badRequest("Expected a JSON body");
   }
-  if (isPrismaValidationError(err)) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("P2002")) return errorResponse("A record with that value already exists.", 409);
-    if (msg.includes("P2025")) return errorResponse("Record not found.", 404);
-    return errorResponse("Invalid request data.", 400);
+
+  const result = schema.safeParse(raw);
+  if (!result.success) {
+    return badRequest("Some details are not valid", fieldErrors(result.error));
   }
-  // Log only the error message (not the full stack/object) to avoid leaking sensitive info
-  console.error("[API] Unhandled error:", err instanceof Error ? err.message : "Unknown error");
-  return errorResponse("Internal server error.", 500);
+  return { data: result.data };
 }
 
-// ---------------------------------------------------------------------------
-// Validation helpers
-// ---------------------------------------------------------------------------
-
-/** Parse and clamp a numeric search param to a safe positive integer. */
-export function parsePositiveInt(value: string | null, fallback: number, max?: number): number {
-  const parsed = parseInt(value ?? "", 10);
-  if (isNaN(parsed) || parsed < 1) return fallback;
-  return max ? Math.min(parsed, max) : parsed;
+/** Flattens Zod issues into { field: message } the forms can display inline. */
+export function fieldErrors(error: ZodError): Record<string, string> {
+  const errors: Record<string, string> = {};
+  for (const issue of error.issues) {
+    const path = issue.path.join(".") || "_";
+    if (!errors[path]) errors[path] = issue.message;
+  }
+  return errors;
 }
 
-/** Valid order status transitions. */
-const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
-  PENDING: ["PREPARING", "CANCELLED"],
-  PREPARING: ["COMPLETED", "CANCELLED"],
-  // Terminal states — no further transitions
-  COMPLETED: [],
-  CANCELLED: [],
-};
+/**
+ * Turns a Prisma error into something a person can act on.
+ *
+ * Anything unrecognised is logged and reported as a generic failure — leaking
+ * raw database errors to the browser tells an attacker about the schema and
+ * tells the cashier nothing useful.
+ */
+export function handlePrismaError(error: unknown, context: string): NextResponse {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    switch (error.code) {
+      case "P2002": {
+        const target = (error.meta?.target as string[] | undefined)?.join(", ");
+        return conflict(
+          target ? `That ${target} is already taken.` : "That record already exists.",
+        );
+      }
+      case "P2003":
+        return badRequest("That references something which no longer exists.");
+      case "P2025":
+        return notFound("That record no longer exists.");
+      case "P1001":
+      case "P1002":
+        console.error(`[${context}] database unreachable`, error.code);
+        return NextResponse.json(
+          { error: "Cannot reach the database. Check your connection and try again." },
+          { status: 503 },
+        );
+      case "P2024":
+        console.error(`[${context}] connection pool timeout`);
+        return NextResponse.json(
+          { error: "The database is busy. Try again in a moment." },
+          { status: 503 },
+        );
+    }
+  }
 
-/** Check whether a status transition is allowed. */
-export function isValidStatusTransition(from: string, to: string): boolean {
-  return VALID_STATUS_TRANSITIONS[from]?.includes(to) ?? false;
+  console.error(`[${context}]`, error);
+  return serverError();
 }

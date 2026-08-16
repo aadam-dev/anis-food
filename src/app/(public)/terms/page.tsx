@@ -39,7 +39,7 @@ export default function TermsPage() {
             <ul className="list-disc pl-6 space-y-2">
               <li>You provide accurate contact and delivery/pickup details. We are not responsible for failed delivery or missed pickup due to incorrect information.</li>
               <li>Orders are subject to confirmation by us (e.g. by phone or WhatsApp). We may refuse or cancel an order at our discretion.</li>
-              <li>Prices shown are in Ghana Cedis (GHS) and include VAT where stated. We may correct pricing errors.</li>
+              <li>Prices shown are in Ghana Cedis (GHS). The price shown is the price you pay; no separate tax is added at checkout. We may correct pricing errors.</li>
               <li>For delivery, we will endeavour to deliver within a reasonable time; exact times are estimates only.</li>
             </ul>
           </section>

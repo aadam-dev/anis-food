@@ -22,12 +22,18 @@ export default function Button({
 }: ButtonProps) {
   const baseStyles = "inline-flex items-center justify-center gap-2 font-semibold rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] hover:scale-[1.02]";
   
+  // Brand tokens, not literals — see the palette note in src/styles/globals.css.
+  // Every variant here carries text, so all of them use the AA-compliant
+  // --color-primary-red-ui rather than the brighter logo red.
   const variants = {
-    primary: "bg-[#DC2626] text-white hover:bg-[#B91C1C] focus:ring-[#DC2626]",
-    secondary: "bg-[#F97316] text-white hover:bg-[#EA580C] focus:ring-[#F97316]",
-    outline: "border-2 border-[#DC2626] text-[#DC2626] hover:bg-[#DC2626] hover:text-white focus:ring-[#DC2626]",
-    ghost: "text-[#DC2626] hover:bg-red-50 focus:ring-[#DC2626]",
-    success: "bg-[#10B981] text-white hover:bg-[#059669] focus:ring-[#10B981]",
+    primary:
+      "bg-primary-red-ui text-white hover:bg-primary-red-dark focus:ring-primary-red-ui",
+    secondary:
+      "bg-accent-orange text-neutral-black hover:brightness-95 focus:ring-accent-orange",
+    outline:
+      "border-2 border-primary-red-ui text-primary-red-ui hover:bg-primary-red-ui hover:text-white focus:ring-primary-red-ui",
+    ghost: "text-primary-red-ui hover:bg-red-50 focus:ring-primary-red-ui",
+    success: "bg-success-cta text-white hover:brightness-95 focus:ring-success-cta",
   };
   
   const sizes = {

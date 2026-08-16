@@ -44,10 +44,18 @@ export const BUSINESS_INFO = {
   heroVideoPath: null as string | null,
 } as const;
 
-/** Order & tax: VAT is inclusive (prices shown include VAT). Used for receipts and checkout. */
+/**
+ * Order & tax.
+ *
+ * Anis does not show VAT: the price on the menu is the price the customer pays,
+ * on the website and at the till alike. The rate stays here at 0 rather than
+ * being deleted, so registering for VAT later is this one line plus the matching
+ * `tax_rate` setting — not a hunt through every receipt component. Every place
+ * that displays a tax line already hides it while the rate is 0.
+ */
 export const ORDER_CONFIG = {
-  /** VAT rate as decimal (e.g. 0.125 = 12.5%). Ghana standard rate. */
-  VAT_RATE: 0.125,
+  /** VAT rate as decimal (e.g. 0.125 = 12.5%). Zero = no VAT shown anywhere. */
+  VAT_RATE: 0,
   /** If true, item prices are VAT-inclusive; we derive subtotal and VAT from total. */
   VAT_INCLUSIVE: true,
 } as const;

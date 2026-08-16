@@ -120,14 +120,20 @@ const Receipt = forwardRef<HTMLDivElement, ReceiptProps>(function Receipt(
 
         {/* Totals */}
         <div className="border-t border-gray-200 pt-4 space-y-2 text-sm">
-          <div className="flex justify-between text-gray-600">
-            <span>Subtotal (ex-VAT):</span>
-            <span>{formatPrice(data.totals.subtotal)}</span>
-          </div>
-          <div className="flex justify-between text-gray-600">
-            <span>VAT ({(data.totals.vatRate * 100).toFixed(1)}%):</span>
-            <span>{formatPrice(data.totals.vat)}</span>
-          </div>
+          {/* Anis charges no VAT, so the receipt shows a single honest total.
+              These lines return the moment a rate is configured. */}
+          {data.totals.vatRate > 0 && (
+            <>
+              <div className="flex justify-between text-gray-600">
+                <span>Subtotal (ex-VAT):</span>
+                <span>{formatPrice(data.totals.subtotal)}</span>
+              </div>
+              <div className="flex justify-between text-gray-600">
+                <span>VAT ({(data.totals.vatRate * 100).toFixed(1)}%):</span>
+                <span>{formatPrice(data.totals.vat)}</span>
+              </div>
+            </>
+          )}
           <div className="flex justify-between text-lg font-bold pt-2">
             <span>Total:</span>
             <span className="text-[#DC2626]">{formatPrice(data.totals.total)}</span>
