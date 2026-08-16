@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
+import PasswordInput from "@/components/ui/PasswordInput";
 
 export default function ChangePasswordForm() {
   const router = useRouter();
@@ -43,75 +44,36 @@ export default function ChangePasswordForm() {
     }
   }
 
-  const fieldStyle = {
-    background: "var(--s-panel-alt)",
-    borderColor: "var(--s-border)",
-    color: "var(--s-ink)",
-  };
-
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label htmlFor="current" className="block text-sm font-medium mb-1.5">
-          Current password
-        </label>
-        <input
-          id="current"
-          type="password"
-          autoComplete="current-password"
-          required
-          value={currentPassword}
-          onChange={(event) => setCurrentPassword(event.target.value)}
-          className="w-full rounded-lg border px-3 py-2.5 outline-none focus:ring-2"
-          style={fieldStyle}
-        />
-      </div>
+      <PasswordInput
+        label="Current password"
+        value={currentPassword}
+        onChange={setCurrentPassword}
+        autoComplete="current-password"
+      />
 
-      <div>
-        <label htmlFor="next" className="block text-sm font-medium mb-1.5">
-          New password
-        </label>
-        <input
-          id="next"
-          type="password"
-          autoComplete="new-password"
-          required
-          value={newPassword}
-          onChange={(event) => setNewPassword(event.target.value)}
-          className="w-full rounded-lg border px-3 py-2.5 outline-none focus:ring-2"
-          style={fieldStyle}
-          aria-describedby="password-hint"
-        />
-        <p
-          id="password-hint"
-          className="mt-1.5 text-xs"
-          style={{ color: tooShort ? "var(--s-bad)" : "var(--s-ink-faint)" }}
-        >
-          At least 10 characters. A short phrase you will remember beats a short
-          scramble you will write down.
-        </p>
-      </div>
+      <PasswordInput
+        label="New password"
+        value={newPassword}
+        onChange={setNewPassword}
+        autoComplete="new-password"
+        hint={
+          tooShort
+            ? "At least 10 characters."
+            : "At least 10 characters. A short phrase you will remember beats a short scramble you will write down."
+        }
+        hintTone={tooShort ? "bad" : "muted"}
+      />
 
-      <div>
-        <label htmlFor="confirm" className="block text-sm font-medium mb-1.5">
-          Confirm new password
-        </label>
-        <input
-          id="confirm"
-          type="password"
-          autoComplete="new-password"
-          required
-          value={confirmPassword}
-          onChange={(event) => setConfirmPassword(event.target.value)}
-          className="w-full rounded-lg border px-3 py-2.5 outline-none focus:ring-2"
-          style={fieldStyle}
-        />
-        {mismatch && (
-          <p className="mt-1.5 text-xs" style={{ color: "var(--s-bad)" }}>
-            These two do not match.
-          </p>
-        )}
-      </div>
+      <PasswordInput
+        label="Confirm new password"
+        value={confirmPassword}
+        onChange={setConfirmPassword}
+        autoComplete="new-password"
+        hint={mismatch ? "These two do not match." : undefined}
+        hintTone="bad"
+      />
 
       {error && (
         <p
