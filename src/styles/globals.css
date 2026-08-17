@@ -167,6 +167,22 @@ h1, h2, h3, h4, h5, h6 {
   display: block;
 }
 
+/* The surface divs paint their own background, but the document behind them is
+   still the public site's white. At rest it is hidden; an iOS overscroll bounce
+   exposes it as a white flash at the top of a dark till, and native controls —
+   scrollbars, autofill, pickers — render light on a dark screen because the
+   document never declared its scheme. Telling the document which surface it is
+   carrying fixes both. */
+body:has([data-surface][data-theme="dark"]) {
+  background: #121110;
+  color-scheme: dark;
+}
+
+body:has([data-surface][data-theme="light"]) {
+  background: #f7f6f4;
+  color-scheme: light;
+}
+
 /* Money must line up column to column. Tabular figures, always. */
 .money {
   font-family: var(--font-mono);
