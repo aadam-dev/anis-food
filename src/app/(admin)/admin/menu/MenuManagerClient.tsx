@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Check, Loader2, AlertCircle } from "lucide-react";
+import Image from "next/image";
+import { Search, Check, Loader2, AlertCircle, ImagePlus } from "lucide-react";
 import { formatGHS, roundMoney } from "@/lib/money";
 import {
   PageHeader,
@@ -244,7 +245,8 @@ function MenuRow({
   return (
     <li className="px-4 py-4 sm:px-5">
       <div className="flex flex-wrap items-start gap-x-4 gap-y-3">
-        <div className="min-w-0 flex-1 basis-full sm:basis-auto">
+        <ImageControl item={item} save={save} />
+        <div className="min-w-0 flex-1 basis-[calc(100%-4rem)] sm:basis-auto">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="font-medium truncate">{item.name}</p>
             {item.isPopular && <Chip tone="good">Popular</Chip>}
@@ -357,5 +359,90 @@ function MenuRow({
         </p>
       )}
     </li>
+  );
+}
+
+/**
+ * The photo for a dish. Tap it to pick an image; it uploads, then saves the
+ * returned URL to the item. The picked file is shown immediately as a local
+ * preview so the admin sees the change before the round-trip finishes.
+ */
+function ImageControl({
+  item,
+  save,
+}: {
+  item: AdminMenuItem;
+  save: (id: string, patch: Partial<AdminMenuItem>) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const shown = preview ?? item.imageUrl;
+
+  async function onPick(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = ""; // let the same file be re-picked after a failure
+    if (!file) return;
+
+    setError(false);
+    setBusy(true);
+    setPreview(URL.createObjectURL(file));
+
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const response = await fetch("/api/admin/upload", { method: "POST", body: form });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(true);
+        setErrorMessage(data.error ?? "Could not upload that image.");
+        setPreview(null);
+        return;
+      }
+      setErrorMessage(null);
+      save(item.id, { imageUrl: data.url });
+    } catch {
+      setError(true);
+      setPreview(null);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="shrink-0">
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        className="relative h-16 w-16 rounded-lg overflow-hidden grid place-items-center border"
+        style={{ background: "var(--s-panel-alt)", borderColor: error ? "var(--s-bad)" : "var(--s-border)" }}
+        aria-label={shown ? `Change photo for ${item.name}` : `Add a photo for ${item.name}`}
+      >
+        {shown ? (
+          <Image src={shown} alt="" width={64} height={64} className="h-full w-full object-cover" unoptimized={!!preview} />
+        ) : (
+          <ImagePlus className="w-5 h-5" style={{ color: "var(--s-ink-faint)" }} />
+        )}
+        {busy && (
+          <span className="absolute inset-0 grid place-items-center" style={{ background: "rgba(0,0,0,0.4)" }}>
+            <Loader2 className="w-4 h-4 animate-spin text-white" />
+          </span>
+        )}
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        onChange={onPick}
+        className="hidden"
+      />
+      {errorMessage && (
+        <p className="mt-1 w-16 text-[0.6rem] leading-tight" style={{ color: "var(--s-bad)" }}>
+          {errorMessage}
+        </p>
+      )}
+    </div>
   );
 }
