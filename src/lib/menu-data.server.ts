@@ -13,11 +13,54 @@ import "server-only";
 import { unstable_cache, revalidateTag, revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { toMoney } from "@/lib/money";
+import seed from "@/data/menu.json";
 import type { SerializedMenuCategory, SerializedMenuItem } from "./menu-data";
 
 export type { SerializedMenuCategory, SerializedMenuItem };
 
 export const MENU_CACHE_TAG = "menu";
+
+/**
+ * The committed menu.json, mapped to the serialized shape, used only when the
+ * database is unreachable.
+ *
+ * The database is still the source of truth — this is a fallback on failure, not
+ * a second live source. It exists because the public menu must never be taken
+ * down by a database blip: Vercel prerenders `/` and `/menu` with several workers
+ * hitting the pooler cold at build time, and Supabase's transaction pooler drops
+ * the occasional cold connection. Without this, one dropped connection fails the
+ * whole deploy. At runtime it means a customer always sees a menu, even mid-outage
+ * — just possibly a slightly stale one until the next revalidation reconnects.
+ */
+function seedCategories(): SerializedMenuCategory[] {
+  return seed.categories.map((category, index) => ({
+    id: category.id,
+    name: category.name,
+    description: category.description ?? null,
+    slug: category.id,
+    sortOrder: index,
+    active: true,
+  }));
+}
+
+function seedItems(): SerializedMenuItem[] {
+  const categoryName = new Map(seed.categories.map((c) => [c.id, c.name]));
+  return seed.items
+    .filter((item) => ("available" in item ? item.available !== false : true))
+    .map((item) => ({
+      id: item.id,
+      name: item.name,
+      description: item.description ?? null,
+      price: toMoney(item.price),
+      categorySlug: item.category,
+      categoryName: categoryName.get(item.category) ?? item.category,
+      categoryId: item.category,
+      imageUrl: "image" in item ? (item.image as string) : null,
+      popular: "popular" in item ? Boolean(item.popular) : false,
+      available: true,
+      tags: "tags" in item ? ((item.tags as string[]) ?? []) : [],
+    }));
+}
 
 /**
  * Backstop TTL, matched to the pages' own `revalidate = 60`.
@@ -33,20 +76,25 @@ const MENU_CACHE_TTL_SECONDS = 60;
 
 export const dbGetCategories = unstable_cache(
   async (): Promise<SerializedMenuCategory[]> => {
-    const categories = await prisma.menuCategory.findMany({
-      where: { isActive: true },
-      orderBy: { sortOrder: "asc" },
-      select: { id: true, name: true, description: true, sortOrder: true, isActive: true },
-    });
+    try {
+      const categories = await prisma.menuCategory.findMany({
+        where: { isActive: true },
+        orderBy: { sortOrder: "asc" },
+        select: { id: true, name: true, description: true, sortOrder: true, isActive: true },
+      });
 
-    return categories.map((category) => ({
-      id: category.id,
-      name: category.name,
-      description: category.description,
-      slug: category.id,
-      sortOrder: category.sortOrder,
-      active: category.isActive,
-    }));
+      return categories.map((category) => ({
+        id: category.id,
+        name: category.name,
+        description: category.description,
+        slug: category.id,
+        sortOrder: category.sortOrder,
+        active: category.isActive,
+      }));
+    } catch (error) {
+      console.error("[menu] categories: database unreachable, serving the seed", error);
+      return seedCategories();
+    }
   },
   ["menu-categories"],
   { tags: [MENU_CACHE_TAG], revalidate: MENU_CACHE_TTL_SECONDS },
@@ -54,21 +102,27 @@ export const dbGetCategories = unstable_cache(
 
 export const dbGetMenuItems = unstable_cache(
   async (): Promise<SerializedMenuItem[]> => {
-    const items = await prisma.menuItem.findMany({
-      where: { isAvailable: true, category: { isActive: true } },
-      orderBy: [{ category: { sortOrder: "asc" } }, { sortOrder: "asc" }],
-      select: {
-        slug: true,
-        name: true,
-        description: true,
-        price: true,
-        imageUrl: true,
-        isPopular: true,
-        isAvailable: true,
-        tags: true,
-        category: { select: { id: true, name: true } },
-      },
-    });
+    let items;
+    try {
+      items = await prisma.menuItem.findMany({
+        where: { isAvailable: true, category: { isActive: true } },
+        orderBy: [{ category: { sortOrder: "asc" } }, { sortOrder: "asc" }],
+        select: {
+          slug: true,
+          name: true,
+          description: true,
+          price: true,
+          imageUrl: true,
+          isPopular: true,
+          isAvailable: true,
+          tags: true,
+          category: { select: { id: true, name: true } },
+        },
+      });
+    } catch (error) {
+      console.error("[menu] items: database unreachable, serving the seed", error);
+      return seedItems();
+    }
 
     return items.map((item) => ({
       // The public id stays the slug so existing /menu#anchor links, shared

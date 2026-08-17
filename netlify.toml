@@ -1,0 +1,15 @@
+# Netlify build configuration.
+#
+# The Next.js runtime plugin is installed automatically by Netlify; it does not
+# need to be listed here. What does need pinning is the Node version: Next.js 16
+# requires Node 20.9+, and a site created before that default rejects the build
+# the moment `next build` runs. Pinning it is the difference between a green
+# deploy and the one that got flagged.
+
+[build]
+  command = "npm run build"
+  # The Next.js plugin reads .next and produces the serverless output itself.
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "22"
