@@ -20,10 +20,15 @@ const updateSchema = z
   })
   .refine((body) => Object.keys(body).length > 0, "Nothing to change");
 
+// Module scope on purpose: when the production minifier inlines
+// initialPassword() into the PATCH handler it drops a same-function `const`,
+// leaving a dangling reference ("alphabet is not defined") that only shows up
+// in the built output, never in dev. Hoisting the alphabet keeps it alive.
+const PASSWORD_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+
 function initialPassword(): string {
-  const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
   const bytes = randomBytes(12);
-  const chars = Array.from(bytes, (b) => alphabet[b % alphabet.length]);
+  const chars = Array.from(bytes, (b) => PASSWORD_ALPHABET[b % PASSWORD_ALPHABET.length]);
   return [0, 4, 8].map((i) => chars.slice(i, i + 4).join("")).join("-");
 }
 

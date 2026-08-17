@@ -15,10 +15,13 @@ const createSchema = z.object({
 });
 
 /** A readable one-time password, e.g. K7PQ-3MTX-9RAW. */
+// Module scope on purpose — see the note in staff/[id]/route.ts. Inlining this
+// function drops a same-function `const`, which only breaks in the built output.
+const PASSWORD_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+
 function initialPassword(): string {
-  const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
   const bytes = randomBytes(12);
-  const chars = Array.from(bytes, (b) => alphabet[b % alphabet.length]);
+  const chars = Array.from(bytes, (b) => PASSWORD_ALPHABET[b % PASSWORD_ALPHABET.length]);
   return [0, 4, 8].map((i) => chars.slice(i, i + 4).join("")).join("-");
 }
 

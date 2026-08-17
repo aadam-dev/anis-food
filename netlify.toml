@@ -13,3 +13,13 @@
 
 [build.environment]
   NODE_VERSION = "22"
+  # Netlify scans the build output for the literal *values* of env vars. Two of
+  # ours are not secrets and were false-flagging the build:
+  #   - SUPABASE_STORAGE_BUCKET is the bucket name "menu", which also happens to
+  #     be the single most common word in a restaurant app, so it appears in
+  #     thousands of legitimate places.
+  #   - NEXT_PUBLIC_SITE_URL is public by design — anything NEXT_PUBLIC_ is
+  #     inlined into the browser bundle on purpose.
+  # The genuinely secret keys (AUTH_SECRET, DATABASE_URL, DIRECT_URL,
+  # SUPABASE_SERVICE_ROLE_KEY) are NOT listed here, so they stay scanned.
+  SECRETS_SCAN_OMIT_KEYS = "NEXT_PUBLIC_SITE_URL,SUPABASE_STORAGE_BUCKET"
