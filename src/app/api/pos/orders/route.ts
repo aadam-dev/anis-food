@@ -5,7 +5,8 @@ import { requireResource, logAudit, clientIp } from "@/lib/api-auth";
 import { ok, parseBody, badRequest, conflict, handlePrismaError } from "@/lib/api-utils";
 import { computeOrderTotals, toMoney, roundMoney, changeDue } from "@/lib/money";
 import { businessDay, formatOrderNumber } from "@/lib/session-utils";
-import { getSettings, taxRateFrom } from "@/lib/settings";
+import { getSettings, getTaxConfig } from "@/lib/settings";
+import { taxBreakdown } from "@/lib/tax";
 import {
   PaymentMethod,
   PaymentStatus,
@@ -79,6 +80,14 @@ const settleSchema = z.object({
 function serialiseOrder(
   order: Prisma.OrderGetPayload<{ include: { items: true } }>,
 ) {
+  const snapshot = order.transactionSnapshot as {
+    tax?: {
+      inclusive: boolean;
+      net: number;
+      taxTotal: number;
+      lines: { code: string; label: string; rate: number; amount: number }[];
+    } | null;
+  } | null;
   return {
     id: order.id,
     orderNumber: order.orderNumber,
@@ -95,6 +104,7 @@ function serialiseOrder(
     total: toMoney(order.total),
     tenderedAmount: order.tenderedAmount === null ? null : toMoney(order.tenderedAmount),
     changeAmount: order.changeAmount === null ? null : toMoney(order.changeAmount),
+    tax: snapshot?.tax ?? null,
     customerName: order.customerName,
     customerPhone: order.customerPhone,
     notes: order.notes,
@@ -194,8 +204,15 @@ export async function POST(request: Request) {
     const totals = computeOrderTotals({
       lines: lines.map((line) => ({ unitPrice: line.unitPrice, quantity: line.quantity })),
       discountAmount: body.discountAmount ?? 0,
-      taxRate: taxRateFrom(settings),
     });
+    // Ghana VAT + levies. Disabled by default, so tax.taxTotal is 0 and
+    // orderTotal === totals.total — the till behaves exactly as before. When it
+    // is switched on and prices are inclusive (the Anis default) the tax is
+    // backed out of the price the customer already sees; if configured as
+    // exclusive instead, it is added on top and orderTotal is the higher gross.
+    const taxConfig = getTaxConfig(settings);
+    const tax = taxBreakdown(totals.total, taxConfig);
+    const orderTotal = taxConfig.enabled && !taxConfig.inclusive ? tax.gross : totals.total;
 
     // Split legs must add up. A bill that is 2 pesewas short of its own total is
     // a drawer that will not balance at 10pm, and nobody will know why.
@@ -206,15 +223,15 @@ export async function POST(request: Request) {
       const sum = roundMoney(
         body.splitPayments.reduce((running, leg) => running + toMoney(leg.amount), 0),
       );
-      if (Math.abs(sum - totals.total) > 0.01) {
+      if (Math.abs(sum - orderTotal) > 0.01) {
         return badRequest(
-          `The split adds up to GH₵${sum.toFixed(2)} but the bill is GH₵${totals.total.toFixed(2)}.`,
+          `The split adds up to GH₵${sum.toFixed(2)} but the bill is GH₵${orderTotal.toFixed(2)}.`,
         );
       }
     }
 
     if (body.paymentMethod === "CASH" && body.tenderedAmount !== undefined) {
-      if (toMoney(body.tenderedAmount) + 0.01 < totals.total) {
+      if (toMoney(body.tenderedAmount) + 0.01 < orderTotal) {
         return badRequest("The amount given is less than the total.");
       }
     }
@@ -254,10 +271,10 @@ export async function POST(request: Request) {
           splitPayments: (body.splitPayments ?? undefined) as never,
           subtotal: totals.subtotal,
           discountAmount: totals.discountAmount,
-          taxAmount: totals.taxAmount,
-          total: totals.total,
+          taxAmount: tax.taxTotal,
+          total: orderTotal,
           tenderedAmount: tendered,
-          changeAmount: tendered === null ? null : changeDue(totals.total, tendered),
+          changeAmount: tendered === null ? null : changeDue(orderTotal, tendered),
           customerName: body.customerName,
           customerPhone: body.customerPhone,
           staffId: auth.user.sub,
@@ -277,8 +294,10 @@ export async function POST(request: Request) {
         include: { items: true },
       });
 
-      // Rule 3. Freeze the receipt as sold.
-      await tx.order.update({
+      // Rule 3. Freeze the receipt as sold. Return this updated row (not the
+      // pre-snapshot `created`) so the receipt shown the instant the sale lands
+      // carries the tax breakdown, exactly as a re-fetched order would.
+      const withSnapshot = await tx.order.update({
         where: { id: created.id },
         data: {
           transactionSnapshot: {
@@ -292,10 +311,15 @@ export async function POST(request: Request) {
               lineTotal: line.lineTotal,
             })),
             totals,
+            chargedTotal: orderTotal,
+            tax: taxConfig.enabled
+              ? { inclusive: taxConfig.inclusive, net: tax.net, lines: tax.lines, taxTotal: tax.taxTotal }
+              : null,
             paymentMethod: body.paymentMethod,
             splitPayments: body.splitPayments ?? null,
           } as never,
         },
+        include: { items: true },
       });
 
       await tx.orderEvent.create({
@@ -303,11 +327,11 @@ export async function POST(request: Request) {
           orderId: created.id,
           type: OrderEventType.CREATED,
           actorId: auth.user.sub,
-          detail: { total: totals.total, paymentMethod: body.paymentMethod } as never,
+          detail: { total: orderTotal, paymentMethod: body.paymentMethod } as never,
         },
       });
 
-      return created;
+      return withSnapshot;
     });
 
     let order: Awaited<ReturnType<typeof writeOrder>> | null = null;

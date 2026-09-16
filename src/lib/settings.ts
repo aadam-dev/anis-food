@@ -1,6 +1,12 @@
 import "server-only";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { prisma } from "@/lib/db";
+import {
+  DISABLED_TAX,
+  GHANA_STANDARD_COMPONENTS,
+  type TaxComponent,
+  type TaxConfig,
+} from "@/lib/tax";
 
 /**
  * Key/value settings.
@@ -21,6 +27,9 @@ export const SETTING_KEYS = [
   "timezone",
   "tax_rate",
   "tax_label",
+  "tax_enabled",
+  "tax_pricing",
+  "tax_components",
   "receipt_header",
   "receipt_footer",
   "default_opening_float",
@@ -39,6 +48,12 @@ export const SETTING_DEFAULTS: Record<SettingKey, string> = {
   timezone: "Africa/Accra",
   tax_rate: "0",
   tax_label: "VAT",
+  // Ghana VAT is built and pre-loaded but switched OFF until the VAT status is
+  // confirmed. Flip tax_enabled to "true" in Settings and every total, receipt
+  // and report starts showing the breakdown; nothing changes until then.
+  tax_enabled: "false",
+  tax_pricing: "inclusive", // menu prices already include tax; back it out for the receipt
+  tax_components: JSON.stringify(GHANA_STANDARD_COMPONENTS),
   receipt_header: "Anis Food and Drink",
   receipt_footer: "Thank you. Please come again!",
   default_opening_float: "200",
@@ -81,4 +96,40 @@ export function taxRateFrom(settings: Record<SettingKey, string>): number {
   const parsed = Number(settings.tax_rate);
   if (!Number.isFinite(parsed) || parsed < 0 || parsed >= 1) return 0;
   return parsed;
+}
+
+function parseComponents(raw: string | undefined): TaxComponent[] {
+  if (!raw) return GHANA_STANDARD_COMPONENTS;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return GHANA_STANDARD_COMPONENTS;
+    const clean = parsed.filter(
+      (c): c is TaxComponent =>
+        !!c &&
+        typeof c === "object" &&
+        typeof (c as TaxComponent).code === "string" &&
+        typeof (c as TaxComponent).label === "string" &&
+        typeof (c as TaxComponent).rate === "number" &&
+        (c as TaxComponent).rate >= 0 &&
+        (c as TaxComponent).rate < 1 &&
+        typeof (c as TaxComponent).compound === "boolean",
+    );
+    return clean.length > 0 ? clean : GHANA_STANDARD_COMPONENTS;
+  } catch {
+    return GHANA_STANDARD_COMPONENTS;
+  }
+}
+
+/**
+ * The tax rules as the till and receipts need them. Disabled unless
+ * `tax_enabled` is explicitly "true", so a misconfiguration fails safe (no tax)
+ * rather than silently charging or mis-stating VAT.
+ */
+export function getTaxConfig(settings: Record<SettingKey, string>): TaxConfig {
+  if (settings.tax_enabled !== "true") return DISABLED_TAX;
+  return {
+    enabled: true,
+    inclusive: settings.tax_pricing !== "exclusive",
+    components: parseComponents(settings.tax_components),
+  };
 }

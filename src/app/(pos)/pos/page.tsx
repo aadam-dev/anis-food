@@ -70,6 +70,8 @@ export default async function PosPage() {
     total: toMoney(order.total),
     tenderedAmount: order.tenderedAmount === null ? null : toMoney(order.tenderedAmount),
     changeAmount: order.changeAmount === null ? null : toMoney(order.changeAmount),
+    tax:
+      (order.transactionSnapshot as { tax?: OrderView["tax"] } | null)?.tax ?? null,
     customerName: order.customerName,
     customerPhone: order.customerPhone,
     notes: order.notes,

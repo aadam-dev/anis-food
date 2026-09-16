@@ -33,6 +33,13 @@ export default function ReceiptModal({
     discountAmount: order.discountAmount,
     taxAmount: order.taxAmount,
     taxLabel: business.taxLabel,
+    taxLines: order.tax?.lines.map((line) => ({
+      code: line.code,
+      label: line.label,
+      amount: line.amount,
+    })),
+    taxInclusive: order.tax?.inclusive,
+    taxableNet: order.tax?.net,
     total: order.total,
     paymentMethod: order.paymentMethod,
     splitPayments: order.splitPayments,

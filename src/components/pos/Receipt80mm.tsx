@@ -30,6 +30,12 @@ export interface ReceiptData {
   discountAmount: number;
   taxAmount: number;
   taxLabel?: string;
+  /** Itemised VAT + levies for compliance. When present, replaces the single tax row. */
+  taxLines?: { code: string; label: string; amount: number }[];
+  /** true → prices already include the taxes; false → they were added on top. */
+  taxInclusive?: boolean;
+  /** The tax-exclusive value, shown under an inclusive-price breakdown. */
+  taxableNet?: number;
   total: number;
   paymentMethod: string;
   splitPayments?: { method: string; amount: number; ref?: string }[] | null;
@@ -119,31 +125,75 @@ export default function Receipt80mm({
 
       <div className="r-rule" />
 
-      {/* Subtotal only earns its place when something changes it. On a plain
-          sale with no discount and no tax it is just the total said twice. */}
-      {(data.discountAmount > 0 || data.taxAmount > 0) && (
-        <div className="r-row">
-          <span>Subtotal</span>
-          <span>{formatGHS(data.subtotal)}</span>
-        </div>
-      )}
-      {data.discountAmount > 0 && (
-        <div className="r-row">
-          <span>Discount</span>
-          <span>-{formatGHS(data.discountAmount)}</span>
-        </div>
-      )}
-      {data.taxAmount > 0 && (
-        <div className="r-row">
-          <span>{data.taxLabel ?? "Tax"}</span>
-          <span>{formatGHS(data.taxAmount)}</span>
-        </div>
-      )}
+      {(() => {
+        const itemised = data.taxLines && data.taxLines.length > 0;
+        const inclusive = data.taxInclusive !== false;
+        const showTaxOnTop = itemised && !inclusive;
+        // Subtotal only earns its place when something changes it. On a plain
+        // sale it is just the total said twice — and with inclusive tax the
+        // breakdown lives under the total, so the subtotal would still equal it.
+        const showSubtotal =
+          data.discountAmount > 0 || showTaxOnTop || (!itemised && data.taxAmount > 0);
 
-      <div className="r-row r-total">
-        <span>TOTAL</span>
-        <span>{formatGHS(data.total)}</span>
-      </div>
+        return (
+          <>
+            {showSubtotal && (
+              <div className="r-row">
+                <span>Subtotal</span>
+                <span>{formatGHS(data.subtotal)}</span>
+              </div>
+            )}
+            {data.discountAmount > 0 && (
+              <div className="r-row">
+                <span>Discount</span>
+                <span>-{formatGHS(data.discountAmount)}</span>
+              </div>
+            )}
+
+            {/* Tax added on top of the price: each levy and VAT as its own line. */}
+            {showTaxOnTop &&
+              data.taxLines!.map((line) => (
+                <div className="r-row" key={line.code}>
+                  <span>{line.label}</span>
+                  <span>{formatGHS(line.amount)}</span>
+                </div>
+              ))}
+            {/* Legacy single-line tax, only when there is no itemised breakdown. */}
+            {!itemised && data.taxAmount > 0 && (
+              <div className="r-row">
+                <span>{data.taxLabel ?? "Tax"}</span>
+                <span>{formatGHS(data.taxAmount)}</span>
+              </div>
+            )}
+
+            <div className="r-row r-total">
+              <span>TOTAL</span>
+              <span>{formatGHS(data.total)}</span>
+            </div>
+
+            {/* Tax already inside the price: show what it breaks down to, as the
+                GRA expects a VAT-inclusive receipt to. */}
+            {itemised && inclusive && (
+              <>
+                <div className="r-rule" />
+                <div className="r-small">Included in the price:</div>
+                {typeof data.taxableNet === "number" && (
+                  <div className="r-row r-small">
+                    <span>Taxable (excl.)</span>
+                    <span>{formatGHS(data.taxableNet)}</span>
+                  </div>
+                )}
+                {data.taxLines!.map((line) => (
+                  <div className="r-row r-small" key={line.code}>
+                    <span>{line.label}</span>
+                    <span>{formatGHS(line.amount)}</span>
+                  </div>
+                ))}
+              </>
+            )}
+          </>
+        );
+      })()}
 
       <div className="r-rule" />
 

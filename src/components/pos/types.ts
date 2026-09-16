@@ -78,6 +78,12 @@ export interface OrderView {
   total: number;
   tenderedAmount: number | null;
   changeAmount: number | null;
+  tax: {
+    inclusive: boolean;
+    net: number;
+    taxTotal: number;
+    lines: { code: string; label: string; rate: number; amount: number }[];
+  } | null;
   customerName: string | null;
   customerPhone: string | null;
   notes: string | null;

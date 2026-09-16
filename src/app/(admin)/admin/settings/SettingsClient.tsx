@@ -84,6 +84,43 @@ export default function SettingsClient({ settings }: { settings: Record<SettingK
         </Field>
       </Panel>
 
+      <Panel title="Tax (Ghana VAT)" className="p-5 space-y-4">
+        <Segmented
+          label="Charge VAT & levies"
+          hint="Off until your VAT status is confirmed. Turning it on adds the tax breakdown to every receipt and report."
+          value={values.tax_enabled === "true" ? "on" : "off"}
+          options={[
+            { value: "off", label: "Off" },
+            { value: "on", label: "On" },
+          ]}
+          onChange={(v) => set("tax_enabled", v === "on" ? "true" : "false")}
+        />
+        {values.tax_enabled === "true" && (
+          <>
+            <Segmented
+              label="Menu prices"
+              hint="Inclusive: the price already contains the tax (Anis default). Exclusive: tax is added on top at the till."
+              value={values.tax_pricing === "exclusive" ? "exclusive" : "inclusive"}
+              options={[
+                { value: "inclusive", label: "Include tax" },
+                { value: "exclusive", label: "Add on top" },
+              ]}
+              onChange={(v) => set("tax_pricing", v)}
+            />
+            <div
+              className="rounded-lg border p-3 text-xs space-y-1"
+              style={{ borderColor: "var(--s-border)", color: "var(--s-ink-muted)" }}
+            >
+              <p className="font-medium" style={{ color: "var(--s-ink)" }}>
+                Applied: NHIL 2.5% · GETFund 2.5% · COVID-19 1% · VAT 15%
+              </p>
+              <p>VAT is charged on the value plus the three levies — the GRA standard method (effective 21.9%).</p>
+              <p>Confirm your registration and rates with your accountant or the GRA before filing.</p>
+            </div>
+          </>
+        )}
+      </Panel>
+
       <Panel title="Appearance" className="p-5 space-y-4">
         <ThemeToggle
           label="Till"
@@ -137,6 +174,33 @@ function ThemeToggle({
   onChange: (value: string) => void;
 }) {
   return (
+    <Segmented
+      label={label}
+      hint={hint}
+      value={value}
+      options={[
+        { value: "light", label: "Light" },
+        { value: "dark", label: "Dark" },
+      ]}
+      onChange={onChange}
+    />
+  );
+}
+
+function Segmented({
+  label,
+  hint,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (value: string) => void;
+}) {
+  return (
     <div className="flex items-center justify-between gap-4">
       <div>
         <p className="text-sm font-medium">{label}</p>
@@ -148,17 +212,17 @@ function ThemeToggle({
         className="inline-flex rounded-lg border p-0.5 shrink-0"
         style={{ borderColor: "var(--s-border)", background: "var(--s-panel-alt)" }}
       >
-        {["light", "dark"].map((theme) => (
+        {options.map((option) => (
           <button
-            key={theme}
-            onClick={() => onChange(theme)}
-            className="rounded-md px-3 py-1.5 text-sm font-semibold capitalize"
+            key={option.value}
+            onClick={() => onChange(option.value)}
+            className="rounded-md px-3 py-1.5 text-sm font-semibold whitespace-nowrap"
             style={{
-              background: value === theme ? "var(--s-brand)" : "transparent",
-              color: value === theme ? "#fff" : "var(--s-ink-muted)",
+              background: value === option.value ? "var(--s-brand)" : "transparent",
+              color: value === option.value ? "#fff" : "var(--s-ink-muted)",
             }}
           >
-            {theme}
+            {option.label}
           </button>
         ))}
       </div>
