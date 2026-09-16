@@ -23,6 +23,7 @@ import {
 import { cartReducer, emptyCart, cartCount } from "./cartReducer";
 import MenuGrid from "./MenuGrid";
 import CartPanel from "./CartPanel";
+import MobileCartSheet from "./MobileCartSheet";
 import PaymentSheet from "./PaymentSheet";
 import ShiftPanel from "./ShiftPanel";
 import OpenTickets from "./OpenTickets";
@@ -77,6 +78,9 @@ export default function Register({
   const [view, setView] = useState<View>("register");
   const [tickets, setTickets] = useState<OrderView[]>(initialTickets);
   const [paying, setPaying] = useState(false);
+  // Phone only: the cart lives in a slide-up sheet, since there's no room for a
+  // side rail. Desktop shows CartPanel inline and never opens this.
+  const [cartOpen, setCartOpen] = useState(false);
   const [receipt, setReceipt] = useState<OrderView | null>(null);
   const [online, setOnline] = useState(true);
   // Reads straight from the queue store, so no effect has to set it.
@@ -403,7 +407,9 @@ export default function Register({
         />
       )}
 
-      {/* Mobile: the charge bar sits above the home indicator, always reachable. */}
+      {/* Mobile: the order bar sits above the home indicator, always reachable.
+          Tapping it opens the cart sheet to review before charging, rather than
+          jumping straight to payment — a phone cashier gets to catch a mis-tap. */}
       {view === "register" && count > 0 && (
         <div
           className="lg:hidden sticky bottom-0 border-t px-3 py-2"
@@ -414,16 +420,29 @@ export default function Register({
           }}
         >
           <button
-            onClick={() => setPaying(true)}
+            onClick={() => setCartOpen(true)}
             className="w-full rounded-xl px-4 py-3.5 font-bold text-white flex items-center justify-between"
             style={{ background: "var(--s-brand)" }}
           >
             <span>
-              Charge {count} item{count > 1 ? "s" : ""}
+              View {count} item{count > 1 ? "s" : ""}
             </span>
             <span className="money">{formatGHS(totals.total)}</span>
           </button>
         </div>
+      )}
+
+      {view === "register" && cartOpen && count > 0 && (
+        <MobileCartSheet
+          cart={cart}
+          totals={totals}
+          dispatch={dispatch}
+          onClose={() => setCartOpen(false)}
+          onCharge={() => {
+            setCartOpen(false);
+            setPaying(true);
+          }}
+        />
       )}
 
       {paying && (

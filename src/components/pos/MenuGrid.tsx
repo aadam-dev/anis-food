@@ -84,18 +84,15 @@ export default function MenuGrid({
               <button
                 key={item.id}
                 onClick={() => onAdd(item)}
-                className="rounded-xl border p-3 text-left active:scale-[0.98] transition-transform"
-                style={{
-                  background: "var(--s-panel)",
-                  borderColor: "var(--s-border)",
-                  minHeight: "5.25rem",
-                }}
+                className="rounded-xl border overflow-hidden text-left active:scale-[0.98] transition-transform flex flex-col"
+                style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
               >
-                <span className="block text-sm font-medium leading-snug line-clamp-3">
+                <ItemThumb item={item} />
+                <span className="px-3 pt-2 block text-sm font-medium leading-snug line-clamp-2">
                   {item.name}
                 </span>
                 <span
-                  className="money mt-1.5 block text-sm font-bold"
+                  className="money px-3 pb-3 pt-1 block text-sm font-bold"
                   style={{ color: "var(--s-brand)" }}
                 >
                   {formatGHS(item.price)}
@@ -107,6 +104,49 @@ export default function MenuGrid({
       </div>
     </div>
   );
+}
+
+// A warm tint derived from the name, so the items that have no photo yet look
+// like a deliberate set of tiles rather than broken images. The first letter
+// sits in the middle — enough for a cashier to tell dishes apart at a glance.
+const THUMB_TINTS = ["#F70E07", "#F07704", "#D40D06", "#B45309", "#9A3412", "#7C2D12"];
+
+function ItemThumb({ item }: { item: PosMenuItem }) {
+  const [failed, setFailed] = useState(false);
+  const showImage = item.imageUrl && !failed;
+
+  if (showImage) {
+    return (
+      <span className="block w-full aspect-[4/3] overflow-hidden" style={{ background: "var(--s-panel-alt)" }}>
+        {/* eslint-disable-next-line @next/next/no-img-element -- POS grid needs the
+            service worker to cache these directly; next/image's loader would not. */}
+        <img
+          src={item.imageUrl!}
+          alt=""
+          loading="lazy"
+          onError={() => setFailed(true)}
+          className="w-full h-full object-cover"
+        />
+      </span>
+    );
+  }
+
+  const tint = THUMB_TINTS[hashString(item.name) % THUMB_TINTS.length];
+  return (
+    <span
+      className="w-full aspect-[4/3] grid place-items-center text-2xl font-bold text-white/90"
+      style={{ background: tint }}
+      aria-hidden="true"
+    >
+      {item.name.trim().charAt(0).toUpperCase()}
+    </span>
+  );
+}
+
+function hashString(value: string): number {
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+  return hash;
 }
 
 function CategoryChip({
