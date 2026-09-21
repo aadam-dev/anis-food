@@ -196,6 +196,23 @@ body:has([data-surface][data-theme="light"]) {
   min-height: 2.75rem;
 }
 
+/* Public site — a slow Ken Burns drift on hero/backdrop images, and warm
+   section grounds. Kept out of @theme so they are plain, predictable CSS. */
+@keyframes anisKenBurns {
+  0% { transform: scale(1); }
+  100% { transform: scale(1.08); }
+}
+.animate-ken-burns {
+  animation: anisKenBurns 22s ease-in-out infinite alternate;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-ken-burns { animation: none; }
+}
+
+/* Warm off-white grounds that alternate down the page for editorial rhythm. */
+.bg-warm { background: #FBF8F5; }
+.bg-warm-alt { background: #F6F1EC; }
+
 /* Tactile Modernism: subtle grain overlay for hero and key sections. Use on a child of a position-relative container. */
 .grain-overlay {
   position: absolute;

@@ -1,23 +1,25 @@
 /**
- * Homepage: hero, featured menu, services, story, Wall of Love, and social grid.
- * Server component — fetches popular items from DB so FeaturedMenu stays in sync
- * with admin changes (new dishes, images, prices).
+ * Homepage — rebuilt to mirror the reference site's structure in Anis's own
+ * light + red identity. Server component: fetches popular items from the DB so
+ * the hero's signature dish and the featured grid stay in sync with admin edits.
  */
-import Hero from "@/components/sections/Hero";
-import FeaturedMenu from "@/components/sections/FeaturedMenu";
-import Testimonials from "@/components/sections/Testimonials";
-import ServicesSection from "@/components/sections/ServicesSection";
-import StorySection from "@/components/sections/StorySection";
-import SocialFeed from "@/components/sections/SocialFeed";
+import Hero, { type HeroDish } from "@/components/public/Hero";
+import StorySection from "@/components/public/StorySection";
+import FeaturedMenu, { type FeaturedItem } from "@/components/public/FeaturedMenu";
+import CategoryGrid from "@/components/public/CategoryGrid";
+import WhyChooseUs from "@/components/public/WhyChooseUs";
+import Testimonials from "@/components/public/Testimonials";
+import Gallery from "@/components/public/Gallery";
+import ContactCTA from "@/components/public/ContactCTA";
 import { dbGetPopularItems } from "@/lib/menu-data.server";
-import type { FeaturedItem } from "@/components/sections/FeaturedMenu";
+import { formatPrice } from "@/lib/utils";
 
 export const revalidate = 60;
 
 export default async function Home() {
   const popularItems = await dbGetPopularItems();
 
-  const featured: FeaturedItem[] = popularItems.slice(0, 3).map((item) => ({
+  const featured: FeaturedItem[] = popularItems.slice(0, 6).map((item) => ({
     id: item.id,
     name: item.name,
     description: item.description,
@@ -27,14 +29,24 @@ export default async function Home() {
     imageUrl: item.imageUrl,
   }));
 
+  const heroDish: HeroDish | undefined = featured[0]
+    ? {
+        name: featured[0].name,
+        priceDisplay: formatPrice(featured[0].price),
+        image: featured[0].imageUrl || "/images/menu/jollof-chicken-serving.jpg",
+      }
+    : undefined;
+
   return (
     <>
-      <Hero />
-      <FeaturedMenu items={featured} />
-      <Testimonials />
-      <ServicesSection />
+      <Hero featured={heroDish} />
       <StorySection />
-      <SocialFeed />
+      <FeaturedMenu items={featured} />
+      <CategoryGrid />
+      <WhyChooseUs />
+      <Testimonials />
+      <Gallery />
+      <ContactCTA />
     </>
   );
 }

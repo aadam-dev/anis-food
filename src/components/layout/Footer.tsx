@@ -1,163 +1,122 @@
-"use client";
-
-/**
- * Site footer: brand, nav links, address, hours, phone, newsletter, and order links.
- */
 import Link from "next/link";
-import { Phone, MapPin, Clock, Instagram, Facebook, MessageCircle, Video, LogIn } from "lucide-react";
-import { BUSINESS_INFO, NAVIGATION_ITEMS } from "@/lib/constants";
+import Image from "next/image";
+import { MapPin, Phone, Clock, Instagram, Facebook, MessageCircle, LogIn } from "lucide-react";
+import { BUSINESS_INFO } from "@/lib/constants";
 import { DEVELOPER_CREDIT } from "@/lib/developer-credit";
-import LiveOpenStatus from "@/components/ui/LiveOpenStatus";
+
+const EXPLORE = [
+  { href: "/menu", label: "Menu" },
+  { href: "/reservations", label: "Reservations" },
+  { href: "/services", label: "Services" },
+  { href: "/about", label: "About" },
+  { href: "/gallery", label: "Gallery" },
+  { href: "/contact", label: "Contact" },
+];
 
 export default function Footer() {
-  const currentYear = new Date().getFullYear();
+  const year = new Date().getFullYear();
 
   return (
-    <footer className="bg-neutral-black text-white pt-20 pb-10">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-12 mb-16">
-
-          {/* Brand Brand & Info */}
-          <div className="lg:col-span-4 space-y-6">
-            <Link href="/" className="inline-block">
-              <div className="flex flex-col font-heading">
-                <span className="text-3xl sm:text-4xl font-extrabold text-white lowercase leading-none flex items-center">
-                  anis
-                  <span className="inline-block w-2.5 h-2.5 bg-accent-orange rounded-full ml-1.5" />
-                </span>
-                <span className="mt-1 text-[10px] font-bold tracking-[0.24em] uppercase text-gray-300">
-                  Food & Drink
-                </span>
-              </div>
-            </Link>
-            <p className="text-gray-400 text-sm leading-relaxed max-w-sm">
-              {BUSINESS_INFO.tagline}. We bring the authentic taste of Ghana to your table with love and passion.
+    <footer className="bg-neutral-black text-white/70">
+      <div className="container mx-auto max-w-7xl px-6 pt-16 pb-8">
+        <div className="grid grid-cols-1 gap-10 md:grid-cols-[1.4fr_1fr_1.2fr]">
+          <div>
+            <Image
+              src="/images/logo-on-dark.png"
+              alt="Anis Food and Drink"
+              width={150}
+              height={114}
+              className="h-14 w-auto"
+            />
+            <p className="mt-5 max-w-xs text-sm leading-relaxed text-white/50">
+              Authentic Ghanaian cuisine at honest prices — cooked with heart in Madina, Accra.
             </p>
-            <div className="flex gap-4 pt-2">
-              <SocialLink href={BUSINESS_INFO.socialMedia.instagram} icon={<Instagram className="w-5 h-5" />} label="Instagram" />
-              <SocialLink href={BUSINESS_INFO.socialMedia.facebook} icon={<Facebook className="w-5 h-5" />} label="Facebook" />
-              <SocialLink href={BUSINESS_INFO.socialMedia.whatsapp} icon={<MessageCircle className="w-5 h-5" />} label="WhatsApp" color="hover:bg-green-600" />
-              <SocialLink href={BUSINESS_INFO.socialMedia.tiktok} icon={<Video className="w-5 h-5" />} label="TikTok" />
-            </div>
-          </div>
-
-          {/* Quick Links */}
-          <div className="lg:col-span-2">
-            <h3 className="text-lg font-heading font-semibold mb-6 text-white">Explore</h3>
-            <ul className="space-y-4">
-              {NAVIGATION_ITEMS.map((item) => (
-                <li key={item.name}>
-                  <Link
-                    href={item.href}
-                    className="text-gray-400 hover:text-primary-red transition-colors text-sm font-heading font-medium block"
-                  >
-                    {item.name}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Contact Info */}
-          <div className="lg:col-span-3">
-            <h3 className="text-lg font-heading font-semibold mb-6 text-white">Visit Us</h3>
-            <ul className="space-y-6">
-              <li className="flex items-start gap-4">
-                <MapPin className="w-5 h-5 text-primary-red mt-1 shrink-0" />
-                <span className="text-gray-400 text-sm leading-relaxed">{BUSINESS_INFO.address}</span>
-              </li>
-              <li className="flex items-start gap-4">
-                <Clock className="w-5 h-5 text-primary-red mt-1 shrink-0" />
-                <LiveOpenStatus variant="card" className="text-gray-400 text-sm" />
-              </li>
-              <li className="flex items-start gap-4">
-                <Phone className="w-5 h-5 text-primary-red mt-1 shrink-0" />
-                <div className="text-gray-400 text-sm space-y-1">
-                  <a href={`tel:${BUSINESS_INFO.phone.replace(/\s/g, "")}`} className="block hover:text-white">
-                    {BUSINESS_INFO.phone}
-                  </a>
-                  <a href={`tel:${BUSINESS_INFO.phoneSecondary.replace(/\s/g, "")}`} className="block hover:text-white">
-                    {BUSINESS_INFO.phoneSecondary} <span className="text-gray-500">(WhatsApp)</span>
-                  </a>
-                </div>
-              </li>
-            </ul>
-          </div>
-
-          {/* Order */}
-          <div className="lg:col-span-3">
-            <h3 className="text-lg font-heading font-semibold mb-6 text-white">Order Online</h3>
-            <div className="flex flex-col gap-2">
+            <div className="mt-6 flex items-center gap-3">
               <a
-                href={BUSINESS_INFO.deliveryPlatforms.boltFood}
+                href={BUSINESS_INFO.socialMedia.instagram}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-sm text-gray-400 hover:text-accent-orange transition-colors flex items-center gap-2"
+                aria-label="Instagram"
+                className="grid h-10 w-10 place-items-center rounded-full bg-white/5 text-white/70 transition-colors hover:bg-primary-red hover:text-white"
               >
-                <span className="w-1.5 h-1.5 rounded-full bg-accent-orange" />
-                Order on Bolt Food
+                <Instagram className="h-4 w-4" />
               </a>
-              <Link
-                href="/order"
-                className="text-sm text-gray-400 hover:text-accent-orange transition-colors flex items-center gap-2"
+              <a
+                href={BUSINESS_INFO.socialMedia.facebook}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Facebook"
+                className="grid h-10 w-10 place-items-center rounded-full bg-white/5 text-white/70 transition-colors hover:bg-primary-red hover:text-white"
               >
-                <span className="w-1.5 h-1.5 rounded-full bg-accent-orange" />
-                Order via WhatsApp
-              </Link>
+                <Facebook className="h-4 w-4" />
+              </a>
+              <a
+                href={BUSINESS_INFO.socialMedia.whatsapp}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="WhatsApp"
+                className="grid h-10 w-10 place-items-center rounded-full bg-white/5 text-white/70 transition-colors hover:bg-primary-red hover:text-white"
+              >
+                <MessageCircle className="h-4 w-4" />
+              </a>
             </div>
           </div>
-        </div>
 
-        {/* Bottom Bar */}
-        <div className="pt-8 border-t border-gray-800 flex flex-col md:flex-row justify-center md:justify-between items-center gap-4">
-          <p className="text-gray-500 text-sm">
-            © {currentYear} Anis Food and Drink. All rights reserved.
-          </p>
-          <div className="flex flex-wrap justify-center gap-6">
-            <Link href="/privacy" className="text-gray-500 hover:text-white text-sm">Privacy Policy</Link>
-            <Link href="/terms" className="text-gray-500 hover:text-white text-sm">Terms of Service</Link>
-            {/* Staff door. Deliberately labelled "Staff" and kept out of the main
-                nav: an unqualified "Sign in" up there reads to a customer as
-                "you need an account to order", which is not true and would cost
-                orders. Here it is on every page for the people who need it. */}
-            <Link
-              href="/login"
-              className="text-gray-500 hover:text-white text-sm inline-flex items-center gap-1.5"
+          <nav aria-label="Footer" className="grid content-start gap-3">
+            <p className="mb-1 text-sm font-semibold text-white">Explore</p>
+            {EXPLORE.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="w-fit text-sm text-white/60 transition-colors hover:text-primary-red"
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+
+          <div className="grid content-start gap-3 text-sm">
+            <p className="mb-1 font-semibold text-white">Visit &amp; order</p>
+            <span className="flex gap-2.5 text-white/60">
+              <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary-red" />
+              {BUSINESS_INFO.address}
+            </span>
+            <a
+              href={`tel:${BUSINESS_INFO.phone.replace(/\s/g, "")}`}
+              className="flex w-fit gap-2.5 text-white/60 transition-colors hover:text-white"
             >
-              <LogIn className="w-3.5 h-3.5" aria-hidden />
-              Staff sign in
-            </Link>
+              <Phone className="mt-0.5 h-4 w-4 shrink-0 text-primary-red" />
+              {BUSINESS_INFO.phone}
+            </a>
+            <span className="flex gap-2.5 text-white/60">
+              <Clock className="mt-0.5 h-4 w-4 shrink-0 text-primary-red" />
+              Open daily, Mon–Sun till late
+            </span>
           </div>
         </div>
 
-        {/* Sits below the copyright so it reads as a signature, not an ad. */}
-        <p className="pt-6 text-center text-gray-600 text-xs">
-          <a
-            href={DEVELOPER_CREDIT.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-gray-400 transition-colors"
-          >
-            {DEVELOPER_CREDIT.label}
-          </a>
-        </p>
+        <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-white/10 pt-8 text-sm text-white/40 sm:flex-row">
+          <span>
+            © {year} {BUSINESS_INFO.name}. All rights reserved.
+          </span>
+          <div className="flex items-center gap-5">
+            <Link
+              href="/login"
+              className="inline-flex items-center gap-1.5 text-white/50 transition-colors hover:text-white"
+            >
+              <LogIn className="h-3.5 w-3.5" /> Staff sign in
+            </Link>
+            <a
+              href={DEVELOPER_CREDIT.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="transition-colors hover:text-white/70"
+            >
+              {DEVELOPER_CREDIT.label}
+            </a>
+          </div>
+        </div>
       </div>
     </footer>
   );
 }
-
-function SocialLink({ href, icon, label, color = "hover:bg-primary-red" }: { href: string | null, icon: React.ReactNode, label: string, color?: string }) {
-  if (!href) return null;
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className={`w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center text-gray-400 ${color} hover:text-white transition-all duration-300`}
-      aria-label={label}
-    >
-      {icon}
-    </a>
-  );
-}
-
