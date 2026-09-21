@@ -328,3 +328,73 @@ export async function getReportableMonths(): Promise<string[]> {
   }
   return [...months].sort().reverse();
 }
+
+// ---------------------------------------------------------------------------
+// VAT return — "what tax did we collect this month?"
+// ---------------------------------------------------------------------------
+
+export interface VatReturn {
+  /** Whether the tax engine was on for any sale in the period. */
+  active: boolean;
+  /** Number of sales that carried tax. */
+  taxedOrders: number;
+  /** Tax-exclusive (net) value of taxed sales. */
+  taxable: number;
+  /** Total tax collected across all levies + VAT. */
+  taxTotal: number;
+  /** Per-charge breakdown (NHIL, GETFund, COVID, VAT…), in the order sold. */
+  byLevy: { code: string; label: string; amount: number }[];
+}
+
+interface TaxSnapshotShape {
+  tax?: {
+    net: number;
+    lines: { code: string; label: string; amount: number }[];
+  } | null;
+}
+
+/**
+ * Aggregates the VAT + levies actually charged over a month, straight from the
+ * receipt snapshots — so the return reflects what customers were charged, not a
+ * rate re-applied after the fact. Empty (active:false) whenever tax was off,
+ * which is the default until Anis's VAT status is confirmed.
+ */
+export async function getVatReturn(month: string): Promise<VatReturn> {
+  const { start, end } = monthRange(month);
+
+  const orders = await prisma.order.findMany({
+    where: {
+      ...REVENUE_WHERE,
+      createdAt: { gte: start, lt: end },
+      taxAmount: { gt: 0 },
+    },
+    select: { taxAmount: true, transactionSnapshot: true },
+  });
+
+  let taxTotal = 0;
+  let taxable = 0;
+  const levies = new Map<string, { label: string; amount: number }>();
+  const order: string[] = [];
+
+  for (const row of orders) {
+    taxTotal = roundMoney(taxTotal + toMoney(row.taxAmount));
+    const snapshot = row.transactionSnapshot as TaxSnapshotShape | null;
+    const tax = snapshot?.tax;
+    if (!tax) continue;
+    taxable = roundMoney(taxable + toMoney(tax.net));
+    for (const line of tax.lines) {
+      if (!levies.has(line.code)) order.push(line.code);
+      const existing = levies.get(line.code) ?? { label: line.label, amount: 0 };
+      existing.amount = roundMoney(existing.amount + toMoney(line.amount));
+      levies.set(line.code, existing);
+    }
+  }
+
+  return {
+    active: orders.length > 0,
+    taxedOrders: orders.length,
+    taxable,
+    taxTotal,
+    byLevy: order.map((code) => ({ code, label: levies.get(code)!.label, amount: levies.get(code)!.amount })),
+  };
+}

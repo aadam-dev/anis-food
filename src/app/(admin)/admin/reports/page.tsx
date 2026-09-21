@@ -1,4 +1,4 @@
-import { getMonthlyReport, getReportableMonths } from "@/lib/reports";
+import { getMonthlyReport, getReportableMonths, getVatReturn, type VatReturn } from "@/lib/reports";
 import { getSessionsForMonth } from "@/lib/report-sessions";
 import { formatGHS } from "@/lib/money";
 import { PageHeader, Panel } from "@/components/admin/ui";
@@ -18,11 +18,15 @@ export default async function ReportsPage({
   const params = await searchParams;
   const months = await getReportableMonths();
   const month = params.month && months.includes(params.month) ? params.month : months[0];
-  const tab = params.tab === "sales" || params.tab === "sessions" ? params.tab : "pl";
+  const tab =
+    params.tab === "sales" || params.tab === "sessions" || params.tab === "vat"
+      ? params.tab
+      : "pl";
 
-  const [report, sessions] = await Promise.all([
+  const [report, sessions, vat] = await Promise.all([
     getMonthlyReport(month),
     tab === "sessions" ? getSessionsForMonth(month) : Promise.resolve([]),
+    tab === "vat" ? getVatReturn(month) : Promise.resolve(null),
   ]);
 
   const monthLabel = new Date(`${month}-01T12:00:00Z`).toLocaleDateString("en-GB", {
@@ -52,7 +56,58 @@ export default async function ReportsPage({
       {tab === "pl" && <ProfitAndLoss report={report} />}
       {tab === "sales" && <DailySales report={report} />}
       {tab === "sessions" && <Sessions sessions={sessions} />}
+      {tab === "vat" && vat && <VatReturnTab vat={vat} />}
     </>
+  );
+}
+
+function VatReturnTab({ vat }: { vat: VatReturn }) {
+  if (!vat.active) {
+    return (
+      <Panel title="VAT return" className="p-6">
+        <p className="text-sm" style={{ color: "var(--s-ink-muted)" }}>
+          No VAT was charged this month. VAT and the GRA levies are built and ready but switched
+          off — turn them on in{" "}
+          <a href="/admin/settings" className="underline" style={{ color: "var(--s-brand)" }}>
+            Settings → Tax
+          </a>{" "}
+          once Anis&apos;s VAT registration is confirmed, and this return fills in automatically.
+        </p>
+      </Panel>
+    );
+  }
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <Panel title="VAT return" className="p-5">
+        <div className="flex justify-between items-baseline mb-3">
+          <span style={{ color: "var(--s-ink-muted)" }}>Taxable sales (excl. tax)</span>
+          <span className="money font-medium">{formatGHS(vat.taxable)}</span>
+        </div>
+        <dl className="space-y-2.5 border-t pt-3" style={{ borderColor: "var(--s-border)" }}>
+          {vat.byLevy.map((levy) => (
+            <div key={levy.code} className="flex justify-between items-baseline">
+              <dt style={{ color: "var(--s-ink-muted)" }}>{levy.label}</dt>
+              <dd className="money">{formatGHS(levy.amount)}</dd>
+            </div>
+          ))}
+          <div
+            className="flex justify-between items-baseline pt-3 mt-2 border-t text-lg font-bold"
+            style={{ borderColor: "var(--s-border)" }}
+          >
+            <dt>Total tax collected</dt>
+            <dd className="money" style={{ color: "var(--s-brand)" }}>
+              {formatGHS(vat.taxTotal)}
+            </dd>
+          </div>
+        </dl>
+        <p className="mt-4 text-xs" style={{ color: "var(--s-ink-faint)" }}>
+          Taken from {vat.taxedOrders} taxed sale{vat.taxedOrders === 1 ? "" : "s"}, straight from
+          each receipt as it was sold. Confirm the figures with your accountant or the GRA before
+          filing.
+        </p>
+      </Panel>
+    </div>
   );
 }
 

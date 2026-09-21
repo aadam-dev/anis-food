@@ -6,6 +6,7 @@ const TABS: { id: string; label: string }[] = [
   { id: "pl", label: "Profit & loss" },
   { id: "sales", label: "Sales" },
   { id: "sessions", label: "Shifts" },
+  { id: "vat", label: "VAT" },
 ];
 
 export default function ReportControls({
