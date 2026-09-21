@@ -1,3 +1,4 @@
+import PageHeader from "@/components/public/PageHeader";
 import ReservationForm from "@/components/reservations/ReservationForm";
 
 export const metadata = {
@@ -8,19 +9,21 @@ export const metadata = {
 
 export default function ReservationsPage() {
   return (
-    <div className="py-12 bg-[#F9FAFB] min-h-screen">
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4 display-font">
-            Book a Table
-          </h1>
-          <p className="text-lg text-gray-600 max-w-xl mx-auto">
-            Request a reservation for your preferred date and time. We&apos;ll
-            confirm by phone shortly.
-          </p>
+    <>
+      <PageHeader
+        eyebrow="Reservations"
+        title="Book a"
+        highlight="table"
+        subtitle="Request your preferred date and time — we'll confirm by phone shortly."
+        image="/images/gallery/interior.webp"
+      />
+      <section className="bg-warm py-16 md:py-20 min-h-screen">
+        <div className="mx-auto max-w-2xl px-6">
+          <div className="rounded-2xl border border-black/5 bg-white p-6 sm:p-8 shadow-sm">
+            <ReservationForm />
+          </div>
         </div>
-        <ReservationForm />
-      </div>
-    </div>
+      </section>
+    </>
   );
 }

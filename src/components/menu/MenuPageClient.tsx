@@ -8,6 +8,7 @@ import { useState, useMemo } from "react";
 import { Search } from "lucide-react";
 import MenuCategory from "@/components/menu/MenuCategory";
 import MenuCard from "@/components/menu/MenuCard";
+import PageHeader from "@/components/public/PageHeader";
 import Input from "@/components/ui/Input";
 import type { SerializedMenuCategory, SerializedMenuItem } from "@/lib/menu-data";
 import { MenuItem as MenuItemType, DietaryTag, MenuCategoryData } from "@/types";
@@ -99,18 +100,16 @@ export default function MenuPageClient({ categories, items }: Props) {
   };
 
   return (
-    <div className="py-12 bg-[#F9FAFB] min-h-screen">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4 display-font">
-            Our Menu
-          </h1>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Explore our delicious selection of authentic Ghanaian dishes
-          </p>
-        </div>
-
+    <>
+      <PageHeader
+        eyebrow="Our menu"
+        title="Every plate,"
+        highlight="freshly made"
+        subtitle="Explore our full selection of authentic Ghanaian dishes — add what you love to your order and send it on WhatsApp."
+        image="/images/menu/jollof-fried-chicken.jpg"
+      />
+      <div className="bg-warm py-16 min-h-screen">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Search + filters */}
         <div className="mb-8 max-w-4xl mx-auto bg-white rounded-2xl border border-gray-200 p-4 sm:p-5 shadow-sm">
           <div className="relative">
@@ -194,7 +193,8 @@ export default function MenuPageClient({ categories, items }: Props) {
             )}
           </div>
         )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }

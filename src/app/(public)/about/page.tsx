@@ -1,132 +1,119 @@
-import { CheckCircle, Users, Award, Heart } from "lucide-react";
-import Card from "@/components/ui/Card";
+import Image from "next/image";
+import Link from "next/link";
+import { Heart, Award, Users, CheckCircle, ArrowRight } from "lucide-react";
+import PageHeader from "@/components/public/PageHeader";
+import SectionHeading from "@/components/sections/SectionHeading";
+import Reveal from "@/components/public/Reveal";
+
+export const metadata = {
+  title: "About Us",
+  description:
+    "Anis Food and Drink — authentic Ghanaian cuisine at honest prices, cooked with heart in Madina, Accra since 2018.",
+};
+
+const VALUES = [
+  {
+    icon: Heart,
+    title: "Made with love",
+    body: "Every dish is prepared with care using traditional recipes passed down through generations.",
+  },
+  {
+    icon: Award,
+    title: "Quality ingredients",
+    body: "We source the freshest ingredients so every meal tastes the way it should — proper.",
+  },
+  {
+    icon: Users,
+    title: "Community focused",
+    body: "Proud to be part of Madina, serving authentic Ghanaian food to our neighbours every day.",
+  },
+  {
+    icon: CheckCircle,
+    title: "Honest prices",
+    body: "Great food shouldn't break the bank. Generous portions at prices everyone can afford.",
+  },
+];
 
 export default function AboutPage() {
-  const values = [
-    {
-      icon: Heart,
-      title: "Made with Love",
-      description: "Every dish is prepared with passion and care, using traditional recipes passed down through generations.",
-    },
-    {
-      icon: Award,
-      title: "Quality Ingredients",
-      description: "We source only the freshest ingredients to ensure the best taste and quality in every meal.",
-    },
-    {
-      icon: Users,
-      title: "Community Focused",
-      description: "We're proud to be part of the Botwe community, serving authentic Ghanaian cuisine to our neighbors.",
-    },
-    {
-      icon: CheckCircle,
-      title: "Affordable Prices",
-      description: "Great food shouldn't break the bank. We offer delicious meals at prices everyone can afford.",
-    },
-  ];
-
   return (
-    <div className="py-12 bg-white min-h-screen">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Hero Section */}
-        <div className="text-center mb-16">
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6 display-font">
-            About Anis Food and Drink
-          </h1>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            Serving authentic Ghanaian cuisine in the heart of Botwe, Accra
-          </p>
-        </div>
+    <>
+      <PageHeader
+        eyebrow="About us"
+        title="Cooked with heart in"
+        highlight="Madina"
+        subtitle="Serving authentic Ghanaian cuisine in the heart of Accra since 2018."
+        image="/images/gallery/chef.jpg"
+      />
 
-        {/* Story Section */}
-        <div className="mb-16">
-          <Card className="p-8 md:p-12">
-            <h2 className="text-3xl font-bold text-gray-900 mb-6 display-font">Our Story</h2>
-            <div className="prose prose-lg max-w-none text-gray-700 space-y-4">
-              <p>
-                Anis Food and Drink was born from a simple passion: to bring authentic,
-                delicious Ghanaian cuisine to our community at prices that everyone can afford.
-                Since 2018 we&apos;ve been a beloved destination in Botwe, Accra—for breakfast, pastries,
-                full meals, and our local bar with natural drinks and juices.
-              </p>
-              <p>
-                Our journey began with a commitment to quality and authenticity. Every dish 
-                on our menu is prepared using time-honored recipes, fresh ingredients, and 
-                the expertise of our experienced chefs. We believe that great food brings
-                people together, and we&apos;re honored to be part of your dining experience.
-              </p>
-              <p>
-                From our signature jollof rice to perfectly grilled chicken, each meal is 
-                crafted with care and served with a smile. We&apos;re not just a restaurant-we&apos;re
-                a part of the Botwe community, and we&apos;re here to serve you.
-              </p>
-            </div>
-          </Card>
-        </div>
+      <section className="bg-white py-24">
+        <div className="container mx-auto max-w-7xl px-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+            <Reveal className="relative">
+              <div className="relative aspect-[4/5] overflow-hidden rounded-3xl shadow-xl">
+                <Image
+                  src="/images/gallery/interior.webp"
+                  alt="Inside Anis Food and Drink"
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 1024px) 100vw, 50vw"
+                />
+              </div>
+              <div className="absolute -z-10 -left-4 -top-4 h-full w-full rounded-3xl border border-primary-red/20" />
+            </Reveal>
 
-        {/* Values Section */}
-        <div className="mb-16">
-          <h2 className="text-3xl font-bold text-gray-900 mb-8 text-center display-font">
-            What Makes Us Special
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {values.map((value, index) => {
-              const Icon = value.icon;
-              return (
-                <Card key={index} hover className="p-6">
-                  <div className="flex items-start space-x-4">
-                    <div className="bg-[#DC2626] p-3 rounded-lg">
-                      <Icon className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                        {value.title}
-                      </h3>
-                      <p className="text-gray-600">{value.description}</p>
-                    </div>
-                  </div>
-                </Card>
-              );
-            })}
+            <Reveal delay={0.1}>
+              <span className="inline-flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.22em] text-primary-red-ui">
+                <span className="h-px w-6 bg-primary-red-ui/50" aria-hidden />
+                Our story
+              </span>
+              <h2 className="mt-4 font-heading text-3xl md:text-4xl font-extrabold tracking-tight text-neutral-black leading-[1.1]">
+                Great food brings{" "}
+                <span className="display-font italic font-medium text-primary-red">people together</span>
+              </h2>
+              <div className="mt-6 space-y-4 text-neutral-gray leading-relaxed">
+                <p>
+                  Anis Food and Drink was born from a simple passion: to bring authentic, delicious
+                  Ghanaian cuisine to our community at prices everyone can afford. Since 2018 we&apos;ve
+                  been a beloved spot in Madina — for breakfast, pastries, full meals, and a local bar
+                  with natural drinks and juices.
+                </p>
+                <p>
+                  Every dish is prepared using time-honoured recipes, fresh ingredients, and the
+                  expertise of our chefs. From our signature jollof to perfectly grilled chicken, each
+                  meal is crafted with care and served with a smile.
+                </p>
+              </div>
+              <Link
+                href="/menu"
+                className="mt-8 inline-flex items-center gap-2 rounded-full bg-primary-red px-7 py-3.5 font-semibold text-white transition-all hover:bg-primary-red-dark hover:scale-[1.02]"
+              >
+                Explore the menu <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Reveal>
           </div>
         </div>
+      </section>
 
-        {/* Why Choose Us */}
-        <div className="bg-gradient-to-r from-[#DC2626] to-[#F97316] rounded-2xl p-8 md:p-12 text-white">
-          <h2 className="text-3xl font-bold mb-6 display-font">Why Choose Anis Food and Drink?</h2>
-          <ul className="space-y-4 text-lg">
-            <li className="flex items-start space-x-3">
-              <CheckCircle className="w-6 h-6 flex-shrink-0 mt-1" />
-              <span>Authentic Ghanaian recipes prepared by experienced chefs</span>
-            </li>
-            <li className="flex items-start space-x-3">
-              <CheckCircle className="w-6 h-6 flex-shrink-0 mt-1" />
-              <span>Fresh ingredients sourced daily for maximum flavor</span>
-            </li>
-            <li className="flex items-start space-x-3">
-              <CheckCircle className="w-6 h-6 flex-shrink-0 mt-1" />
-              <span>Affordable prices without compromising on quality</span>
-            </li>
-            <li className="flex items-start space-x-3">
-              <CheckCircle className="w-6 h-6 flex-shrink-0 mt-1" />
-              <span>Friendly service in a welcoming atmosphere</span>
-            </li>
-            <li className="flex items-start space-x-3">
-              <CheckCircle className="w-6 h-6 flex-shrink-0 mt-1" />
-              <span>Breakfast, pastries, and a local bar with natural drinks and juices</span>
-            </li>
-            <li className="flex items-start space-x-3">
-              <CheckCircle className="w-6 h-6 flex-shrink-0 mt-1" />
-              <span>Convenient delivery and pickup options</span>
-            </li>
-            <li className="flex items-start space-x-3">
-              <CheckCircle className="w-6 h-6 flex-shrink-0 mt-1" />
-              <span>High standards of hygiene and food safety</span>
-            </li>
-          </ul>
+      <section className="bg-warm py-24">
+        <div className="container mx-auto max-w-7xl px-6">
+          <div className="mb-14">
+            <SectionHeading eyebrow="What we stand for" title="Our" highlight="values" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {VALUES.map((v, i) => (
+              <Reveal key={v.title} delay={i * 0.06}>
+                <div className="h-full rounded-2xl border border-black/5 bg-white p-7 transition-shadow hover:shadow-lg">
+                  <span className="grid h-12 w-12 place-items-center rounded-xl bg-primary-red/10 text-primary-red-ui">
+                    <v.icon className="h-6 w-6" />
+                  </span>
+                  <h3 className="mt-5 font-heading text-lg font-bold text-neutral-black">{v.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-neutral-gray">{v.body}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
         </div>
-      </div>
-    </div>
+      </section>
+    </>
   );
 }
-
