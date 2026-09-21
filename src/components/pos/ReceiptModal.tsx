@@ -76,6 +76,7 @@ export default function ReceiptModal({
     address: business.address,
     phone: business.phone,
     footer: business.footer,
+    logoUrl: "/images/logo.png",
     verifyUrl,
     qrDataUrl,
   };

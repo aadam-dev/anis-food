@@ -273,24 +273,44 @@ body:has([data-surface][data-theme="light"]) {
     margin: 0;
   }
 
+  /* The receipt lives inside a fixed, centered, scrollable modal. Without these
+     resets it prints wherever that modal put it — pushed down the page, with the
+     overflow clipped so a fragment bleeds to the top. Flattening every ancestor
+     to static/visible/no-clip lets the receipt escape the modal and pin to the
+     page's top-left, which is what a thermal roll expects. */
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
   body * {
-    visibility: hidden;
+    visibility: hidden !important;
+    position: static !important;
+    overflow: visible !important;
+    max-height: none !important;
+    transform: none !important;
   }
 
   [data-receipt],
   [data-receipt] *,
   [data-anis-receipt],
   [data-anis-receipt] * {
-    visibility: visible;
+    visibility: visible !important;
   }
 
   [data-receipt],
   [data-anis-receipt] {
-    position: absolute;
-    left: 0;
-    top: 0;
-    box-shadow: none;
-    border: none;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
   }
 
   [data-receipt] {
@@ -302,8 +322,8 @@ body:has([data-surface][data-theme="light"]) {
      wrap every line in the wrong place. */
   [data-anis-receipt] {
     width: 72mm;
-    border-radius: 0;
-    padding: 0;
-    margin: 0;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
   }
 }
