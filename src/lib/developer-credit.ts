@@ -1,8 +1,8 @@
 /**
  * Developer credit — three separate identities, on purpose.
  *
- * `DEVELOPER_CREDIT` is the public-facing one (site footer, sign-in screen): the
- * developer's own brand, aadambuilds.dev.
+ * `DEVELOPER_CREDIT` is the public-facing one (site footer, sign-in screen):
+ * the product brand, Pronaj, linking to its web-development page.
  *
  * `RECEIPT_CREDIT` is what prints on the thermal slip: Pronaj, the product name
  * the restaurant's customers and staff see on paper every day. A shopfront brand
@@ -17,12 +17,12 @@
  */
 
 export const DEVELOPER_CREDIT = {
-  name: "Aadam",
-  url: "https://aadambuilds.dev",
+  name: "Pronaj",
+  url: "https://pronajgh.com/digital/web-development",
   /** Used where a link works — the site footer, the sign-in screen. */
-  label: "Powered by Aadam",
-  /** Used on printed receipts, where a link is useless and the URL must be readable. */
-  printLines: ["Powered by Aadam", "aadambuilds.dev"] as const,
+  label: "Powered by Pronaj",
+  /** Kept for any text-only surface; the public site uses the linked label above. */
+  printLines: ["Powered by Pronaj", "pronajgh.com"] as const,
 } as const;
 
 /** Printed on the thermal receipt. Local phone form — the reader is in Accra. */
