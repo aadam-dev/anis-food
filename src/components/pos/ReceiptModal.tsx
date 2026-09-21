@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X, Printer } from "lucide-react";
+import QRCode from "qrcode";
 import Receipt80mm, { type ReceiptData } from "./Receipt80mm";
+import { printReceiptNow } from "@/lib/receipt-print";
 import type { OrderView } from "./types";
 
 export default function ReceiptModal({
@@ -17,6 +19,28 @@ export default function ReceiptModal({
   onClose: () => void;
 }) {
   const printed = useRef(false);
+  const [qrDataUrl, setQrDataUrl] = useState<string | undefined>();
+
+  // The public page a customer reaches by scanning the slip. clientRef is an
+  // unguessable UUID already on the order, so it doubles as the receipt token.
+  const siteUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    (typeof window !== "undefined" ? window.location.origin : "");
+  const verifyUrl = `${siteUrl}/receipt/${order.clientRef}`;
+
+  useEffect(() => {
+    let alive = true;
+    QRCode.toDataURL(verifyUrl, { margin: 0, width: 240 })
+      .then((url) => {
+        if (alive) setQrDataUrl(url);
+      })
+      .catch(() => {
+        // No QR is better than a blank box; the receipt still prints without it.
+      });
+    return () => {
+      alive = false;
+    };
+  }, [verifyUrl]);
 
   const data: ReceiptData = {
     orderNumber: order.orderNumber,
@@ -52,17 +76,28 @@ export default function ReceiptModal({
     address: business.address,
     phone: business.phone,
     footer: business.footer,
+    verifyUrl,
+    qrDataUrl,
   };
 
   useEffect(() => {
-    // Print once, shortly after the receipt is on screen — long enough for the
-    // browser to lay it out, short enough that the cashier is not left waiting
-    // with a customer's hand out.
+    // Print once, as soon as the QR is in the DOM — printReceiptNow waits for the
+    // image to decode so the QR never lands on paper as a blank box. If the QR is
+    // slow or fails, a 1.2s fallback prints the receipt without it rather than
+    // leaving the cashier waiting with a customer's hand out.
     if (printed.current) return;
-    printed.current = true;
-    const timer = setTimeout(() => window.print(), 600);
+    if (qrDataUrl) {
+      printed.current = true;
+      printReceiptNow();
+      return;
+    }
+    const timer = setTimeout(() => {
+      if (printed.current) return;
+      printed.current = true;
+      printReceiptNow();
+    }, 1200);
     return () => clearTimeout(timer);
-  }, []);
+  }, [qrDataUrl]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -78,7 +113,7 @@ export default function ReceiptModal({
           <h2 className="font-semibold">Receipt</h2>
           <div className="flex items-center gap-1">
             <button
-              onClick={() => window.print()}
+              onClick={() => printReceiptNow()}
               className="h-11 px-3 flex items-center gap-1.5 rounded-lg text-sm font-semibold"
               style={{ background: "var(--s-panel-alt)" }}
             >

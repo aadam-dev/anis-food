@@ -2,7 +2,7 @@
 
 import { formatGHS } from "@/lib/money";
 import { callNumber } from "@/lib/session-utils";
-import { DEVELOPER_CREDIT } from "@/lib/developer-credit";
+import { RECEIPT_CREDIT } from "@/lib/developer-credit";
 
 /**
  * The receipt, at 72mm printable width on 80mm thermal paper.
@@ -48,6 +48,10 @@ export interface ReceiptData {
   address: string;
   phone: string;
   footer: string;
+  /** Public URL a customer can open to verify this sale (printed under the QR). */
+  verifyUrl?: string;
+  /** The verify URL as a scannable QR, pre-rendered to a data: URL by the caller. */
+  qrDataUrl?: string;
 }
 
 const METHOD_LABELS: Record<string, string> = {
@@ -236,8 +240,25 @@ export default function Receipt80mm({
       <div className="r-rule" />
       <div className="r-center r-small">
         <div>{data.footer}</div>
+      </div>
+
+      {data.qrDataUrl && (
+        <div className="r-center r-small" style={{ marginTop: 8 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element -- inline data: URL,
+              printed directly; next/image's loader would break the thermal print. */}
+          <img
+            src={data.qrDataUrl}
+            alt=""
+            style={{ width: "30mm", height: "30mm", margin: "0 auto", display: "block" }}
+          />
+          <div>Scan to verify this receipt</div>
+        </div>
+      )}
+
+      <div className="r-rule" />
+      <div className="r-center r-small">
         <div className="r-spacer" />
-        {DEVELOPER_CREDIT.printLines.map((line) => (
+        {RECEIPT_CREDIT.printLines.map((line) => (
           <div key={line}>{line}</div>
         ))}
       </div>
