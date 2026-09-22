@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import { formatGHS, type OrderTotals } from "@/lib/money";
 import type { CartAction, CartState } from "./cartReducer";
 import CartLines from "./CartLines";
+import CustomerFields from "./CustomerFields";
 
 /**
  * The cart, on a phone.
@@ -19,12 +20,22 @@ export default function MobileCartSheet({
   cart,
   totals,
   dispatch,
+  customerName,
+  customerPhone,
+  onCustomerName,
+  onCustomerPhone,
+  onClear,
   onClose,
   onCharge,
 }: {
   cart: CartState;
   totals: OrderTotals;
   dispatch: React.Dispatch<CartAction>;
+  customerName: string;
+  customerPhone: string;
+  onCustomerName: (value: string) => void;
+  onCustomerPhone: (value: string) => void;
+  onClear: () => void;
   onClose: () => void;
   onCharge: () => void;
 }) {
@@ -52,8 +63,8 @@ export default function MobileCartSheet({
           <div className="flex items-center gap-1">
             {!empty && (
               <button
-                onClick={() => dispatch({ type: "clear" })}
-                className="text-sm px-2 py-1"
+                onClick={onClear}
+                className="text-sm px-2 py-1 font-medium"
                 style={{ color: "var(--s-ink-muted)" }}
               >
                 Clear
@@ -68,6 +79,15 @@ export default function MobileCartSheet({
               <X className="w-5 h-5" />
             </button>
           </div>
+        </div>
+
+        <div className="px-4 py-3 border-b" style={{ borderColor: "var(--s-border)" }}>
+          <CustomerFields
+            name={customerName}
+            phone={customerPhone}
+            onName={onCustomerName}
+            onPhone={onCustomerPhone}
+          />
         </div>
 
         <div className="flex-1 overflow-y-auto overscroll-contain">
