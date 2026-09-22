@@ -84,6 +84,7 @@ export interface OrderView {
     taxTotal: number;
     lines: { code: string; label: string; rate: number; amount: number }[];
   } | null;
+  tableLabel: string | null;
   customerName: string | null;
   customerPhone: string | null;
   notes: string | null;

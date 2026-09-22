@@ -10,7 +10,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { useRouter } from "next/navigation";
-import { CloudOff, Receipt, Store, LogOut, Wallet } from "lucide-react";
+import { CloudOff, Receipt, Store, LogOut, Wallet, LayoutGrid, X } from "lucide-react";
 import { computeOrderTotals, formatGHS } from "@/lib/money";
 import {
   enqueue,
@@ -27,6 +27,7 @@ import MobileCartSheet from "./MobileCartSheet";
 import PaymentSheet from "./PaymentSheet";
 import ShiftPanel from "./ShiftPanel";
 import OpenTickets from "./OpenTickets";
+import TableFloor from "./TableFloor";
 import ReceiptModal from "./ReceiptModal";
 import type {
   OrderView,
@@ -36,7 +37,7 @@ import type {
   PaymentChoice,
 } from "./types";
 
-type View = "register" | "tickets" | "shift";
+type View = "register" | "tables" | "tickets" | "shift";
 type Gate = "none" | "stale" | "active" | "error";
 
 interface RegisterProps {
@@ -76,6 +77,10 @@ export default function Register({
     !initialSession ? "none" : initialSession.isStale ? "stale" : "active",
   );
   const [view, setView] = useState<View>("register");
+  // The dine-in table the current order is being rung up for (null = counter/
+  // takeaway). tableRefresh forces the floor to reload after a tab changes.
+  const [selectedTable, setSelectedTable] = useState<{ id: string; label: string } | null>(null);
+  const [tableRefresh, setTableRefresh] = useState(0);
   const [tickets, setTickets] = useState<OrderView[]>(initialTickets);
   const [paying, setPaying] = useState(false);
   // Phone only: the cart lives in a slide-up sheet, since there's no room for a
@@ -226,6 +231,7 @@ export default function Register({
       })),
       paymentMethod: method,
       discountAmount: cart.discount || undefined,
+      tableId: selectedTable?.id,
       ...extras,
     };
 
@@ -251,6 +257,8 @@ export default function Register({
       dispatch({ type: "clear" });
       setPaying(false);
       setReceipt(data.order);
+      setSelectedTable(null);
+      setTableRefresh((n) => n + 1);
       void loadSession();
       void loadTickets();
     } catch {
@@ -259,6 +267,7 @@ export default function Register({
       await enqueue(clientRef, payload);
       dispatch({ type: "clear" });
       setPaying(false);
+      setSelectedTable(null);
       setBanner({
         tone: "good",
         text: "Saved on this device. It will send itself when the network is back.",
@@ -310,6 +319,9 @@ export default function Register({
         <div className="flex items-center gap-1 px-2 py-2">
           <TabButton active={view === "register"} onClick={() => setView("register")}>
             <Store className="w-4 h-4" /> Register
+          </TabButton>
+          <TabButton active={view === "tables"} onClick={() => setView("tables")}>
+            <LayoutGrid className="w-4 h-4" /> Tables
           </TabButton>
           <TabButton active={view === "tickets"} onClick={() => setView("tickets")}>
             <Receipt className="w-4 h-4" /> Tickets
@@ -367,19 +379,49 @@ export default function Register({
       </header>
 
       {view === "register" && (
-        <div className="flex-1 min-h-0 lg:grid lg:grid-cols-[1fr_22rem]">
-          <MenuGrid
-            categories={menu.categories}
-            items={menu.items}
-            onAdd={(item) => dispatch({ type: "add", item })}
-          />
-          <CartPanel
-            cart={cart}
-            totals={totals}
-            dispatch={dispatch}
-            onCharge={() => setPaying(true)}
-          />
+        <div className="flex-1 min-h-0 flex flex-col">
+          {selectedTable && (
+            <div
+              className="flex items-center justify-between px-3 py-2 text-sm font-medium"
+              style={{ background: "var(--s-hover)", color: "var(--s-brand)" }}
+            >
+              <span>
+                Seating <b>{selectedTable.label}</b> — this order opens the table&apos;s tab
+              </span>
+              <button
+                onClick={() => setSelectedTable(null)}
+                aria-label="Clear table"
+                className="h-8 w-8 grid place-items-center rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+          <div className="flex-1 min-h-0 lg:grid lg:grid-cols-[1fr_22rem]">
+            <MenuGrid
+              categories={menu.categories}
+              items={menu.items}
+              onAdd={(item) => dispatch({ type: "add", item })}
+            />
+            <CartPanel
+              cart={cart}
+              totals={totals}
+              dispatch={dispatch}
+              onCharge={() => setPaying(true)}
+            />
+          </div>
         </div>
+      )}
+
+      {view === "tables" && (
+        <TableFloor
+          refreshKey={tableRefresh}
+          onSeat={(table) => {
+            setSelectedTable(table);
+            setView("register");
+          }}
+          onOpenTab={() => setView("tickets")}
+        />
       )}
 
       {view === "tickets" && (

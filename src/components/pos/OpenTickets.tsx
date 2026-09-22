@@ -94,9 +94,19 @@ export default function OpenTickets({
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="money text-2xl font-bold leading-none">
-                  {callNumber(ticket.orderNumber)}
-                </p>
+                <div className="flex items-center gap-2">
+                  <p className="money text-2xl font-bold leading-none">
+                    {callNumber(ticket.orderNumber)}
+                  </p>
+                  {ticket.tableLabel && (
+                    <span
+                      className="rounded px-1.5 py-0.5 text-xs font-bold"
+                      style={{ background: "var(--s-brand)", color: "#fff" }}
+                    >
+                      {ticket.tableLabel}
+                    </span>
+                  )}
+                </div>
                 <p className="mt-1 text-sm truncate" style={{ color: "var(--s-ink-muted)" }}>
                   {ticket.customerName || "No name"} ·{" "}
                   <span style={{ color: waitingMinutes > 20 ? "var(--s-warn)" : undefined }}>

@@ -63,6 +63,8 @@ const createSchema = z.object({
   discountAmount: z.number().min(0).max(1000000).optional(),
   deliveryType: z.enum(["DINE_IN", "TAKEAWAY", "DELIVERY"]).default("DINE_IN"),
   source: z.enum(["POS", "ONLINE", "BOLT", "WALK_IN"]).default("POS"),
+  /** Dine-in table this order is seated at. */
+  tableId: z.string().optional(),
   customerName: z.string().max(120).optional(),
   customerPhone: z.string().max(30).optional(),
   notes: z.string().max(500).optional(),
@@ -105,6 +107,7 @@ function serialiseOrder(
     tenderedAmount: order.tenderedAmount === null ? null : toMoney(order.tenderedAmount),
     changeAmount: order.changeAmount === null ? null : toMoney(order.changeAmount),
     tax: snapshot?.tax ?? null,
+    tableLabel: order.tableLabel,
     customerName: order.customerName,
     customerPhone: order.customerPhone,
     notes: order.notes,
@@ -236,6 +239,15 @@ export async function POST(request: Request) {
       }
     }
 
+    // Resolve the table now so the label can be snapshotted onto the order and
+    // never drift if the table is later renamed.
+    const table = body.tableId
+      ? await prisma.restaurantTable.findUnique({
+          where: { id: body.tableId },
+          select: { id: true, label: true },
+        })
+      : null;
+
     const day = businessDay();
     const ip = clientIp(request);
 
@@ -262,6 +274,8 @@ export async function POST(request: Request) {
           orderNumber,
           clientRef: body.clientRef,
           sessionId: session?.id ?? null,
+          tableId: table?.id ?? null,
+          tableLabel: table?.label ?? null,
           status: isUnpaid ? OrderStatus.PREPARING : OrderStatus.COMPLETED,
           source: body.source as OrderSource,
           deliveryType: body.deliveryType as DeliveryType,

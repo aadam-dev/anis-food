@@ -276,6 +276,14 @@ model Order {
   sessionId String?
   session   PosSession? @relation(fields: [sessionId], references: [id])
 
+  /// Dine-in table this order is seated at (a table's open "tab"). Null for
+  /// takeaway, delivery, and walk-in counter sales.
+  tableId    String?
+  table      RestaurantTable? @relation(fields: [tableId], references: [id])
+  /// Snapshot of the table label as seated, kept even if the table is later
+  /// renamed or removed — the receipt and history must not change under it.
+  tableLabel String?
+
   status       OrderStatus  @default(COMPLETED)
   source       OrderSource  @default(POS)
   deliveryType DeliveryType @default(DINE_IN)
@@ -329,6 +337,27 @@ model Order {
   @@index([status, createdAt])
   @@index([customerId])
   @@index([paymentStatus, status])
+  @@index([tableId, paymentStatus])
+}
+
+/// A dine-in table on the floor. Its "tab" is whatever order is currently open
+/// against it (paymentStatus PENDING); closing/settling that order frees it.
+model RestaurantTable {
+  id        String  @id @default(cuid())
+  /// Short label a cashier reads off the floor: "T1", "Patio 3", "Bar 2".
+  label     String  @unique
+  /// Section of the room, so the floor view can group tables sensibly.
+  zone      String  @default("Main")
+  seats     Int     @default(4)
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders Order[]
+
+  @@index([zone, sortOrder])
 }
 
 model OrderItem {
