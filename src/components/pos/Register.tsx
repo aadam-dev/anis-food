@@ -9,8 +9,9 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CloudOff, Receipt, Store, LogOut, Wallet, LayoutGrid, X } from "lucide-react";
+import { CloudOff, Receipt, Store, LogOut, Wallet, LayoutGrid, X, ChefHat } from "lucide-react";
 import { computeOrderTotals, formatGHS } from "@/lib/money";
 import {
   enqueue,
@@ -330,9 +331,17 @@ export default function Register({
           <TabButton active={view === "shift"} onClick={() => setView("shift")}>
             <Wallet className="w-4 h-4" /> Shift
           </TabButton>
+          <Link
+            href="/pos/kitchen"
+            className="ml-auto h-11 w-11 grid place-items-center rounded-lg"
+            style={{ color: "var(--s-ink-muted)" }}
+            aria-label="Kitchen display"
+          >
+            <ChefHat className="w-4 h-4" />
+          </Link>
           <button
             onClick={handleSignOut}
-            className="ml-auto h-11 w-11 grid place-items-center rounded-lg"
+            className="h-11 w-11 grid place-items-center rounded-lg"
             style={{ color: "var(--s-ink-muted)" }}
             aria-label="Sign out"
           >

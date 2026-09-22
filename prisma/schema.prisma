@@ -288,6 +288,11 @@ model Order {
   source       OrderSource  @default(POS)
   deliveryType DeliveryType @default(DINE_IN)
 
+  /// Kitchen-display lifecycle, deliberately separate from payment: an order can
+  /// be paid (COMPLETED) and still be cooking. SERVED drops it off the board.
+  kitchenStatus    KitchenStatus @default(QUEUED)
+  kitchenUpdatedAt DateTime?
+
   paymentMethod    PaymentMethod
   paymentStatus    PaymentStatus @default(PAID)
   paymentReference String?
@@ -338,6 +343,14 @@ model Order {
   @@index([customerId])
   @@index([paymentStatus, status])
   @@index([tableId, paymentStatus])
+  @@index([kitchenStatus, createdAt])
+}
+
+enum KitchenStatus {
+  QUEUED
+  COOKING
+  READY
+  SERVED
 }
 
 /// A dine-in table on the floor. Its "tab" is whatever order is currently open
