@@ -9,7 +9,6 @@
  *
  *   npm run db:seed
  */
-import { randomBytes } from "node:crypto";
 import { PrismaClient, UserRole, SalaryType } from "../src/generated/prisma/index.js";
 import { hashPassword } from "../src/lib/auth/password";
 import menu from "../src/data/menu.json" with { type: "json" };
@@ -67,13 +66,16 @@ const SETTINGS: Record<string, string> = {
   admin_theme: "light",
 };
 
-/** Generates a readable but strong first password: 4 groups of 4 base32 chars. */
-function initialPassword(): string {
-  const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // no I, L, O, 0, 1
-  const bytes = randomBytes(16);
-  const chars = Array.from(bytes, (b) => alphabet[b % alphabet.length]);
-  return [0, 4, 8, 12].map((i) => chars.slice(i, i + 4).join("")).join("-");
-}
+/**
+ * The password every seeded account gets.
+ *
+ * Easy and shared on purpose: a fresh database should be testable the moment it
+ * is seeded, with one password that unlocks Karim (owner), IT (super admin) and
+ * the cashiers alike. Override it with SEED_PASSWORD when you want something
+ * else. It is NOT a credential to keep — CHANGE IT before real staff or
+ * customers touch the system.
+ */
+const SEED_PASSWORD = process.env.SEED_PASSWORD || "anis1234";
 
 async function seedUsers() {
   const created: { email: string; role: string; password: string }[] = [];
@@ -92,16 +94,16 @@ async function seedUsers() {
       continue;
     }
 
-    const password = initialPassword();
+    const password = SEED_PASSWORD;
     const user = await prisma.user.create({
       data: {
         email,
         name: seed.name,
         role: seed.role,
         passwordHash: await hashPassword(password),
-        // Everyone must choose their own password on first sign-in. The one
-        // printed below is a delivery mechanism, not a credential to keep.
-        passwordResetRequired: true,
+        // Easy seed password, ready to sign in with immediately for testing.
+        // Change it (and this flag stays false) before going live.
+        passwordResetRequired: false,
       },
     });
 
@@ -199,8 +201,7 @@ async function main() {
 
   if (created.length > 0) {
     console.log("\n" + "─".repeat(64));
-    console.log("FIRST-TIME PASSWORDS — shown once, not stored anywhere.");
-    console.log("Give each person theirs directly. They must change it at first sign-in.");
+    console.log("SEED LOGINS — easy shared password for testing. CHANGE before launch.");
     console.log("─".repeat(64));
     for (const user of created) {
       console.log(`  ${user.email.padEnd(22)} ${user.password}   (${user.role})`);
