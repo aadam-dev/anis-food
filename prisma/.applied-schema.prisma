@@ -353,6 +353,53 @@ enum KitchenStatus {
   SERVED
 }
 
+/// A tracked stock item — an ingredient, a drink, a packaging supply. Stock is
+/// kept as a running number that every movement adjusts, so the current level
+/// and its full history can never disagree.
+model InventoryItem {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  /// Unit the stock is counted in: kg, L, pcs, bag, crate…
+  unit        String   @default("unit")
+  stock       Decimal  @default(0) @db.Decimal(12, 3)
+  /// At or below this level the item is flagged low on the dashboard.
+  lowStock    Decimal  @default(0) @db.Decimal(12, 3)
+  costPerUnit Decimal? @db.Decimal(10, 2)
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  movements InventoryMovement[]
+
+  @@index([isActive, sortOrder])
+}
+
+enum InventoryMovementType {
+  RECEIVE
+  USE
+  WASTE
+  COUNT
+  ADJUST
+}
+
+/// One change to a stock level, kept forever for the audit trail. `quantity` is
+/// the signed delta actually applied to the item's stock.
+model InventoryMovement {
+  id       String                @id @default(cuid())
+  itemId   String
+  item     InventoryItem         @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  type     InventoryMovementType
+  quantity Decimal               @db.Decimal(12, 3)
+  reason   String?
+  createdBy String?
+
+  createdAt DateTime @default(now())
+
+  @@index([itemId, createdAt])
+}
+
 /// A dine-in table on the floor. Its "tab" is whatever order is currently open
 /// against it (paymentStatus PENDING); closing/settling that order frees it.
 model RestaurantTable {

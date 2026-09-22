@@ -14,6 +14,7 @@ export const RESOURCE_ROLES = {
   orders: [UserRole.OWNER, UserRole.SUPER_ADMIN, UserRole.MANAGER, UserRole.ACCOUNTANT],
   menu: [UserRole.OWNER, UserRole.SUPER_ADMIN, UserRole.MANAGER],
   tables: [UserRole.OWNER, UserRole.SUPER_ADMIN, UserRole.MANAGER],
+  inventory: [UserRole.OWNER, UserRole.SUPER_ADMIN, UserRole.MANAGER],
   expenses: [UserRole.OWNER, UserRole.SUPER_ADMIN, UserRole.MANAGER, UserRole.ACCOUNTANT],
   customers: [UserRole.OWNER, UserRole.SUPER_ADMIN, UserRole.MANAGER, UserRole.ACCOUNTANT],
   reports: [UserRole.OWNER, UserRole.SUPER_ADMIN, UserRole.MANAGER, UserRole.ACCOUNTANT],

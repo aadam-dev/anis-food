@@ -17,6 +17,7 @@ import {
   LogOut,
   Store,
   LayoutGrid,
+  Boxes,
 } from "lucide-react";
 import type { UserRole } from "@/generated/prisma";
 import { canAccess, type Resource } from "@/lib/permissions";
@@ -47,6 +48,7 @@ const SECTIONS: { title: string; items: NavItem[] }[] = [
     items: [
       { href: "/admin/menu", label: "Menu", icon: UtensilsCrossed, resource: "menu" },
       { href: "/admin/tables", label: "Tables", icon: LayoutGrid, resource: "tables" },
+      { href: "/admin/inventory", label: "Inventory", icon: Boxes, resource: "inventory" },
       { href: "/admin/customers", label: "Customers", icon: Users, resource: "customers" },
     ],
   },
