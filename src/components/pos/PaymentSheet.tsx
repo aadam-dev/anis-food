@@ -1,9 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { X, Loader2 } from "lucide-react";
+import {
+  X,
+  Loader2,
+  Banknote,
+  Smartphone,
+  CreditCard,
+  Building2,
+  Split,
+  Clock,
+} from "lucide-react";
 import { formatGHS, roundMoney, changeDue, type OrderTotals } from "@/lib/money";
 import type { PaymentChoice } from "./types";
+import CustomerFields from "./CustomerFields";
 
 /**
  * Taking the money.
@@ -12,13 +22,13 @@ import type { PaymentChoice } from "./types";
  * one-handed, sometimes by someone also holding a takeaway bag.
  */
 
-const METHODS: { value: PaymentChoice; label: string }[] = [
-  { value: "CASH", label: "Cash" },
-  { value: "MOMO", label: "Mobile Money" },
-  { value: "CARD", label: "Card" },
-  { value: "BANK_TRANSFER", label: "Transfer" },
-  { value: "SPLIT", label: "Split" },
-  { value: "UNPAID", label: "Pay later" },
+const METHODS: { value: PaymentChoice; label: string; icon: typeof Banknote }[] = [
+  { value: "CASH", label: "Cash", icon: Banknote },
+  { value: "MOMO", label: "MoMo", icon: Smartphone },
+  { value: "CARD", label: "Card", icon: CreditCard },
+  { value: "BANK_TRANSFER", label: "Transfer", icon: Building2 },
+  { value: "SPLIT", label: "Split", icon: Split },
+  { value: "UNPAID", label: "Pay later", icon: Clock },
 ];
 
 /** Notes a cashier is most likely to be handed. */
@@ -26,10 +36,18 @@ const QUICK_CASH = [5, 10, 20, 50, 100, 200];
 
 export default function PaymentSheet({
   totals,
+  customerName,
+  customerPhone,
+  onCustomerName,
+  onCustomerPhone,
   onClose,
   onConfirm,
 }: {
   totals: OrderTotals;
+  customerName: string;
+  customerPhone: string;
+  onCustomerName: (value: string) => void;
+  onCustomerPhone: (value: string) => void;
   onClose: () => void;
   onConfirm: (
     method: PaymentChoice,
@@ -38,13 +56,13 @@ export default function PaymentSheet({
       paymentReference?: string;
       splitPayments?: { method: string; amount: number; ref?: string }[];
       customerName?: string;
+      customerPhone?: string;
     },
   ) => Promise<void>;
 }) {
   const [method, setMethod] = useState<PaymentChoice>("CASH");
   const [tendered, setTendered] = useState("");
   const [reference, setReference] = useState("");
-  const [customerName, setCustomerName] = useState("");
   const [splitCash, setSplitCash] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +91,8 @@ export default function PaymentSheet({
       await onConfirm(method, {
         tenderedAmount: method === "CASH" && tendered !== "" ? tenderedValue : undefined,
         paymentReference: reference.trim() || undefined,
-        customerName: method === "UNPAID" ? customerName.trim() || undefined : undefined,
+        customerName: customerName.trim() || undefined,
+        customerPhone: customerName.trim() ? customerPhone.trim() || undefined : undefined,
         splitPayments:
           method === "SPLIT"
             ? [
@@ -126,20 +145,26 @@ export default function PaymentSheet({
         </div>
 
         <div className="p-4 space-y-4">
-          <div className="grid grid-cols-3 gap-2">
-            {METHODS.map((entry) => (
-              <button
-                key={entry.value}
-                onClick={() => setMethod(entry.value)}
-                className="rounded-xl px-2 py-3 text-sm font-semibold"
-                style={{
-                  background: method === entry.value ? "var(--s-brand)" : "var(--s-panel-alt)",
-                  color: method === entry.value ? "#fff" : "var(--s-ink-muted)",
-                }}
-              >
-                {entry.label}
-              </button>
-            ))}
+          <div className="grid grid-cols-2 gap-2">
+            {METHODS.map((entry) => {
+              const Icon = entry.icon;
+              const selected = method === entry.value;
+              return (
+                <button
+                  key={entry.value}
+                  onClick={() => setMethod(entry.value)}
+                  className="rounded-xl px-3 py-3 text-sm font-semibold flex items-center justify-center gap-2"
+                  style={{
+                    background: selected ? "var(--s-brand)" : "var(--s-panel-alt)",
+                    color: selected ? "#fff" : "var(--s-ink)",
+                    border: selected ? "1px solid transparent" : "1px solid var(--s-border)",
+                  }}
+                >
+                  <Icon className="w-4 h-4 shrink-0" />
+                  {entry.label}
+                </button>
+              );
+            })}
           </div>
 
           {method === "CASH" && (
@@ -227,21 +252,17 @@ export default function PaymentSheet({
           )}
 
           {method === "UNPAID" && (
-            <div>
-              <label className="block text-sm font-medium mb-1.5">Who is this for?</label>
-              <input
-                type="text"
-                value={customerName}
-                onChange={(event) => setCustomerName(event.target.value)}
-                placeholder="Name or table"
-                className="w-full rounded-xl border px-3 py-3 outline-none focus:ring-2"
-                style={fieldStyle}
-              />
-              <p className="mt-2 text-xs" style={{ color: "var(--s-ink-faint)" }}>
-                Goes to the kitchen now and waits on the Tickets tab until it is paid for.
-              </p>
-            </div>
+            <p className="text-xs" style={{ color: "var(--s-ink-faint)" }}>
+              Goes to the kitchen now and waits on Tickets until it is paid for.
+            </p>
           )}
+
+          <CustomerFields
+            name={customerName}
+            phone={customerPhone}
+            onName={onCustomerName}
+            onPhone={onCustomerPhone}
+          />
 
           {error && (
             <p role="alert" className="text-sm" style={{ color: "var(--s-bad)" }}>

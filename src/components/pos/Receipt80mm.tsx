@@ -103,8 +103,14 @@ export default function Receipt80mm({
       <div className="r-small">
         <div>{when}</div>
         {data.soldBy && <div>Served by {data.soldBy}</div>}
-        {data.customerName && <div>Customer: {data.customerName}</div>}
-        {data.customerPhone && <div>{data.customerPhone}</div>}
+        {data.customerName?.trim() ? (
+          <>
+            <div>Customer: {data.customerName.trim()}</div>
+            {data.customerPhone?.trim() && <div>{data.customerPhone.trim()}</div>}
+          </>
+        ) : (
+          <div>Walk-in</div>
+        )}
       </div>
 
       <div className="r-rule" />

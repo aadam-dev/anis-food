@@ -3,7 +3,7 @@ import { ArrowDownRight, ArrowUpRight, Clock, ReceiptText, Wallet } from "lucide
 import { getDashboard } from "@/lib/reports";
 import { currentSession } from "@/lib/pos-session";
 import { formatGHS } from "@/lib/money";
-import { PageHeader, Panel } from "@/components/admin/ui";
+import { PageHeader, Panel, Stat } from "@/components/admin/ui";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
 import TrendBars from "@/components/admin/TrendBars";
 import { PAYMENT_LABELS } from "@/components/admin/labels";
@@ -26,79 +26,54 @@ export default async function AdminOverviewPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Panel className="p-5">
-          <p className="text-sm" style={{ color: "var(--s-ink-muted)" }}>
-            Revenue today
-          </p>
-          <p className="money mt-1 text-3xl font-bold">{formatGHS(data.today.revenue)}</p>
-          {data.revenueDelta !== null && (
-            <p
-              className="mt-1 inline-flex items-center gap-1 text-xs font-medium"
-              style={{ color: data.revenueDelta >= 0 ? "var(--s-good)" : "var(--s-bad)" }}
-            >
-              {data.revenueDelta >= 0 ? (
-                <ArrowUpRight className="w-3.5 h-3.5" />
-              ) : (
-                <ArrowDownRight className="w-3.5 h-3.5" />
-              )}
-              {Math.abs(data.revenueDelta)}% vs same day last week
-            </p>
-          )}
-          {data.revenueDelta === null && (
-            <p className="mt-1 text-xs" style={{ color: "var(--s-ink-faint)" }}>
-              No sales this day last week to compare
-            </p>
-          )}
-        </Panel>
-
-        <Panel className="p-5">
-          <p className="text-sm" style={{ color: "var(--s-ink-muted)" }}>
-            Orders today
-          </p>
-          <p className="money mt-1 text-3xl font-bold">{data.today.orders}</p>
-          <p className="mt-1 text-xs" style={{ color: "var(--s-ink-faint)" }}>
-            {formatGHS(data.today.averageTicket)} average
-          </p>
-        </Panel>
-
-        <Panel className="p-5">
-          <p className="text-sm inline-flex items-center gap-1.5" style={{ color: "var(--s-ink-muted)" }}>
-            <ReceiptText className="w-4 h-4" /> Open tickets
-          </p>
-          <p className="money mt-1 text-3xl font-bold">{data.openTickets.count}</p>
-          <p className="mt-1 text-xs" style={{ color: "var(--s-ink-faint)" }}>
-            {data.openTickets.count > 0
+        <Stat
+          label="Revenue today"
+          value={formatGHS(data.today.revenue)}
+          icon={<Wallet className="w-4 h-4" />}
+          detail={
+            data.revenueDelta !== null ? (
+              <span
+                className="inline-flex items-center gap-1 font-medium"
+                style={{ color: data.revenueDelta >= 0 ? "var(--s-good)" : "var(--s-bad)" }}
+              >
+                {data.revenueDelta >= 0 ? (
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                ) : (
+                  <ArrowDownRight className="w-3.5 h-3.5" />
+                )}
+                {Math.abs(data.revenueDelta)}% vs same day last week
+              </span>
+            ) : (
+              "No sales this day last week to compare"
+            )
+          }
+        />
+        <Stat
+          label="Orders today"
+          value={data.today.orders}
+          icon={<ReceiptText className="w-4 h-4" />}
+          detail={`${formatGHS(data.today.averageTicket)} average`}
+        />
+        <Stat
+          label="Open tickets"
+          value={data.openTickets.count}
+          icon={<Clock className="w-4 h-4" />}
+          detail={
+            data.openTickets.count > 0
               ? `${formatGHS(data.openTickets.value)} unpaid${
                   data.openTickets.oldestMinutes !== null
                     ? ` · oldest ${data.openTickets.oldestMinutes}m`
                     : ""
                 }`
-              : "All settled"}
-          </p>
-        </Panel>
-
-        <Panel className="p-5">
-          <p className="text-sm inline-flex items-center gap-1.5" style={{ color: "var(--s-ink-muted)" }}>
-            <Wallet className="w-4 h-4" /> Till
-          </p>
-          {shift ? (
-            <>
-              <p className="money mt-1 text-3xl font-bold">{formatGHS(shift.expectedCash)}</p>
-              <p className="mt-1 text-xs" style={{ color: "var(--s-ink-faint)" }}>
-                expected · open by {shift.openedBy.name}
-              </p>
-            </>
-          ) : (
-            <>
-              <p className="mt-1 text-lg font-semibold" style={{ color: "var(--s-ink-muted)" }}>
-                Closed
-              </p>
-              <p className="mt-1 text-xs" style={{ color: "var(--s-ink-faint)" }}>
-                No shift open right now
-              </p>
-            </>
-          )}
-        </Panel>
+              : "All settled"
+          }
+        />
+        <Stat
+          label="Till"
+          value={shift ? formatGHS(shift.expectedCash) : "Closed"}
+          icon={<Wallet className="w-4 h-4" />}
+          detail={shift ? `Expected cash · ${shift.openedBy.name}` : "No shift open right now"}
+        />
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
