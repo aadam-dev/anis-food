@@ -34,7 +34,7 @@ import {
 
 const lineSchema = z.object({
   menuItemId: z.string().min(1),
-  quantity: z.number().int().min(1).max(99),
+  quantity: z.number().int().min(1).max(999),
   notes: z.string().max(200).optional(),
 });
 

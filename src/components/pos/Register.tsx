@@ -29,7 +29,9 @@ import PaymentSheet from "./PaymentSheet";
 import ShiftPanel from "./ShiftPanel";
 import OpenTickets, { SettleSheet } from "./OpenTickets";
 import ReceiptModal from "./ReceiptModal";
+import QuantityEntrySheet from "./QuantityEntrySheet";
 import type {
+  CartLine,
   OrderView,
   PosCategory,
   PosMenuItem,
@@ -39,6 +41,11 @@ import type {
 
 type View = "register" | "tickets" | "shift";
 type Gate = "none" | "stale" | "active" | "error";
+
+interface ExpenseCategoryOption {
+  id: string;
+  name: string;
+}
 
 interface RegisterProps {
   user: { name: string; role: string };
@@ -54,6 +61,8 @@ interface RegisterProps {
   initialCategories: PosCategory[];
   initialItems: PosMenuItem[];
   initialTickets: OrderView[];
+  expenseCategories?: ExpenseCategoryOption[];
+  canFileExpense?: boolean;
 }
 
 export default function Register({
@@ -64,6 +73,8 @@ export default function Register({
   initialCategories,
   initialItems,
   initialTickets,
+  expenseCategories = [],
+  canFileExpense = false,
 }: RegisterProps) {
   const router = useRouter();
   const [cart, dispatch] = useReducer(cartReducer, emptyCart);
@@ -91,6 +102,8 @@ export default function Register({
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [settling, setSettling] = useState<OrderView | null>(null);
+  const [focusedMenuItemId, setFocusedMenuItemId] = useState<string | null>(null);
+  const [qtyTarget, setQtyTarget] = useState<CartLine | null>(null);
   const cartKey = useRef(`anis-pos-cart:${user.name}`);
   const skipSave = useRef(true);
 
@@ -157,6 +170,8 @@ export default function Register({
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed.lines) && parsed.lines.length > 0) {
           dispatch({ type: "replace", lines: parsed.lines, discount: parsed.discount ?? 0 });
+          const last = parsed.lines[parsed.lines.length - 1];
+          if (last?.menuItemId) setFocusedMenuItemId(last.menuItemId);
         }
         if (typeof parsed.customerName === "string") setCustomerName(parsed.customerName);
         if (typeof parsed.customerPhone === "string") setCustomerPhone(parsed.customerPhone);
@@ -165,6 +180,15 @@ export default function Register({
       /* Corrupt entry: start with an empty cart rather than failing to load. */
     }
   }, []);
+
+  // Old saves may lack imageUrl — fill from the live menu without wiping qty.
+  useEffect(() => {
+    if (menu.items.length === 0 || cart.lines.length === 0) return;
+    if (cart.lines.every((line) => line.imageUrl !== undefined)) return;
+    const byId: Record<string, string | null> = {};
+    for (const item of menu.items) byId[item.id] = item.imageUrl;
+    dispatch({ type: "enrichImages", byId });
+  }, [menu.items, cart.lines]);
 
   useEffect(() => {
     // The first run is the empty cart from before restore. Writing it would
@@ -307,6 +331,18 @@ export default function Register({
     dispatch({ type: "clear" });
     setCustomerName("");
     setCustomerPhone("");
+    setFocusedMenuItemId(null);
+    setQtyTarget(null);
+  }
+
+  function addItem(item: PosMenuItem) {
+    dispatch({ type: "add", item });
+    setFocusedMenuItemId(item.id);
+  }
+
+  function editQty(line: CartLine) {
+    setFocusedMenuItemId(line.menuItemId);
+    setQtyTarget(line);
   }
 
   const count = cartCount(cart);
@@ -320,6 +356,8 @@ export default function Register({
         session={session}
         gate={gate}
         defaultOpeningFloat={defaultOpeningFloat}
+        expenseCategories={expenseCategories}
+        canFileExpense={canFileExpense}
         onChanged={() => {
           void loadSession();
           void loadTickets();
@@ -451,13 +489,16 @@ export default function Register({
             items={menu.items}
             quantities={quantities}
             tickets={tickets}
-            onAdd={(item) => dispatch({ type: "add", item })}
+            onAdd={addItem}
             onOpenTicket={(ticket) => setSettling(ticket)}
           />
           <CartPanel
             cart={cart}
             totals={totals}
             dispatch={dispatch}
+            focusedMenuItemId={focusedMenuItemId}
+            onFocus={setFocusedMenuItemId}
+            onEditQty={editQty}
             customerName={customerName}
             customerPhone={customerPhone}
             onCustomerName={setCustomerName}
@@ -477,6 +518,8 @@ export default function Register({
           session={session}
           gate="active"
           defaultOpeningFloat={defaultOpeningFloat}
+          expenseCategories={expenseCategories}
+          canFileExpense={canFileExpense}
           onChanged={() => {
             void loadSession();
             void loadTickets();
@@ -515,6 +558,9 @@ export default function Register({
           cart={cart}
           totals={totals}
           dispatch={dispatch}
+          focusedMenuItemId={focusedMenuItemId}
+          onFocus={setFocusedMenuItemId}
+          onEditQty={editQty}
           customerName={customerName}
           customerPhone={customerPhone}
           onCustomerName={setCustomerName}
@@ -525,6 +571,25 @@ export default function Register({
             setCartOpen(false);
             setPaying(true);
           }}
+        />
+      )}
+
+      {qtyTarget && (
+        <QuantityEntrySheet
+          productName={qtyTarget.name}
+          initialQty={qtyTarget.quantity}
+          onConfirm={(quantity) => {
+            dispatch({
+              type: "setQuantity",
+              menuItemId: qtyTarget.menuItemId,
+              quantity,
+            });
+            if (quantity === 0) {
+              const remaining = cart.lines.filter((line) => line.menuItemId !== qtyTarget.menuItemId);
+              setFocusedMenuItemId(remaining[remaining.length - 1]?.menuItemId ?? null);
+            }
+          }}
+          onClose={() => setQtyTarget(null)}
         />
       )}
 
