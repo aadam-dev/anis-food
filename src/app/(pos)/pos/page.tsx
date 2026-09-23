@@ -3,6 +3,7 @@ import { getSettings } from "@/lib/settings";
 import { currentSession } from "@/lib/pos-session";
 import { prisma } from "@/lib/db";
 import { toMoney } from "@/lib/money";
+import { canAccess } from "@/lib/permissions";
 import Register from "@/components/pos/Register";
 import type { OrderView, PosCategory, PosMenuItem, SessionView } from "@/components/pos/types";
 
@@ -15,7 +16,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function PosPage() {
   const user = await getCurrentUser();
-  const [settings, session, categories, items, tickets] = await Promise.all([
+  const [settings, session, categories, items, tickets, expenseCategories] = await Promise.all([
     getSettings(),
     currentSession(),
     prisma.menuCategory.findMany({
@@ -41,6 +42,10 @@ export default async function PosPage() {
       orderBy: { createdAt: "asc" },
       include: { items: true },
       take: 100,
+    }),
+    prisma.expenseCategory.findMany({
+      orderBy: { sortOrder: "asc" },
+      select: { id: true, name: true },
     }),
   ]);
 
@@ -86,6 +91,8 @@ export default async function PosPage() {
     })),
   }));
 
+  const canFileExpense = canAccess(user!.role, "expenses");
+
   return (
     <Register
       user={{ name: user!.name, role: user!.role }}
@@ -101,6 +108,8 @@ export default async function PosPage() {
       initialCategories={categories as PosCategory[]}
       initialItems={menuItems}
       initialTickets={openTickets}
+      expenseCategories={canFileExpense ? expenseCategories : []}
+      canFileExpense={canFileExpense}
     />
   );
 }

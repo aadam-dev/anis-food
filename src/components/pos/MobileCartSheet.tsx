@@ -3,6 +3,7 @@
 import { X } from "lucide-react";
 import { formatGHS, type OrderTotals } from "@/lib/money";
 import type { CartAction, CartState } from "./cartReducer";
+import type { CartLine } from "./types";
 import CartLines from "./CartLines";
 import CustomerFields from "./CustomerFields";
 
@@ -20,6 +21,9 @@ export default function MobileCartSheet({
   cart,
   totals,
   dispatch,
+  focusedMenuItemId,
+  onFocus,
+  onEditQty,
   customerName,
   customerPhone,
   onCustomerName,
@@ -31,6 +35,9 @@ export default function MobileCartSheet({
   cart: CartState;
   totals: OrderTotals;
   dispatch: React.Dispatch<CartAction>;
+  focusedMenuItemId?: string | null;
+  onFocus?: (menuItemId: string) => void;
+  onEditQty?: (line: CartLine) => void;
   customerName: string;
   customerPhone: string;
   onCustomerName: (value: string) => void;
@@ -91,7 +98,13 @@ export default function MobileCartSheet({
         </div>
 
         <div className="flex-1 overflow-y-auto overscroll-contain">
-          <CartLines cart={cart} dispatch={dispatch} />
+          <CartLines
+            cart={cart}
+            dispatch={dispatch}
+            focusedMenuItemId={focusedMenuItemId}
+            onFocus={onFocus}
+            onEditQty={onEditQty}
+          />
         </div>
 
         {!empty && (
