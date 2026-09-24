@@ -1,9 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { X, Loader2 } from "lucide-react";
+import {
+  Banknote,
+  Smartphone,
+  CreditCard,
+  Building2,
+  Split,
+  Clock,
+} from "lucide-react";
 import { formatGHS, roundMoney, changeDue, type OrderTotals } from "@/lib/money";
 import type { PaymentChoice } from "./types";
+import CustomerFields from "./CustomerFields";
+import Sheet, { SheetError } from "./ui/Sheet";
+import Button from "./ui/Button";
 
 /**
  * Taking the money.
@@ -12,13 +22,13 @@ import type { PaymentChoice } from "./types";
  * one-handed, sometimes by someone also holding a takeaway bag.
  */
 
-const METHODS: { value: PaymentChoice; label: string }[] = [
-  { value: "CASH", label: "Cash" },
-  { value: "MOMO", label: "Mobile Money" },
-  { value: "CARD", label: "Card" },
-  { value: "BANK_TRANSFER", label: "Transfer" },
-  { value: "SPLIT", label: "Split" },
-  { value: "UNPAID", label: "Pay later" },
+const METHODS: { value: PaymentChoice; label: string; icon: typeof Banknote }[] = [
+  { value: "CASH", label: "Cash", icon: Banknote },
+  { value: "MOMO", label: "MoMo", icon: Smartphone },
+  { value: "CARD", label: "Card", icon: CreditCard },
+  { value: "BANK_TRANSFER", label: "Transfer", icon: Building2 },
+  { value: "SPLIT", label: "Split", icon: Split },
+  { value: "UNPAID", label: "Pay later", icon: Clock },
 ];
 
 /** Notes a cashier is most likely to be handed. */
@@ -26,10 +36,18 @@ const QUICK_CASH = [5, 10, 20, 50, 100, 200];
 
 export default function PaymentSheet({
   totals,
+  customerName,
+  customerPhone,
+  onCustomerName,
+  onCustomerPhone,
   onClose,
   onConfirm,
 }: {
   totals: OrderTotals;
+  customerName: string;
+  customerPhone: string;
+  onCustomerName: (value: string) => void;
+  onCustomerPhone: (value: string) => void;
   onClose: () => void;
   onConfirm: (
     method: PaymentChoice,
@@ -38,13 +56,13 @@ export default function PaymentSheet({
       paymentReference?: string;
       splitPayments?: { method: string; amount: number; ref?: string }[];
       customerName?: string;
+      customerPhone?: string;
     },
   ) => Promise<void>;
 }) {
   const [method, setMethod] = useState<PaymentChoice>("CASH");
   const [tendered, setTendered] = useState("");
   const [reference, setReference] = useState("");
-  const [customerName, setCustomerName] = useState("");
   const [splitCash, setSplitCash] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,12 +86,14 @@ export default function PaymentSheet({
       return;
     }
 
+    if (submitting) return;
     setSubmitting(true);
     try {
       await onConfirm(method, {
         tenderedAmount: method === "CASH" && tendered !== "" ? tenderedValue : undefined,
         paymentReference: reference.trim() || undefined,
-        customerName: method === "UNPAID" ? customerName.trim() || undefined : undefined,
+        customerName: customerName.trim() || undefined,
+        customerPhone: customerName.trim() ? customerPhone.trim() || undefined : undefined,
         splitPayments:
           method === "SPLIT"
             ? [
@@ -82,6 +102,8 @@ export default function PaymentSheet({
               ]
             : undefined,
       });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not take that payment.");
     } finally {
       setSubmitting(false);
     }
@@ -94,52 +116,47 @@ export default function PaymentSheet({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center">
-      <div className="absolute inset-0 bg-black/60" onClick={onClose} aria-hidden />
-      <div
-        role="dialog"
-        aria-label="Take payment"
-        className="relative w-full sm:max-w-md max-h-[92dvh] overflow-y-auto rounded-t-2xl sm:rounded-2xl border"
-        style={{
-          background: "var(--s-panel)",
-          borderColor: "var(--s-border)",
-          paddingBottom: "max(1rem, env(safe-area-inset-bottom))",
-        }}
-      >
-        <div
-          className="sticky top-0 flex items-center justify-between px-4 py-3 border-b"
-          style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
-        >
-          <div>
-            <p className="text-xs" style={{ color: "var(--s-ink-muted)" }}>
-              Total due
-            </p>
-            <p className="money text-2xl font-bold">{formatGHS(totals.total)}</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="h-11 w-11 grid place-items-center rounded-lg"
-            aria-label="Close"
+    <Sheet
+      eyebrow="Total due"
+      title={<span className="money text-2xl">{formatGHS(totals.total)}</span>}
+      onClose={onClose}
+      dismissible={!submitting}
+      footer={
+        <div className="space-y-2">
+          <SheetError message={error} />
+          <Button
+            size="lg"
+            className="w-full"
+            onClick={confirm}
+            busy={submitting}
+            disabled={short || splitInvalid}
           >
-            <X className="w-5 h-5" />
-          </button>
+            {method === "UNPAID" ? "Send to kitchen" : `Take ${formatGHS(totals.total)}`}
+          </Button>
         </div>
-
-        <div className="p-4 space-y-4">
-          <div className="grid grid-cols-3 gap-2">
-            {METHODS.map((entry) => (
-              <button
-                key={entry.value}
-                onClick={() => setMethod(entry.value)}
-                className="rounded-xl px-2 py-3 text-sm font-semibold"
-                style={{
-                  background: method === entry.value ? "var(--s-brand)" : "var(--s-panel-alt)",
-                  color: method === entry.value ? "#fff" : "var(--s-ink-muted)",
-                }}
-              >
-                {entry.label}
-              </button>
-            ))}
+      }
+    >
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-2">
+            {METHODS.map((entry) => {
+              const Icon = entry.icon;
+              const selected = method === entry.value;
+              return (
+                <button
+                  key={entry.value}
+                  onClick={() => setMethod(entry.value)}
+                  className="rounded-xl px-3 py-3 text-sm font-semibold flex items-center justify-center gap-2"
+                  style={{
+                    background: selected ? "var(--s-brand)" : "var(--s-panel-alt)",
+                    color: selected ? "#fff" : "var(--s-ink)",
+                    border: selected ? "1px solid transparent" : "1px solid var(--s-border)",
+                  }}
+                >
+                  <Icon className="w-4 h-4 shrink-0" />
+                  {entry.label}
+                </button>
+              );
+            })}
           </div>
 
           {method === "CASH" && (
@@ -227,39 +244,18 @@ export default function PaymentSheet({
           )}
 
           {method === "UNPAID" && (
-            <div>
-              <label className="block text-sm font-medium mb-1.5">Who is this for?</label>
-              <input
-                type="text"
-                value={customerName}
-                onChange={(event) => setCustomerName(event.target.value)}
-                placeholder="Name or table"
-                className="w-full rounded-xl border px-3 py-3 outline-none focus:ring-2"
-                style={fieldStyle}
-              />
-              <p className="mt-2 text-xs" style={{ color: "var(--s-ink-faint)" }}>
-                Goes to the kitchen now and waits on the Tickets tab until it is paid for.
-              </p>
-            </div>
-          )}
-
-          {error && (
-            <p role="alert" className="text-sm" style={{ color: "var(--s-bad)" }}>
-              {error}
+            <p className="text-xs" style={{ color: "var(--s-ink-faint)" }}>
+              Goes to the kitchen now and waits on Tickets until it is paid for.
             </p>
           )}
 
-          <button
-            onClick={confirm}
-            disabled={submitting || short || splitInvalid}
-            className="w-full rounded-xl px-4 py-4 font-bold text-white disabled:opacity-50 flex items-center justify-center gap-2"
-            style={{ background: "var(--s-brand)" }}
-          >
-            {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
-            {method === "UNPAID" ? "Send to kitchen" : `Take ${formatGHS(totals.total)}`}
-          </button>
+          <CustomerFields
+            name={customerName}
+            phone={customerPhone}
+            onName={onCustomerName}
+            onPhone={onCustomerPhone}
+          />
         </div>
-      </div>
-    </div>
+    </Sheet>
   );
 }

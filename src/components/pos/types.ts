@@ -19,6 +19,8 @@ export interface CartLine {
   name: string;
   unitPrice: number;
   quantity: number;
+  /** Kept on the line so the cart rail can show the dish after a restore. */
+  imageUrl?: string | null;
   notes?: string;
 }
 
@@ -66,6 +68,7 @@ export interface OrderView {
   id: string;
   orderNumber: string;
   clientRef: string;
+  sessionId?: string | null;
   status: string;
   paymentMethod: string;
   paymentStatus: string;

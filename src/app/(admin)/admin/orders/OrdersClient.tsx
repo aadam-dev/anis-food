@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Loader2, Search } from "lucide-react";
 import { formatGHS } from "@/lib/money";
 import { callNumber } from "@/lib/session-utils";
 import { Panel, EmptyState, Chip, AdminButton } from "@/components/admin/ui";
@@ -23,52 +23,138 @@ export interface AdminOrder {
   total: number;
   staff: string | null;
   customerName: string | null;
+  customerPhone: string | null;
   voidReason: string | null;
   items: { id: string; name: string; quantity: number; lineTotal: number }[];
 }
 
 const VOID_REASONS = Object.entries(VOID_REASON_LABELS);
 
+type OrderFilter = "all" | "unpaid" | "paid" | "voided";
+
+const FILTERS: { id: OrderFilter; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "unpaid", label: "Unpaid" },
+  { id: "paid", label: "Paid" },
+  { id: "voided", label: "Voided" },
+];
+
 export default function OrdersClient({ orders, day }: { orders: AdminOrder[]; day: string }) {
   const router = useRouter();
   const [open, setOpen] = useState<string | null>(null);
   const [voiding, setVoiding] = useState<AdminOrder | null>(null);
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<OrderFilter>("all");
 
-  const total = orders
-    .filter((o) => o.status !== "CANCELLED")
-    .reduce((sum, o) => sum + o.total, 0);
+  const active = orders.filter((order) => order.status !== "CANCELLED");
+  const total = active.reduce((sum, order) => sum + order.total, 0);
+
+  const visible = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return orders.filter((order) => {
+      const voided = order.status === "CANCELLED";
+      if (filter === "voided" && !voided) return false;
+      if (filter === "unpaid" && (voided || order.paymentStatus !== "PENDING")) return false;
+      if (filter === "paid" && (voided || order.paymentStatus === "PENDING")) return false;
+      if (!needle) return true;
+      const haystack = [
+        order.orderNumber,
+        callNumber(order.orderNumber),
+        order.customerName,
+        order.customerPhone,
+        order.staff,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(needle);
+    });
+  }, [orders, query, filter]);
 
   return (
     <>
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <input
-          type="date"
-          value={day}
-          onChange={(event) => router.push(`/admin/orders?day=${event.target.value}`)}
-          className="rounded-lg border px-3 py-2 text-sm min-h-11"
-          style={{ background: "var(--s-panel-alt)", borderColor: "var(--s-border)", color: "var(--s-ink)" }}
-          aria-label="Day"
-        />
-        <Chip>{orders.filter((o) => o.status !== "CANCELLED").length} orders</Chip>
-        <Chip tone="good">{formatGHS(total)}</Chip>
+      <div className="mb-4 flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            type="date"
+            value={day}
+            onChange={(event) => router.push(`/admin/orders?day=${event.target.value}`)}
+            className="rounded-lg border px-3 py-2 text-sm min-h-11"
+            style={{ background: "var(--s-panel-alt)", borderColor: "var(--s-border)", color: "var(--s-ink)" }}
+            aria-label="Day"
+          />
+          <Chip>{active.length} orders</Chip>
+          <Chip tone="good">{formatGHS(total)}</Chip>
+        </div>
+
+        <div className="relative">
+          <Search
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4"
+            style={{ color: "var(--s-ink-faint)" }}
+          />
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Name, phone, or order number"
+            aria-label="Search orders"
+            className="w-full rounded-xl border pl-9 pr-3 py-2.5 text-sm min-h-11 outline-none"
+            style={{ background: "var(--s-panel)", borderColor: "var(--s-border)", color: "var(--s-ink)" }}
+          />
+        </div>
+
+        <div className="flex gap-2 overflow-x-auto no-scrollbar">
+          {FILTERS.map((entry) => {
+            const selected = filter === entry.id;
+            return (
+              <button
+                key={entry.id}
+                type="button"
+                onClick={() => setFilter(entry.id)}
+                className="shrink-0 rounded-full border px-4 py-2 text-sm font-semibold"
+                style={{
+                  background: selected ? "var(--s-brand)" : "var(--s-panel)",
+                  borderColor: selected ? "var(--s-brand)" : "var(--s-border)",
+                  color: selected ? "#fff" : "var(--s-ink-muted)",
+                }}
+              >
+                {entry.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <Panel>
         {orders.length === 0 ? (
           <EmptyState title="No orders on this day" hint="Pick another date above." />
+        ) : visible.length === 0 ? (
+          <EmptyState title="Nothing matches" hint="Try another search or filter." />
         ) : (
-          <ul className="divide-y" style={{ borderColor: "var(--s-border)" }}>
-            {orders.map((order) => {
+          <ul className="flex flex-col gap-3 p-3 sm:gap-0 sm:p-0 sm:divide-y" style={{ borderColor: "var(--s-border)" }}>
+            {visible.map((order) => {
               const voided = order.status === "CANCELLED";
               const isOpen = open === order.id;
+              const when = new Date(order.createdAt).toLocaleTimeString("en-GB", {
+                timeZone: "Africa/Accra",
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+              const customer = [order.customerName?.trim(), order.customerPhone?.trim()]
+                .filter(Boolean)
+                .join(" · ");
               return (
-                <li key={order.id} className="px-4 py-3 sm:px-5">
+                <li
+                  key={order.id}
+                  className="rounded-xl border p-3 sm:rounded-none sm:border-0 sm:px-5 sm:py-3"
+                  style={{ borderColor: "var(--s-border)", background: "var(--s-panel)" }}
+                >
                   <button
                     onClick={() => setOpen(isOpen ? null : order.id)}
                     className="w-full flex items-center gap-3 text-left"
                   >
                     <span
-                      className="money text-lg font-bold w-10 shrink-0"
+                      className="money text-lg font-bold w-12 shrink-0"
                       style={{ color: voided ? "var(--s-ink-faint)" : "var(--s-ink)" }}
                     >
                       {callNumber(order.orderNumber)}
@@ -79,27 +165,21 @@ export default function OrdersClient({ orders, day }: { orders: AdminOrder[]; da
                           className="text-sm font-medium"
                           style={voided ? { textDecoration: "line-through", color: "var(--s-ink-faint)" } : undefined}
                         >
-                          {new Date(order.createdAt).toLocaleTimeString("en-GB", {
-                            timeZone: "Africa/Accra",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+                          {when}
                         </span>
                         {voided ? (
                           <Chip tone="bad">Voided</Chip>
                         ) : (
                           <Chip>{PAYMENT_LABELS[order.paymentMethod] ?? order.paymentMethod}</Chip>
                         )}
-                        {order.paymentStatus === "PENDING" && <Chip tone="warn">Unpaid</Chip>}
+                        {order.paymentStatus === "PENDING" && !voided && <Chip tone="warn">Unpaid</Chip>}
                         {order.source !== "POS" && (
                           <Chip>{ORDER_SOURCE_LABELS[order.source] ?? order.source}</Chip>
                         )}
                       </span>
-                      {order.customerName && (
-                        <span className="block text-xs mt-0.5" style={{ color: "var(--s-ink-faint)" }}>
-                          {order.customerName}
-                        </span>
-                      )}
+                      <span className="block text-xs mt-0.5 truncate" style={{ color: "var(--s-ink-faint)" }}>
+                        {customer || "Walk-in"}
+                      </span>
                     </span>
                     <span
                       className="money font-semibold whitespace-nowrap"
@@ -110,7 +190,7 @@ export default function OrdersClient({ orders, day }: { orders: AdminOrder[]; da
                   </button>
 
                   {isOpen && (
-                    <div className="mt-3 pl-13 sm:pl-13">
+                    <div className="mt-3 sm:pl-12">
                       <ul className="space-y-1 text-sm" style={{ color: "var(--s-ink-muted)" }}>
                         {order.items.map((item) => (
                           <li key={item.id} className="flex justify-between gap-3">
@@ -121,7 +201,7 @@ export default function OrdersClient({ orders, day }: { orders: AdminOrder[]; da
                           </li>
                         ))}
                       </ul>
-                      <div className="mt-2 flex items-center justify-between">
+                      <div className="mt-2 flex items-center justify-between gap-3">
                         <span className="text-xs" style={{ color: "var(--s-ink-faint)" }}>
                           {order.orderNumber}
                           {order.staff ? ` · ${order.staff}` : ""}

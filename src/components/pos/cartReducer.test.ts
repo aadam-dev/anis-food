@@ -51,7 +51,13 @@ describe("cart", () => {
   it("caps a fat-fingered quantity", () => {
     let state = cartReducer(emptyCart, { type: "add", item: jollof });
     state = cartReducer(state, { type: "setQuantity", menuItemId: jollof.id, quantity: 5000 });
-    assert.equal(state.lines[0].quantity, 99);
+    assert.equal(state.lines[0].quantity, 999);
+  });
+
+  it("keeps the dish photo on the line", () => {
+    const withPhoto = { ...jollof, imageUrl: "/images/menu/jollof.jpg" };
+    const state = cartReducer(emptyCart, { type: "add", item: withPhoto });
+    assert.equal(state.lines[0].imageUrl, "/images/menu/jollof.jpg");
   });
 
   it("clears completely, discount included", () => {

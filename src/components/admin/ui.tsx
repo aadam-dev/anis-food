@@ -32,6 +32,39 @@ export function PageHeader({
   );
 }
 
+export function Stat({
+  label,
+  value,
+  detail,
+  icon,
+}: {
+  label: string;
+  value: React.ReactNode;
+  detail?: React.ReactNode;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <Panel className="p-5">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-sm font-medium" style={{ color: "var(--s-ink-muted)" }}>
+          {label}
+        </p>
+        {icon && (
+          <span style={{ color: "var(--s-ink-faint)" }} aria-hidden>
+            {icon}
+          </span>
+        )}
+      </div>
+      <p className="money mt-2 text-3xl font-bold tracking-tight">{value}</p>
+      {detail && (
+        <div className="mt-1.5 text-xs" style={{ color: "var(--s-ink-faint)" }}>
+          {detail}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
 export function Panel({
   children,
   className,

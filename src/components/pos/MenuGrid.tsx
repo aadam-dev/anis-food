@@ -1,21 +1,38 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Search, X } from "lucide-react";
 import { formatGHS } from "@/lib/money";
-import type { PosCategory, PosMenuItem } from "./types";
+import { callNumber } from "@/lib/session-utils";
+import type { OrderView, PosCategory, PosMenuItem } from "./types";
+import DishThumb from "./DishThumb";
 
 export default function MenuGrid({
   categories,
   items,
+  quantities,
+  tickets,
   onAdd,
+  onOpenTicket,
+  locked = false,
 }: {
   categories: PosCategory[];
   items: PosMenuItem[];
+  quantities: Record<string, number>;
+  tickets: OrderView[];
   onAdd: (item: PosMenuItem) => void;
+  onOpenTicket: (ticket: OrderView) => void;
+  /** True while an old shift is still open: the menu is visible but cannot ring. */
+  locked?: boolean;
 }) {
   const [category, setCategory] = useState<string>("popular");
   const [search, setSearch] = useState("");
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
 
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -45,15 +62,60 @@ export default function MenuGrid({
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search the menu"
             aria-label="Search the menu"
-            className="w-full rounded-xl border pl-9 pr-3 py-3 outline-none focus:ring-2"
+            className="w-full rounded-xl border pl-9 pr-10 py-3 outline-none"
             style={{
               background: "var(--s-panel-alt)",
               borderColor: "var(--s-border)",
               color: "var(--s-ink)",
             }}
           />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              className="absolute right-1 top-1/2 -translate-y-1/2 h-9 w-9 grid place-items-center rounded-lg"
+              style={{ color: "var(--s-ink-muted)" }}
+              aria-label="Clear search"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
+
+      {!search && tickets.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto px-3 pt-3 no-scrollbar">
+          {tickets.map((ticket) => {
+            const minutes = Math.max(
+              0,
+              Math.floor((now - new Date(ticket.createdAt).getTime()) / 60000),
+            );
+            const label = ticket.customerName?.trim() || callNumber(ticket.orderNumber);
+            return (
+              <button
+                key={ticket.id}
+                type="button"
+                onClick={() => onOpenTicket(ticket)}
+                className="shrink-0 rounded-xl border px-3 py-2 text-left"
+                style={{
+                  background: "color-mix(in srgb, var(--s-warn) 14%, transparent)",
+                  borderColor: "color-mix(in srgb, var(--s-warn) 45%, transparent)",
+                }}
+              >
+                <span
+                  className="block max-w-[9rem] truncate text-xs font-bold"
+                  style={{ color: "var(--s-warn)" }}
+                >
+                  {label}
+                </span>
+                <span className="block text-[11px]" style={{ color: "var(--s-ink-muted)" }}>
+                  {formatGHS(ticket.total)} · {minutes}m
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {!search && (
         <div className="flex gap-2 overflow-x-auto px-3 py-3 no-scrollbar">
@@ -79,26 +141,41 @@ export default function MenuGrid({
             Nothing here. Try another search.
           </p>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
-            {visible.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => onAdd(item)}
-                className="rounded-xl border overflow-hidden text-left active:scale-[0.98] transition-transform flex flex-col"
-                style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
-              >
-                <ItemThumb item={item} />
-                <span className="px-3 pt-2 block text-sm font-medium leading-snug line-clamp-2">
-                  {item.name}
-                </span>
-                <span
-                  className="money px-3 pb-3 pt-1 block text-sm font-bold"
-                  style={{ color: "var(--s-brand)" }}
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5">
+            {visible.map((item) => {
+              const qty = quantities[item.id] ?? 0;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => onAdd(item)}
+                  disabled={locked}
+                  className="relative rounded-2xl border overflow-hidden text-left active:scale-[0.98] transition-transform flex flex-col disabled:opacity-45 disabled:active:scale-100"
+                  style={{
+                    background: qty > 0 ? "color-mix(in srgb, var(--s-brand) 12%, var(--s-panel))" : "var(--s-panel)",
+                    borderColor: qty > 0 ? "var(--s-brand)" : "var(--s-border)",
+                  }}
                 >
-                  {formatGHS(item.price)}
-                </span>
-              </button>
-            ))}
+                  {qty > 0 && (
+                    <span
+                      className="absolute top-2 right-2 z-10 min-w-6 h-6 px-1.5 rounded-full grid place-items-center text-xs font-bold text-white"
+                      style={{ background: "var(--s-brand)" }}
+                    >
+                      {qty}
+                    </span>
+                  )}
+                  <ItemThumb item={item} />
+                  <span className="px-3 pt-2 block text-sm font-semibold leading-snug line-clamp-2">
+                    {item.name}
+                  </span>
+                  <span
+                    className="money px-3 pb-3 pt-1 block text-sm font-bold"
+                    style={{ color: "var(--s-brand)" }}
+                  >
+                    {formatGHS(item.price)}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
@@ -106,47 +183,8 @@ export default function MenuGrid({
   );
 }
 
-// A warm tint derived from the name, so the items that have no photo yet look
-// like a deliberate set of tiles rather than broken images. The first letter
-// sits in the middle — enough for a cashier to tell dishes apart at a glance.
-const THUMB_TINTS = ["#F70E07", "#F07704", "#D40D06", "#B45309", "#9A3412", "#7C2D12"];
-
 function ItemThumb({ item }: { item: PosMenuItem }) {
-  const [failed, setFailed] = useState(false);
-  const showImage = item.imageUrl && !failed;
-
-  if (showImage) {
-    return (
-      <span className="block w-full aspect-[4/3] overflow-hidden" style={{ background: "var(--s-panel-alt)" }}>
-        {/* eslint-disable-next-line @next/next/no-img-element -- POS grid needs the
-            service worker to cache these directly; next/image's loader would not. */}
-        <img
-          src={item.imageUrl!}
-          alt=""
-          loading="lazy"
-          onError={() => setFailed(true)}
-          className="w-full h-full object-cover"
-        />
-      </span>
-    );
-  }
-
-  const tint = THUMB_TINTS[hashString(item.name) % THUMB_TINTS.length];
-  return (
-    <span
-      className="w-full aspect-[4/3] grid place-items-center text-2xl font-bold text-white/90"
-      style={{ background: tint }}
-      aria-hidden="true"
-    >
-      {item.name.trim().charAt(0).toUpperCase()}
-    </span>
-  );
-}
-
-function hashString(value: string): number {
-  let hash = 0;
-  for (let i = 0; i < value.length; i++) hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
-  return hash;
+  return <DishThumb name={item.name} imageUrl={item.imageUrl} />;
 }
 
 function CategoryChip({
@@ -161,9 +199,10 @@ function CategoryChip({
   return (
     <button
       onClick={onClick}
-      className="shrink-0 rounded-full px-4 py-2 text-sm font-semibold whitespace-nowrap"
+      className="shrink-0 rounded-full border px-4 py-2 text-sm font-semibold whitespace-nowrap"
       style={{
         background: active ? "var(--s-brand)" : "var(--s-panel)",
+        borderColor: active ? "var(--s-brand)" : "var(--s-border)",
         color: active ? "#fff" : "var(--s-ink-muted)",
       }}
     >

@@ -2,17 +2,38 @@
 
 import { formatGHS, type OrderTotals } from "@/lib/money";
 import type { CartAction, CartState } from "./cartReducer";
+import type { CartLine } from "./types";
 import CartLines from "./CartLines";
+import CustomerFields from "./CustomerFields";
+import Button from "./ui/Button";
 
 export default function CartPanel({
   cart,
   totals,
   dispatch,
+  focusedMenuItemId,
+  onFocus,
+  onEditQty,
+  customerName,
+  customerPhone,
+  onCustomerName,
+  onCustomerPhone,
+  onClear,
   onCharge,
+  locked = false,
 }: {
+  locked?: boolean;
   cart: CartState;
   totals: OrderTotals;
   dispatch: React.Dispatch<CartAction>;
+  focusedMenuItemId?: string | null;
+  onFocus?: (menuItemId: string) => void;
+  onEditQty?: (line: CartLine) => void;
+  customerName: string;
+  customerPhone: string;
+  onCustomerName: (value: string) => void;
+  onCustomerPhone: (value: string) => void;
+  onClear: () => void;
   onCharge: () => void;
 }) {
   const empty = cart.lines.length === 0;
@@ -26,8 +47,8 @@ export default function CartPanel({
         <h2 className="font-semibold">This order</h2>
         {!empty && (
           <button
-            onClick={() => dispatch({ type: "clear" })}
-            className="text-sm"
+            onClick={onClear}
+            className="text-sm font-medium"
             style={{ color: "var(--s-ink-muted)" }}
           >
             Clear
@@ -35,8 +56,23 @@ export default function CartPanel({
         )}
       </div>
 
+      <div className="px-4 py-3 border-b" style={{ borderColor: "var(--s-border)" }}>
+        <CustomerFields
+          name={customerName}
+          phone={customerPhone}
+          onName={onCustomerName}
+          onPhone={onCustomerPhone}
+        />
+      </div>
+
       <div className="flex-1 overflow-y-auto">
-        <CartLines cart={cart} dispatch={dispatch} />
+        <CartLines
+          cart={cart}
+          dispatch={dispatch}
+          focusedMenuItemId={focusedMenuItemId}
+          onFocus={onFocus}
+          onEditQty={onEditQty}
+        />
       </div>
 
       {!empty && (
@@ -51,13 +87,9 @@ export default function CartPanel({
             <span className="font-semibold">Total</span>
             <span className="money text-2xl font-bold">{formatGHS(totals.total)}</span>
           </div>
-          <button
-            onClick={onCharge}
-            className="w-full rounded-xl px-4 py-3.5 font-bold text-white"
-            style={{ background: "var(--s-brand)" }}
-          >
-            Charge {formatGHS(totals.total)}
-          </button>
+          <Button size="lg" className="w-full" onClick={onCharge} disabled={locked}>
+            {locked ? "Close the old shift first" : `Charge ${formatGHS(totals.total)}`}
+          </Button>
         </div>
       )}
     </aside>

@@ -3,6 +3,7 @@ import { getSettings } from "@/lib/settings";
 import { currentSession } from "@/lib/pos-session";
 import { prisma } from "@/lib/db";
 import { toMoney } from "@/lib/money";
+import { canAccess, canVoidAtTill } from "@/lib/permissions";
 import Register from "@/components/pos/Register";
 import type { OrderView, PosCategory, PosMenuItem, SessionView } from "@/components/pos/types";
 
@@ -15,7 +16,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function PosPage() {
   const user = await getCurrentUser();
-  const [settings, session, categories, items, tickets] = await Promise.all([
+  const [settings, session, categories, items, tickets, expenseCategories] = await Promise.all([
     getSettings(),
     currentSession(),
     prisma.menuCategory.findMany({
@@ -42,6 +43,10 @@ export default async function PosPage() {
       include: { items: true },
       take: 100,
     }),
+    prisma.expenseCategory.findMany({
+      orderBy: { sortOrder: "asc" },
+      select: { id: true, name: true },
+    }),
   ]);
 
   const menuItems: PosMenuItem[] = items.map((item) => ({
@@ -58,6 +63,7 @@ export default async function PosPage() {
     id: order.id,
     orderNumber: order.orderNumber,
     clientRef: order.clientRef,
+    sessionId: order.sessionId,
     status: order.status,
     paymentMethod: order.paymentMethod,
     paymentStatus: order.paymentStatus,
@@ -86,6 +92,10 @@ export default async function PosPage() {
     })),
   }));
 
+  const canFileExpense = canAccess(user!.role, "expenses");
+  const canVoid = canVoidAtTill(user!.role);
+  const backOfficeHref = canAccess(user!.role, "admin") ? "/admin" : undefined;
+
   return (
     <Register
       user={{ name: user!.name, role: user!.role }}
@@ -101,6 +111,10 @@ export default async function PosPage() {
       initialCategories={categories as PosCategory[]}
       initialItems={menuItems}
       initialTickets={openTickets}
+      expenseCategories={canFileExpense ? expenseCategories : []}
+      canFileExpense={canFileExpense}
+      canVoid={canVoid}
+      backOfficeHref={backOfficeHref}
     />
   );
 }
