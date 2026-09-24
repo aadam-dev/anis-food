@@ -14,6 +14,7 @@ export default function MenuGrid({
   tickets,
   onAdd,
   onOpenTicket,
+  locked = false,
 }: {
   categories: PosCategory[];
   items: PosMenuItem[];
@@ -21,6 +22,8 @@ export default function MenuGrid({
   tickets: OrderView[];
   onAdd: (item: PosMenuItem) => void;
   onOpenTicket: (ticket: OrderView) => void;
+  /** True while an old shift is still open: the menu is visible but cannot ring. */
+  locked?: boolean;
 }) {
   const [category, setCategory] = useState<string>("popular");
   const [search, setSearch] = useState("");
@@ -145,7 +148,8 @@ export default function MenuGrid({
                 <button
                   key={item.id}
                   onClick={() => onAdd(item)}
-                  className="relative rounded-2xl border overflow-hidden text-left active:scale-[0.98] transition-transform flex flex-col"
+                  disabled={locked}
+                  className="relative rounded-2xl border overflow-hidden text-left active:scale-[0.98] transition-transform flex flex-col disabled:opacity-45 disabled:active:scale-100"
                   style={{
                     background: qty > 0 ? "color-mix(in srgb, var(--s-brand) 12%, var(--s-panel))" : "var(--s-panel)",
                     borderColor: qty > 0 ? "var(--s-brand)" : "var(--s-border)",

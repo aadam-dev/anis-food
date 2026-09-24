@@ -2,8 +2,6 @@
 
 import { useState } from "react";
 import {
-  X,
-  Loader2,
   Banknote,
   Smartphone,
   CreditCard,
@@ -14,6 +12,8 @@ import {
 import { formatGHS, roundMoney, changeDue, type OrderTotals } from "@/lib/money";
 import type { PaymentChoice } from "./types";
 import CustomerFields from "./CustomerFields";
+import Sheet, { SheetError } from "./ui/Sheet";
+import Button from "./ui/Button";
 
 /**
  * Taking the money.
@@ -86,6 +86,7 @@ export default function PaymentSheet({
       return;
     }
 
+    if (submitting) return;
     setSubmitting(true);
     try {
       await onConfirm(method, {
@@ -101,6 +102,8 @@ export default function PaymentSheet({
               ]
             : undefined,
       });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not take that payment.");
     } finally {
       setSubmitting(false);
     }
@@ -113,38 +116,27 @@ export default function PaymentSheet({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center">
-      <div className="absolute inset-0 bg-black/60" onClick={onClose} aria-hidden />
-      <div
-        role="dialog"
-        aria-label="Take payment"
-        className="relative w-full sm:max-w-md max-h-[92dvh] overflow-y-auto rounded-t-2xl sm:rounded-2xl border"
-        style={{
-          background: "var(--s-panel)",
-          borderColor: "var(--s-border)",
-          paddingBottom: "max(1rem, env(safe-area-inset-bottom))",
-        }}
-      >
-        <div
-          className="sticky top-0 flex items-center justify-between px-4 py-3 border-b"
-          style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
-        >
-          <div>
-            <p className="text-xs" style={{ color: "var(--s-ink-muted)" }}>
-              Total due
-            </p>
-            <p className="money text-2xl font-bold">{formatGHS(totals.total)}</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="h-11 w-11 grid place-items-center rounded-lg"
-            aria-label="Close"
+    <Sheet
+      eyebrow="Total due"
+      title={<span className="money text-2xl">{formatGHS(totals.total)}</span>}
+      onClose={onClose}
+      dismissible={!submitting}
+      footer={
+        <div className="space-y-2">
+          <SheetError message={error} />
+          <Button
+            size="lg"
+            className="w-full"
+            onClick={confirm}
+            busy={submitting}
+            disabled={short || splitInvalid}
           >
-            <X className="w-5 h-5" />
-          </button>
+            {method === "UNPAID" ? "Send to kitchen" : `Take ${formatGHS(totals.total)}`}
+          </Button>
         </div>
-
-        <div className="p-4 space-y-4">
+      }
+    >
+        <div className="space-y-4">
           <div className="grid grid-cols-2 gap-2">
             {METHODS.map((entry) => {
               const Icon = entry.icon;
@@ -263,24 +255,7 @@ export default function PaymentSheet({
             onName={onCustomerName}
             onPhone={onCustomerPhone}
           />
-
-          {error && (
-            <p role="alert" className="text-sm" style={{ color: "var(--s-bad)" }}>
-              {error}
-            </p>
-          )}
-
-          <button
-            onClick={confirm}
-            disabled={submitting || short || splitInvalid}
-            className="w-full rounded-xl px-4 py-4 font-bold text-white disabled:opacity-50 flex items-center justify-center gap-2"
-            style={{ background: "var(--s-brand)" }}
-          >
-            {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
-            {method === "UNPAID" ? "Send to kitchen" : `Take ${formatGHS(totals.total)}`}
-          </button>
         </div>
-      </div>
-    </div>
+    </Sheet>
   );
 }

@@ -5,10 +5,31 @@ import { Delete } from "lucide-react";
 /**
  * Punch pad for quantities and till amounts.
  *
- * Used by the quantity sheet and by shift open / cash in-out so a cashier never
- * has to hunt for a tiny text field with greasy fingers.
+ * Used by the quantity sheet, shift open, cash in/out and the drawer count so a
+ * cashier never has to hunt for a tiny text field with greasy fingers.
  */
-const SHORTCUTS = [10, 20, 50, 100] as const;
+export const QTY_SHORTCUTS = [10, 20, 50, 100] as const;
+export const CASH_SHORTCUTS = [50, 100, 200, 500] as const;
+
+/** Applies one key press to the current value. Pure, so it can be tested. */
+export function applyNumpadKey(
+  value: string,
+  key: string,
+  { maxDigits, allowDecimal }: { maxDigits: number; allowDecimal: boolean },
+): string {
+  if (key === "back") return value.slice(0, -1);
+  if (key === "clear") return "";
+  if (key === ".") {
+    if (!allowDecimal || value.includes(".")) return value;
+    return value === "" ? "0." : `${value}.`;
+  }
+  if (!/^\d$/.test(key)) return value;
+  const next = value === "0" ? key : `${value}${key}`;
+  const [whole, frac] = next.split(".");
+  if (whole.length > maxDigits) return value;
+  if (frac !== undefined && frac.length > 2) return value;
+  return next;
+}
 
 export default function Numpad({
   value,
@@ -17,82 +38,77 @@ export default function Numpad({
   doneLabel = "Done",
   maxDigits = 3,
   allowDecimal = false,
+  shortcuts = QTY_SHORTCUTS,
+  shortcutPrefix = "",
 }: {
   value: string;
   onChange: (next: string) => void;
-  onDone: () => void;
+  /** Omit when the sheet footer carries the confirm button. */
+  onDone?: () => void;
   doneLabel?: string;
-  /** Whole quantities stay short; money fields need room for cedis. */
   maxDigits?: number;
   allowDecimal?: boolean;
+  shortcuts?: readonly number[];
+  shortcutPrefix?: string;
 }) {
-  function append(digit: string) {
-    if (digit === ".") {
-      if (!allowDecimal || value.includes(".")) return;
-      onChange(value === "" ? "0." : `${value}.`);
-      return;
-    }
-    const next = value === "0" && digit !== "." ? digit : `${value}${digit}`;
-    const [whole, frac = ""] = next.split(".");
-    if (whole.replace(/^0+/, "").length > maxDigits && whole !== "0") return;
-    if (frac.length > 2) return;
-    onChange(next);
-  }
+  const press = (key: string) => onChange(applyNumpadKey(value, key, { maxDigits, allowDecimal }));
+  const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", allowDecimal ? "." : "clear", "0", "back"];
 
-  function backspace() {
-    onChange(value.slice(0, -1));
-  }
-
-  function clear() {
-    onChange("");
-  }
-
-  const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", allowDecimal ? "." : "", "0", "back"] as const;
+  const keyStyle = {
+    borderColor: "var(--s-border)",
+    background: "var(--s-panel-alt)",
+    color: "var(--s-ink)",
+  };
 
   return (
     <div>
-      <div className="mb-3 flex gap-2">
-        {SHORTCUTS.map((amount) => (
-          <button
-            key={amount}
-            type="button"
-            onClick={() => onChange(String(amount))}
-            className="flex-1 rounded-xl border py-2.5 text-sm font-bold"
-            style={{
-              borderColor: "var(--s-border)",
-              background: "var(--s-panel-alt)",
-              color: "var(--s-ink)",
-            }}
-          >
-            {amount}
-          </button>
-        ))}
-      </div>
+      {shortcuts.length > 0 && (
+        <div className="mb-2 grid grid-cols-4 gap-2">
+          {shortcuts.map((amount) => (
+            <button
+              key={amount}
+              type="button"
+              onClick={() => onChange(String(amount))}
+              className="money rounded-xl border py-2.5 text-sm font-bold active:scale-[0.97] transition-transform"
+              style={{
+                borderColor: "color-mix(in srgb, var(--s-brand) 35%, var(--s-border))",
+                background: "color-mix(in srgb, var(--s-brand) 10%, var(--s-panel))",
+                color: "var(--s-ink)",
+              }}
+            >
+              {shortcutPrefix}
+              {amount}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-2">
-        {keys.map((key, index) => {
-          if (key === "") {
-            return <span key={`empty-${index}`} />;
-          }
+        {keys.map((key) => {
           if (key === "back") {
             return (
               <button
                 key="back"
                 type="button"
-                onClick={backspace}
-                onContextMenu={(event) => {
-                  event.preventDefault();
-                  clear();
-                }}
+                onClick={() => press("back")}
                 aria-label="Backspace"
-                className="rounded-xl border py-3.5 grid place-items-center font-semibold"
-                style={{
-                  borderColor: "var(--s-border)",
-                  background: "var(--s-panel-alt)",
-                  color: "var(--s-ink)",
-                }}
+                className="rounded-xl border py-3.5 grid place-items-center active:scale-[0.97] transition-transform"
+                style={keyStyle}
               >
                 <Delete className="w-5 h-5" />
+              </button>
+            );
+          }
+          if (key === "clear") {
+            return (
+              <button
+                key="clear"
+                type="button"
+                onClick={() => press("clear")}
+                className="rounded-xl border py-3.5 text-sm font-semibold active:scale-[0.97] transition-transform"
+                style={{ ...keyStyle, color: "var(--s-ink-muted)" }}
+              >
+                Clear
               </button>
             );
           }
@@ -100,13 +116,9 @@ export default function Numpad({
             <button
               key={key}
               type="button"
-              onClick={() => append(key)}
-              className="money rounded-xl border py-3.5 text-xl font-bold"
-              style={{
-                borderColor: "var(--s-border)",
-                background: "var(--s-panel)",
-                color: "var(--s-ink)",
-              }}
+              onClick={() => press(key)}
+              className="money rounded-xl border py-3.5 text-xl font-bold active:scale-[0.97] transition-transform"
+              style={{ ...keyStyle, background: "var(--s-panel)" }}
             >
               {key}
             </button>
@@ -114,24 +126,16 @@ export default function Numpad({
         })}
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          onClick={clear}
-          className="rounded-xl border py-3 text-sm font-semibold"
-          style={{ borderColor: "var(--s-border)", color: "var(--s-ink-muted)" }}
-        >
-          Clear
-        </button>
+      {onDone && (
         <button
           type="button"
           onClick={onDone}
-          className="rounded-xl py-3 text-sm font-bold text-white"
+          className="mt-3 w-full rounded-2xl py-3.5 text-sm font-bold text-white"
           style={{ background: "var(--s-brand)" }}
         >
           {doneLabel}
         </button>
-      </div>
+      )}
     </div>
   );
 }

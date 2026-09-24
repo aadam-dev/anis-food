@@ -3,7 +3,7 @@ import { getSettings } from "@/lib/settings";
 import { currentSession } from "@/lib/pos-session";
 import { prisma } from "@/lib/db";
 import { toMoney } from "@/lib/money";
-import { canAccess } from "@/lib/permissions";
+import { canAccess, canVoidAtTill } from "@/lib/permissions";
 import Register from "@/components/pos/Register";
 import type { OrderView, PosCategory, PosMenuItem, SessionView } from "@/components/pos/types";
 
@@ -63,6 +63,7 @@ export default async function PosPage() {
     id: order.id,
     orderNumber: order.orderNumber,
     clientRef: order.clientRef,
+    sessionId: order.sessionId,
     status: order.status,
     paymentMethod: order.paymentMethod,
     paymentStatus: order.paymentStatus,
@@ -92,6 +93,8 @@ export default async function PosPage() {
   }));
 
   const canFileExpense = canAccess(user!.role, "expenses");
+  const canVoid = canVoidAtTill(user!.role);
+  const backOfficeHref = canAccess(user!.role, "admin") ? "/admin" : undefined;
 
   return (
     <Register
@@ -110,6 +113,8 @@ export default async function PosPage() {
       initialTickets={openTickets}
       expenseCategories={canFileExpense ? expenseCategories : []}
       canFileExpense={canFileExpense}
+      canVoid={canVoid}
+      backOfficeHref={backOfficeHref}
     />
   );
 }

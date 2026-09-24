@@ -1,13 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { X } from "lucide-react";
 import { formatGHS } from "@/lib/money";
-import Numpad from "./Numpad";
+import Numpad, { CASH_SHORTCUTS } from "./Numpad";
+import Sheet from "./ui/Sheet";
+import Button from "./ui/Button";
 
-/**
- * Punch a money amount for opening float or cash in/out.
- */
+/** Punch a money amount. */
 export default function AmountEntrySheet({
   title,
   subtitle,
@@ -15,6 +14,8 @@ export default function AmountEntrySheet({
   onConfirm,
   onClose,
   doneLabel = "Use this amount",
+  allowEmpty = false,
+  emptyLabel = "Not recorded",
 }: {
   title: string;
   subtitle?: string;
@@ -22,65 +23,59 @@ export default function AmountEntrySheet({
   onConfirm: (value: string) => void;
   onClose: () => void;
   doneLabel?: string;
+  /** For optional figures like MoMo, where blank means "not checked". */
+  allowEmpty?: boolean;
+  emptyLabel?: string;
 }) {
   const [raw, setRaw] = useState(initialValue);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center">
-      <button
-        type="button"
-        aria-label="Cancel amount"
-        onClick={onClose}
-        className="absolute inset-0"
-        style={{ background: "rgba(0,0,0,0.5)" }}
-      />
-      <section
-        className="relative w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl border p-4"
-        style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
-      >
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <div className="min-w-0">
-            <h2 className="font-bold">{title}</h2>
-            {subtitle && (
-              <p className="mt-0.5 text-sm" style={{ color: "var(--s-ink-muted)" }}>
-                {subtitle}
-              </p>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="h-11 w-11 grid place-items-center rounded-lg shrink-0"
-            style={{ color: "var(--s-ink-muted)" }}
-            aria-label="Close"
+    <Sheet
+      title={title}
+      subtitle={subtitle}
+      onClose={onClose}
+      size="sm"
+      footer={
+        <div className="grid gap-2">
+          <Button
+            size="lg"
+            className="w-full"
+            disabled={!allowEmpty && raw === ""}
+            onClick={() => {
+              onConfirm(raw);
+              onClose();
+            }}
           >
-            <X className="w-5 h-5" />
-          </button>
+            {doneLabel}
+          </Button>
+          {allowEmpty && (
+            <Button
+              tone="ghost"
+              className="w-full"
+              onClick={() => {
+                onConfirm("");
+                onClose();
+              }}
+            >
+              {emptyLabel}
+            </Button>
+          )}
         </div>
-
-        <div
-          className="money mb-4 rounded-xl border px-4 py-3 text-right text-3xl font-bold"
-          style={{
-            background: "var(--s-panel-alt)",
-            borderColor: "var(--s-border)",
-            color: "var(--s-ink)",
-          }}
-        >
-          {raw === "" ? "—" : formatGHS(Number(raw) || 0)}
-        </div>
-
-        <Numpad
-          value={raw}
-          onChange={setRaw}
-          onDone={() => {
-            onConfirm(raw);
-            onClose();
-          }}
-          doneLabel={doneLabel}
-          maxDigits={7}
-          allowDecimal
-        />
-      </section>
-    </div>
+      }
+    >
+      <div
+        className="money mb-4 rounded-2xl border px-4 py-3 text-right text-4xl font-bold"
+        style={{ background: "var(--s-panel-alt)", borderColor: "var(--s-border)" }}
+      >
+        {raw === "" ? <span style={{ color: "var(--s-ink-faint)" }}>{formatGHS(0)}</span> : formatGHS(Number(raw) || 0)}
+      </div>
+      <Numpad
+        value={raw}
+        onChange={setRaw}
+        maxDigits={7}
+        allowDecimal
+        shortcuts={CASH_SHORTCUTS}
+      />
+    </Sheet>
   );
 }

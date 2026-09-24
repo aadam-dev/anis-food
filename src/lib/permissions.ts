@@ -56,6 +56,14 @@ export function canAccess(role: UserRole | undefined | null, resource: Resource)
   return rolesForResource(resource).includes(role);
 }
 
+/**
+ * Voiding at the till takes a manager. A cashier who can void their own sale
+ * can also make cash disappear, so they settle and ask.
+ */
+export function canVoidAtTill(role: UserRole | undefined | null): boolean {
+  return canAccess(role, "orders") && canAccess(role, "pos");
+}
+
 export function canSeeCosts(role: UserRole | undefined | null): boolean {
   return !!role && COST_VISIBLE_ROLES.includes(role);
 }

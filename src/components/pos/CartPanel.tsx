@@ -5,6 +5,7 @@ import type { CartAction, CartState } from "./cartReducer";
 import type { CartLine } from "./types";
 import CartLines from "./CartLines";
 import CustomerFields from "./CustomerFields";
+import Button from "./ui/Button";
 
 export default function CartPanel({
   cart,
@@ -19,7 +20,9 @@ export default function CartPanel({
   onCustomerPhone,
   onClear,
   onCharge,
+  locked = false,
 }: {
+  locked?: boolean;
   cart: CartState;
   totals: OrderTotals;
   dispatch: React.Dispatch<CartAction>;
@@ -84,13 +87,9 @@ export default function CartPanel({
             <span className="font-semibold">Total</span>
             <span className="money text-2xl font-bold">{formatGHS(totals.total)}</span>
           </div>
-          <button
-            onClick={onCharge}
-            className="w-full rounded-xl px-4 py-3.5 font-bold text-white"
-            style={{ background: "var(--s-brand)" }}
-          >
-            Charge {formatGHS(totals.total)}
-          </button>
+          <Button size="lg" className="w-full" onClick={onCharge} disabled={locked}>
+            {locked ? "Close the old shift first" : `Charge ${formatGHS(totals.total)}`}
+          </Button>
         </div>
       )}
     </aside>
