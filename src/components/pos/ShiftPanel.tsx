@@ -36,6 +36,9 @@ export default function ShiftPanel({
   const [movementDirection, setMovementDirection] = useState<"IN" | "OUT">("OUT");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Set when a close is blocked purely by unpaid tickets, so we can offer a
+  // one-tap "Void & close" instead of leaving the cashier stuck.
+  const [blockedTickets, setBlockedTickets] = useState<number | null>(null);
 
   async function post(path: string, method: string, body: unknown) {
     setBusy(true);
@@ -49,8 +52,11 @@ export default function ShiftPanel({
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         setError(data.error ?? "That did not work.");
+        const detail = data.detail as { canVoidAndClose?: boolean; openTickets?: number } | undefined;
+        setBlockedTickets(detail?.canVoidAndClose ? Number(detail.openTickets) || 0 : null);
         return false;
       }
+      setBlockedTickets(null);
       onChanged();
       return true;
     } catch {
@@ -385,6 +391,26 @@ export default function ShiftPanel({
           {busy && <Loader2 className="w-4 h-4 animate-spin" />}
           {counted === null ? "Count the drawer first" : "Close the shift"}
         </button>
+
+        {/* Escape hatch: a stale shift can hold unpaid tabs that can no longer be
+            reached from the till. Rather than dead-end, void them and close. */}
+        {blockedTickets !== null && (
+          <button
+            disabled={busy || counted === null}
+            onClick={() =>
+              post("/api/pos/sessions", "PATCH", {
+                sessionId: session!.id,
+                cashCount: counts,
+                closingMomo: closingMomo.trim() === "" ? null : Number(closingMomo) || 0,
+                voidOpenTickets: true,
+              })
+            }
+            className="mt-2 w-full rounded-xl px-4 py-3 font-semibold disabled:opacity-50"
+            style={{ background: "var(--s-panel-alt)", color: "var(--s-bad)", border: "1px solid var(--s-border)" }}
+          >
+            Void {blockedTickets} unpaid ticket{blockedTickets === 1 ? "" : "s"} &amp; close
+          </button>
+        )}
       </>
     );
   }

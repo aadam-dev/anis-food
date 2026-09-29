@@ -7,7 +7,7 @@ import { roundMoney } from "@/lib/money";
 import { drawerDifference, countedTotal } from "@/lib/cash";
 import { isStaleSession, businessDay } from "@/lib/session-utils";
 import { summariseSession } from "@/lib/pos-session";
-import { SessionStatus } from "@/generated/prisma";
+import { SessionStatus, OrderStatus, OrderEventType } from "@/generated/prisma";
 
 /**
  * The shift.
@@ -30,6 +30,9 @@ const closeSchema = z.object({
   closingCash: z.number().min(0).max(1000000).optional(),
   closingMomo: z.number().min(0).max(1000000).nullable().optional(),
   notes: z.string().max(500).optional(),
+  /** Void any still-open tickets as part of closing — the escape hatch for a
+   *  stale shift whose unpaid tabs can no longer be settled at the till. */
+  voidOpenTickets: z.boolean().optional(),
 });
 
 /** The shift the till should be working against, if any. */
@@ -117,13 +120,18 @@ export async function PATCH(request: Request) {
       return conflict("That shift is already closed.");
     }
 
-    const openTickets = await prisma.order.count({
+    const openTicketRows = await prisma.order.findMany({
       where: { sessionId: session.id, paymentStatus: "PENDING", status: { not: "CANCELLED" } },
+      select: { id: true },
     });
-    if (openTickets > 0) {
+    // Blocked only if the cashier hasn't chosen to void them. The count comes
+    // back so the till can offer a one-tap "Void & close" — without it, a stale
+    // shift whose tickets can't be reached is a dead end.
+    if (openTicketRows.length > 0 && !body.voidOpenTickets) {
       return badRequest(
-        `${openTickets} order(s) have not been paid for yet. Settle or void them before ` +
-          `closing, or the shift's takings will not match what went out of the kitchen.`,
+        `${openTicketRows.length} order(s) have not been paid for yet. Settle them from the ` +
+          `Tickets tab, or void them and close the shift.`,
+        { openTickets: openTicketRows.length, canVoidAndClose: true },
       );
     }
 
@@ -137,21 +145,46 @@ export async function PATCH(request: Request) {
     const summary = await summariseSession(session.id);
     if (!summary) return badRequest("That shift no longer exists.");
 
-    const closed = await prisma.posSession.update({
-      where: { id: session.id },
-      data: {
-        status: SessionStatus.CLOSED,
-        closedAt: new Date(),
-        closedById: auth.user.sub,
-        closingCash,
-        closingMomo: body.closingMomo ?? null,
-        // Snapshotted so a later menu edit or a voided order cannot silently
-        // rewrite what this shift was reconciled against.
-        expectedCash: summary.expectedCash,
-        expectedMomo: summary.expectedMomo,
-        cashCount: (body.cashCount ?? undefined) as never,
-        notes: body.notes ?? session.notes,
-      },
+    const closed = await prisma.$transaction(async (tx) => {
+      // Void the stragglers first (unpaid tickets contribute nothing to cash, so
+      // this does not move the reconciliation). Each void is audited on its order.
+      if (body.voidOpenTickets && openTicketRows.length > 0) {
+        for (const ticket of openTicketRows) {
+          await tx.order.update({
+            where: { id: ticket.id },
+            data: {
+              status: OrderStatus.CANCELLED,
+              voidedAt: new Date(),
+              voidNote: "Voided when the shift was closed",
+            },
+          });
+          await tx.orderEvent.create({
+            data: {
+              orderId: ticket.id,
+              type: OrderEventType.VOIDED,
+              actorId: auth.user.sub,
+              detail: { reason: "shift close" } as never,
+            },
+          });
+        }
+      }
+
+      return tx.posSession.update({
+        where: { id: session.id },
+        data: {
+          status: SessionStatus.CLOSED,
+          closedAt: new Date(),
+          closedById: auth.user.sub,
+          closingCash,
+          closingMomo: body.closingMomo ?? null,
+          // Snapshotted so a later menu edit or a voided order cannot silently
+          // rewrite what this shift was reconciled against.
+          expectedCash: summary.expectedCash,
+          expectedMomo: summary.expectedMomo,
+          cashCount: (body.cashCount ?? undefined) as never,
+          notes: body.notes ?? session.notes,
+        },
+      });
     });
 
     await logAudit({
