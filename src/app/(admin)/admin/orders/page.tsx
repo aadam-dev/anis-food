@@ -66,7 +66,7 @@ export default async function OrdersPage({
 
   return (
     <>
-      <PageHeader title="Orders" description="Every sale rung on the chosen day." />
+      <PageHeader title="Orders" description="Till sales and online orders for the chosen day." />
       <OrdersClient
         orders={serialized}
         day={day}
@@ -76,6 +76,7 @@ export default async function OrdersPage({
           phone: settings.business_phone,
           footer: settings.receipt_footer,
           taxLabel: settings.tax_label,
+          whatsapp: settings.business_whatsapp || settings.business_phone,
         }}
       />
     </>

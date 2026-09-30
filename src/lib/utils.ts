@@ -182,7 +182,58 @@ export function getWhatsAppContactUrl(
   message += `Email: ${data.email}\n`;
   message += `Phone: ${data.phone}\n\n`;
   message += `Message:\n${data.message}`;
-  const clean = phone.replace(/\D/g, "");
-  return `https://wa.me/${clean}?text=${encodeURIComponent(message)}`;
+  return getWhatsAppUrl(phone, message);
+}
+
+/** Ghana numbers starting with 0 become 233… so wa.me opens the right chat. */
+export function whatsappDigits(phone: string): string {
+  let digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("00")) digits = digits.slice(2);
+  if (digits.startsWith("0") && digits.length === 10) digits = `233${digits.slice(1)}`;
+  return digits;
+}
+
+export function getWhatsAppUrl(phone: string, message: string): string {
+  return `https://wa.me/${whatsappDigits(phone)}?text=${encodeURIComponent(message)}`;
+}
+
+/** Staff → customer: confirm an online order landed. */
+export function onlineOrderConfirmMessage(input: {
+  customerName: string;
+  orderNumber: string;
+  total: number;
+  deliveryType: string;
+}): string {
+  const place =
+    input.deliveryType === "DELIVERY"
+      ? " for delivery"
+      : input.deliveryType === "TAKEAWAY"
+        ? " for pickup"
+        : "";
+  return [
+    `Hello ${input.customerName.trim() || "there"},`,
+    "",
+    `This is Anis Food and Drink. We have your online order ${input.orderNumber}${place}.`,
+    `Total: GHS ${input.total.toFixed(2)}.`,
+    "",
+    "Please reply to confirm this order. Thank you.",
+  ].join("\n");
+}
+
+/** Staff → customer: ask for MoMo / transfer payment (no card gateway yet). */
+export function onlineOrderPaymentMessage(input: {
+  customerName: string;
+  orderNumber: string;
+  total: number;
+  payToPhone: string;
+}): string {
+  return [
+    `Hello ${input.customerName.trim() || "there"},`,
+    "",
+    `Please pay GHS ${input.total.toFixed(2)} for order ${input.orderNumber}.`,
+    `MoMo / transfer to ${input.payToPhone}.`,
+    "",
+    "Send the name on the payment and a screenshot when done so we can mark it paid. Thank you.",
+  ].join("\n");
 }
 

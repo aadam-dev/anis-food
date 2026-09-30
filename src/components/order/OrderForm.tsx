@@ -1,17 +1,24 @@
 "use client";
 
 /**
- * Order form: delivery type, contact fields, notes. Submits via WhatsApp with pre-filled message.
+ * Order form: delivery type, contact fields, notes.
+ * Saves the order to the back office as Online, then opens WhatsApp so the
+ * kitchen still gets a ping. Without the API write, staff would never see it.
  */
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { MessageCircle, Send } from "lucide-react";
+import { Loader2, MessageCircle, Send } from "lucide-react";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import type { MenuItem } from "@/types";
 import { OrderFormData } from "@/types";
-import { generateWhatsAppOrderMessage, formatPrice, getOrderTotals, validateOrderPhone, generateOrderReference } from "@/lib/utils";
+import {
+  generateWhatsAppOrderMessage,
+  formatPrice,
+  getOrderTotals,
+  validateOrderPhone,
+} from "@/lib/utils";
 import { BUSINESS_INFO, ORDER_CONFIG } from "@/lib/constants";
 
 interface OrderFormProps {
@@ -33,6 +40,8 @@ export default function OrderForm({
   onContinueToPayment,
 }: OrderFormProps) {
   const [deliveryType, setDeliveryType] = useState<"pickup" | "delivery">("delivery");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const {
     register,
     handleSubmit,
@@ -45,7 +54,7 @@ export default function OrderForm({
     ORDER_CONFIG.VAT_INCLUSIVE
   );
 
-  const onSubmitForm = (data: OrderFormData) => {
+  const onSubmitForm = async (data: OrderFormData) => {
     if (primaryAction === "continue" && onContinueToPayment) {
       onContinueToPayment({
         name: data.name,
@@ -58,44 +67,84 @@ export default function OrderForm({
       return;
     }
 
-    const ref = orderRef ?? generateOrderReference();
-    const orderData: OrderFormData = {
-      ...data,
-      deliveryType,
-      orderRef: ref,
-      items: items.map((item) => ({
-        menuItem: {
-          ...item.menuItem,
-          description: "",
-          category: "local",
-        } as MenuItem,
-        quantity: item.quantity,
-      })),
-    };
+    setSubmitting(true);
+    setSubmitError(null);
 
-    const message = generateWhatsAppOrderMessage(
-      data.name,
-      data.phone,
-      data.address,
-      items.map((item) => ({
-        name: item.menuItem.name,
-        quantity: item.quantity,
-        price: item.menuItem.price,
-      })),
-      deliveryType,
-      totals.total,
-      data.notes,
-      {
-        orderRef: ref,
-        subtotal: totals.subtotal,
-        vat: totals.vat,
-        vatRate: totals.vatRate,
+    const clientRef =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `web-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+    try {
+      const response = await fetch("/api/public/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientRef,
+          deliveryType,
+          customerName: data.name,
+          customerPhone: data.phone,
+          customerAddress: data.address,
+          notes: data.notes,
+          lines: items.map((item) => ({
+            menuItemId: item.menuItem.id,
+            quantity: item.quantity,
+          })),
+        }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        order?: { orderNumber: string; total: number };
+      };
+      if (!response.ok || !payload.order) {
+        setSubmitError(payload.error ?? "Could not place the order. Try again.");
+        setSubmitting(false);
+        return;
       }
-    );
-    const whatsappUrl = `https://wa.me/${BUSINESS_INFO.phoneSecondary.replace(/\D/g, "")}?text=${message}`;
-    window.open(whatsappUrl, "_blank");
 
-    onSubmit?.(orderData);
+      const ref = orderRef ?? payload.order.orderNumber;
+      const orderData: OrderFormData = {
+        ...data,
+        deliveryType,
+        orderRef: ref,
+        items: items.map((item) => ({
+          menuItem: {
+            ...item.menuItem,
+            description: "",
+            category: "local",
+          } as MenuItem,
+          quantity: item.quantity,
+        })),
+      };
+
+      const message = generateWhatsAppOrderMessage(
+        data.name,
+        data.phone,
+        data.address,
+        items.map((item) => ({
+          name: item.menuItem.name,
+          quantity: item.quantity,
+          price: item.menuItem.price,
+        })),
+        deliveryType,
+        payload.order.total,
+        data.notes,
+        {
+          orderRef: ref,
+          subtotal: totals.subtotal,
+          vat: totals.vat,
+          vatRate: totals.vatRate,
+        },
+      );
+      const whatsappUrl = `https://wa.me/${BUSINESS_INFO.phoneSecondary.replace(/\D/g, "")}?text=${message}`;
+      window.open(whatsappUrl, "_blank");
+
+      onSubmit?.(orderData);
+    } catch {
+      setSubmitError("No connection. Check the network and try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -104,14 +153,13 @@ export default function OrderForm({
         <MessageCircle className="w-6 h-6 text-[#10B981]" />
         <h2 className="text-2xl font-bold text-gray-900">Complete Your Order</h2>
       </div>
-      <p className="text-sm text-gray-500 mb-6">Fill in your details and send directly to our team on WhatsApp for quick confirmation.</p>
+      <p className="text-sm text-gray-500 mb-6">
+        Fill in your details. We save the order for the kitchen, then open WhatsApp so you can confirm with us.
+      </p>
 
       <form onSubmit={handleSubmit(onSubmitForm)} className="space-y-6">
-        {/* Delivery Type */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-3">
-            Order Type
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-3">Order Type</label>
           <div className="grid grid-cols-2 gap-3">
             <button
               type="button"
@@ -140,7 +188,6 @@ export default function OrderForm({
           </div>
         </div>
 
-        {/* Customer Details */}
         <Input
           label="Full Name"
           {...register("name", { required: "Name is required" })}
@@ -169,7 +216,10 @@ export default function OrderForm({
           <Input
             label={deliveryType === "pickup" ? "Name for pickup" : "Delivery address"}
             {...register("address", {
-              required: deliveryType === "pickup" ? "Name for pickup is required" : "Delivery address is required",
+              required:
+                deliveryType === "pickup"
+                  ? "Name for pickup is required"
+                  : "Delivery address is required",
             })}
             error={errors.address?.message}
             placeholder={
@@ -195,7 +245,6 @@ export default function OrderForm({
           />
         </div>
 
-        {/* Order Summary */}
         <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
           <h3 className="font-semibold mb-2">Order Total</h3>
           <div className="space-y-1 text-sm">
@@ -222,21 +271,30 @@ export default function OrderForm({
           )}
           <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-300">
             <span className="font-bold text-lg">Total:</span>
-            <span className="font-bold text-xl text-[#DC2626]">
-              {formatPrice(totals.total)}
-            </span>
+            <span className="font-bold text-xl text-[#DC2626]">{formatPrice(totals.total)}</span>
           </div>
         </div>
 
-        {/* Submit Button */}
+        {submitError && (
+          <p className="text-sm text-center" style={{ color: "#DC2626" }}>
+            {submitError}
+          </p>
+        )}
+
         <Button
           type="submit"
           variant={primaryAction === "continue" ? "primary" : "success"}
           size="lg"
           fullWidth
           className="group"
+          disabled={submitting}
         >
-          {primaryAction === "continue" ? (
+          {submitting ? (
+            <>
+              <Loader2 className="w-5 h-5 mr-2 inline animate-spin" />
+              Placing order…
+            </>
+          ) : primaryAction === "continue" ? (
             <>
               Continue to payment
               <span className="ml-2">→</span>
@@ -250,11 +308,9 @@ export default function OrderForm({
         </Button>
 
         <p className="text-xs text-gray-500 text-center">
-          By placing an order, you agree to our terms and conditions. 
-          We&apos;ll confirm your order via phone call.
+          By placing an order, you agree to our terms and conditions. We&apos;ll confirm on WhatsApp.
         </p>
       </form>
     </Card>
   );
 }
-

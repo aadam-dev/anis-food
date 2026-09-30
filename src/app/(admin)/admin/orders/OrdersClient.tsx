@@ -2,9 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Search } from "lucide-react";
+import { Loader2, MessageCircle, Search, Wallet } from "lucide-react";
 import { formatGHS } from "@/lib/money";
 import { callNumber } from "@/lib/session-utils";
+import {
+  getWhatsAppUrl,
+  onlineOrderConfirmMessage,
+  onlineOrderPaymentMessage,
+} from "@/lib/utils";
 import { Panel, EmptyState, Chip, AdminButton, inputClass, inputStyle } from "@/components/admin/ui";
 import {
   PAYMENT_LABELS,
@@ -74,10 +79,11 @@ function asOrderView(order: AdminOrder): OrderView {
 
 const VOID_REASONS = Object.entries(VOID_REASON_LABELS);
 
-type OrderFilter = "all" | "unpaid" | "paid" | "voided";
+type OrderFilter = "all" | "online" | "unpaid" | "paid" | "voided";
 
 const FILTERS: { id: OrderFilter; label: string }[] = [
   { id: "all", label: "All" },
+  { id: "online", label: "Online" },
   { id: "unpaid", label: "Unpaid" },
   { id: "paid", label: "Paid" },
   { id: "voided", label: "Voided" },
@@ -90,7 +96,14 @@ export default function OrdersClient({
 }: {
   orders: AdminOrder[];
   day: string;
-  business: { header: string; address: string; phone: string; footer: string; taxLabel: string };
+  business: {
+    header: string;
+    address: string;
+    phone: string;
+    footer: string;
+    taxLabel: string;
+    whatsapp: string;
+  };
 }) {
   const router = useRouter();
   const [open, setOpen] = useState<string | null>(null);
@@ -109,6 +122,7 @@ export default function OrdersClient({
     return orders.filter((order) => {
       const voided = order.status === "CANCELLED";
       if (filter === "voided" && !voided) return false;
+      if (filter === "online" && order.source !== "ONLINE") return false;
       if (filter === "unpaid" && (voided || order.paymentStatus !== "PENDING")) return false;
       if (filter === "paid" && (voided || order.paymentStatus === "PENDING")) return false;
       if (!needle) return true;
@@ -229,11 +243,16 @@ export default function OrdersClient({
                         )}
                         {order.paymentStatus === "PENDING" && !voided && <Chip tone="warn">Unpaid</Chip>}
                         {order.source !== "POS" && (
-                          <Chip>{ORDER_SOURCE_LABELS[order.source] ?? order.source}</Chip>
+                          <Chip tone={order.source === "ONLINE" ? "warn" : "neutral"}>
+                            {ORDER_SOURCE_LABELS[order.source] ?? order.source}
+                          </Chip>
                         )}
                       </span>
                       <span className="block text-xs mt-0.5 truncate" style={{ color: "var(--s-ink-faint)" }}>
                         {customer || "Walk-in"}
+                        {order.source === "ONLINE" && order.deliveryType
+                          ? ` · ${order.deliveryType === "DELIVERY" ? "Delivery" : order.deliveryType === "TAKEAWAY" ? "Pickup" : order.deliveryType}`
+                          : ""}
                       </span>
                     </span>
                     <span
@@ -265,6 +284,54 @@ export default function OrdersClient({
                             : ""}
                         </span>
                         <div className="flex flex-wrap justify-end gap-2">
+                          {order.source === "ONLINE" && order.customerPhone?.trim() && !voided && (
+                            <>
+                              <a
+                                href={getWhatsAppUrl(
+                                  order.customerPhone,
+                                  onlineOrderConfirmMessage({
+                                    customerName: order.customerName?.trim() || "there",
+                                    orderNumber: order.orderNumber,
+                                    total: order.total,
+                                    deliveryType: order.deliveryType,
+                                  }),
+                                )}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border px-4 py-2.5 text-sm font-bold"
+                                style={{
+                                  background: "var(--s-panel)",
+                                  color: "var(--s-ink)",
+                                  borderColor: "var(--s-border)",
+                                  boxShadow: "var(--s-shadow)",
+                                }}
+                              >
+                                <MessageCircle className="w-4 h-4" /> Confirm on WhatsApp
+                              </a>
+                              <a
+                                href={getWhatsAppUrl(
+                                  order.customerPhone,
+                                  onlineOrderPaymentMessage({
+                                    customerName: order.customerName?.trim() || "there",
+                                    orderNumber: order.orderNumber,
+                                    total: order.total,
+                                    payToPhone: business.whatsapp || business.phone,
+                                  }),
+                                )}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border px-4 py-2.5 text-sm font-bold"
+                                style={{
+                                  background: "var(--s-panel)",
+                                  color: "var(--s-ink)",
+                                  borderColor: "var(--s-border)",
+                                  boxShadow: "var(--s-shadow)",
+                                }}
+                              >
+                                <Wallet className="w-4 h-4" /> Ask for payment
+                              </a>
+                            </>
+                          )}
                           <AdminButton
                             onClick={() => {
                               setSlipKind("receipt");
