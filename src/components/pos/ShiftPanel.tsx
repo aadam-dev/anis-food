@@ -262,7 +262,7 @@ export default function ShiftPanel({
     });
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-5 pb-24 max-w-3xl mx-auto w-full space-y-4">
+    <div className="mx-auto min-h-0 w-full max-w-3xl flex-1 space-y-4 overflow-y-auto px-4 py-5 pb-24">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-sm" style={{ color: "var(--s-ink-muted)" }}>
@@ -275,7 +275,7 @@ export default function ShiftPanel({
         </div>
         <div className="flex gap-2">
           <Button tone="secondary" onClick={onCashMovement}>
-            Cash in / out
+            Move money
           </Button>
           <Button onClick={onCloseShift}>Close shift</Button>
         </div>
@@ -323,7 +323,7 @@ export default function ShiftPanel({
         style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
       >
         <div className="flex items-center justify-between">
-          <h2 className="font-semibold">Cash in and out</h2>
+          <h2 className="font-semibold">Drawer movements</h2>
           <button
             type="button"
             onClick={onCashMovement}

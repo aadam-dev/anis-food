@@ -1,11 +1,10 @@
 "use client";
 
-import { Banknote, CreditCard, Smartphone } from "lucide-react";
 import { formatGHS, type OrderTotals } from "@/lib/money";
 import type { CartAction, CartState } from "./cartReducer";
 import type { CartLine } from "./types";
 import CartLines from "./CartLines";
-import CustomerFields, { type FulfillmentType } from "./CustomerFields";
+import { OrderContextBar, type FulfillmentType } from "./CustomerFields";
 import Button from "./ui/Button";
 
 export default function CartPanel({
@@ -25,6 +24,10 @@ export default function CartPanel({
   onCustomerAddress,
   onClear,
   onCharge,
+  selectedIds = [],
+  onToggleLine,
+  onChargeSelected,
+  selectedTotal = null,
   locked = false,
   tables = [],
   tableId = "",
@@ -47,6 +50,10 @@ export default function CartPanel({
   onCustomerAddress: (value: string) => void;
   onClear: () => void;
   onCharge: () => void;
+  selectedIds?: string[];
+  onToggleLine?: (menuItemId: string) => void;
+  onChargeSelected?: () => void;
+  selectedTotal?: number | null;
   tables?: { id: string; label: string; area: string; occupied: boolean }[];
   tableId?: string;
   onTable?: (id: string) => void;
@@ -77,7 +84,7 @@ export default function CartPanel({
       </div>
 
       <div className="border-b px-4 py-3" style={{ borderColor: "var(--s-border)" }}>
-        <CustomerFields
+        <OrderContextBar
           fulfillment={fulfillment}
           onFulfillment={onFulfillment}
           name={customerName}
@@ -99,6 +106,8 @@ export default function CartPanel({
           focusedMenuItemId={focusedMenuItemId}
           onFocus={onFocus}
           onEditQty={onEditQty}
+          selectedIds={selectedIds}
+          onToggle={onToggleLine}
         />
       </div>
 
@@ -118,29 +127,23 @@ export default function CartPanel({
             <span className="font-extrabold" style={{ color: "var(--s-brand)" }}>Total</span>
             <span className="money text-2xl font-extrabold" style={{ color: "var(--s-brand)" }}>{formatGHS(totals.total)}</span>
           </div>
-          <p className="mb-2 text-xs font-bold">Payment method</p>
-          <div className="mb-3 grid grid-cols-3 gap-2">
-            {[
-              { icon: Banknote, label: "Cash" },
-              { icon: Smartphone, label: "MoMo" },
-              { icon: CreditCard, label: "Card" },
-            ].map(({ icon: Icon, label }, index) => (
-              <span
-                key={label}
-                className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-bold"
-                style={{
-                  background: index === 1 ? "color-mix(in srgb, var(--s-brand) 10%, var(--s-panel))" : "var(--s-panel-alt)",
-                  color: index === 1 ? "var(--s-brand)" : "var(--s-ink-muted)",
-                  boxShadow: "inset 0 0 0 1px var(--s-border)",
-                }}
-              >
-                <Icon className="h-4 w-4" />
-                {label}
-              </span>
-            ))}
-          </div>
-          <Button size="lg" className="w-full" onClick={onCharge} disabled={locked}>
-            {locked ? "Close the old shift first" : `Charge ${formatGHS(totals.total)}`}
+          {selectedTotal !== null && onChargeSelected && (
+            <Button size="lg" className="mb-2 w-full" onClick={onChargeSelected} disabled={locked}>
+              {locked ? "Close the old shift first" : `Charge selected ${formatGHS(selectedTotal)}`}
+            </Button>
+          )}
+          <Button
+            size="lg"
+            tone={selectedTotal !== null ? "secondary" : "primary"}
+            className="w-full"
+            onClick={onCharge}
+            disabled={locked}
+          >
+            {locked
+              ? "Close the old shift first"
+              : selectedTotal !== null
+                ? `Charge full bill ${formatGHS(totals.total)}`
+                : `Charge ${formatGHS(totals.total)}`}
           </Button>
         </div>
       )}

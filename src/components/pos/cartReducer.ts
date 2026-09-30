@@ -18,6 +18,7 @@ export type CartAction =
   | { type: "increment"; menuItemId: string }
   | { type: "decrement"; menuItemId: string }
   | { type: "remove"; menuItemId: string }
+  | { type: "removeMany"; menuItemIds: string[] }
   | { type: "setNotes"; menuItemId: string; notes: string }
   | { type: "setDiscount"; amount: number }
   | { type: "replace"; lines: CartLine[]; discount?: number }
@@ -101,6 +102,11 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
         ...state,
         lines: state.lines.filter((line) => line.menuItemId !== action.menuItemId),
       };
+
+    case "removeMany": {
+      const drop = new Set(action.menuItemIds);
+      return { ...state, lines: state.lines.filter((line) => !drop.has(line.menuItemId)) };
+    }
 
     case "setNotes":
       return {

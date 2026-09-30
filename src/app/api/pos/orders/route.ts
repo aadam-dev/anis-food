@@ -8,6 +8,8 @@ import { businessDay, formatOrderNumber } from "@/lib/session-utils";
 import { saleBlockedReason } from "@/lib/shift-close";
 import { getSettings, getTaxConfig } from "@/lib/settings";
 import { taxBreakdown } from "@/lib/tax";
+import { serialiseOrder } from "@/lib/serialise-order";
+import { saleBooks, settlementAfterCorrection, splitAddsUp } from "@/lib/till-rules";
 import {
   PaymentMethod,
   PaymentStatus,
@@ -80,61 +82,33 @@ const settleSchema = z.object({
   tenderedAmount: z.number().min(0).max(1000000).optional(),
 });
 
-/** Shapes an order for the receipt and the open-tickets rail. */
-function serialiseOrder(
-  order: Prisma.OrderGetPayload<{ include: { items: true } }>,
-) {
-  const snapshot = order.transactionSnapshot as {
-    tax?: {
-      inclusive: boolean;
-      net: number;
-      taxTotal: number;
-      lines: { code: string; label: string; rate: number; amount: number }[];
-    } | null;
-  } | null;
-  return {
-    id: order.id,
-    orderNumber: order.orderNumber,
-    clientRef: order.clientRef,
-    sessionId: order.sessionId,
-    status: order.status,
-    paymentMethod: order.paymentMethod,
-    paymentStatus: order.paymentStatus,
-    paymentReference: order.paymentReference,
-    splitPayments: order.splitPayments,
-    deliveryType: order.deliveryType,
-    subtotal: toMoney(order.subtotal),
-    discountAmount: toMoney(order.discountAmount),
-    taxAmount: toMoney(order.taxAmount),
-    total: toMoney(order.total),
-    tenderedAmount: order.tenderedAmount === null ? null : toMoney(order.tenderedAmount),
-    changeAmount: order.changeAmount === null ? null : toMoney(order.changeAmount),
-    tax: snapshot?.tax ?? null,
-    tableLabel: order.tableLabel,
-    customerName: order.customerName,
-    customerPhone: order.customerPhone,
-    customerAddress: order.customerAddress,
-    notes: order.notes,
-    createdAt: order.createdAt.toISOString(),
-    items: order.items.map((item) => ({
-      id: item.id,
-      name: item.name,
-      quantity: item.quantity,
-      unitPrice: toMoney(item.unitPrice),
-      lineTotal: toMoney(item.lineTotal),
-      notes: item.notes,
-    })),
-  };
-}
-
-/** Open tickets — sent to the kitchen, not yet paid for. */
-export async function GET() {
+/** Open tickets, or every sale on the shift that is open now. */
+export async function GET(request: Request) {
   const auth = await requireResource("pos");
   if (auth instanceof NextResponse) return auth;
 
   try {
+    const scope = new URL(request.url).searchParams.get("scope");
+    if (scope === "shift") {
+      const session = await prisma.posSession.findFirst({
+        where: { status: SessionStatus.OPEN },
+      });
+      if (!session) return ok({ orders: [] });
+      const orders = await prisma.order.findMany({
+        where: { sessionId: session.id },
+        orderBy: { createdAt: "desc" },
+        include: { items: true },
+        take: 200,
+      });
+      return ok({ orders: orders.map(serialiseOrder) });
+    }
+
     const orders = await prisma.order.findMany({
-      where: { paymentStatus: PaymentStatus.PENDING, status: { not: OrderStatus.CANCELLED } },
+      where: {
+        paymentStatus: PaymentStatus.PENDING,
+        status: { not: OrderStatus.CANCELLED },
+        paymentMethod: { not: PaymentMethod.BOLT_FOOD },
+      },
       orderBy: { createdAt: "asc" },
       include: { items: true },
       take: 100,
@@ -165,15 +139,15 @@ export async function POST(request: Request) {
       return ok({ order: serialiseOrder(existing), duplicate: true });
     }
 
-    const isUnpaid = body.paymentMethod === "UNPAID";
+    const books = saleBooks(body.paymentMethod);
 
     const session = await prisma.posSession.findFirst({
       where: { status: SessionStatus.OPEN },
     });
     // An unpaid ticket touches no money, so it can be raised before the drawer
-    // is counted in. Anything that takes payment needs a shift to belong to,
-    // or the takings have nowhere to be reconciled against.
-    if (!session && !isUnpaid) {
+    // is counted in. Bolt is not cash either, but it still belongs to a shift
+    // so close-of-day can list it. Anything received at the till needs a shift.
+    if (!session && books.needsOpenShift) {
       return conflict(
         "No shift is open. Open the till first so this sale is counted in the right shift.",
       );
@@ -226,17 +200,8 @@ export async function POST(request: Request) {
     // Split legs must add up. A bill that is 2 pesewas short of its own total is
     // a drawer that will not balance at 10pm, and nobody will know why.
     if (body.paymentMethod === "SPLIT") {
-      if (!body.splitPayments || body.splitPayments.length < 2) {
-        return badRequest("A split payment needs at least two parts.");
-      }
-      const sum = roundMoney(
-        body.splitPayments.reduce((running, leg) => running + toMoney(leg.amount), 0),
-      );
-      if (Math.abs(sum - orderTotal) > 0.01) {
-        return badRequest(
-          `The split adds up to GH₵${sum.toFixed(2)} but the bill is GH₵${orderTotal.toFixed(2)}.`,
-        );
-      }
+      const split = splitAddsUp(orderTotal, body.splitPayments ?? []);
+      if (!split.ok) return badRequest(split.reason);
     }
 
     if (body.paymentMethod === "CASH" && body.tenderedAmount !== undefined) {
@@ -294,11 +259,11 @@ export async function POST(request: Request) {
           sessionId: session?.id ?? null,
           tableId: table?.id ?? null,
           tableLabel: table?.label ?? null,
-          status: isUnpaid ? OrderStatus.PREPARING : OrderStatus.COMPLETED,
+          status: books.orderStatus as OrderStatus,
           source: body.source as OrderSource,
           deliveryType: body.deliveryType as DeliveryType,
           paymentMethod: body.paymentMethod as PaymentMethod,
-          paymentStatus: isUnpaid ? PaymentStatus.PENDING : PaymentStatus.PAID,
+          paymentStatus: books.paymentStatus as PaymentStatus,
           paymentReference: body.paymentReference,
           splitPayments: (body.splitPayments ?? undefined) as never,
           subtotal: totals.subtotal,
@@ -444,18 +409,11 @@ export async function PATCH(request: Request) {
     const total = toMoney(order.total);
 
     if (body.paymentMethod === "SPLIT") {
-      if (!body.splitPayments || body.splitPayments.length < 2) {
-        return badRequest("A split payment needs at least two parts.");
-      }
-      const sum = roundMoney(
-        body.splitPayments.reduce((running, leg) => running + toMoney(leg.amount), 0),
-      );
-      if (Math.abs(sum - total) > 0.01) {
-        return badRequest(
-          `The split adds up to GH₵${sum.toFixed(2)} but the bill is GH₵${total.toFixed(2)}.`,
-        );
-      }
+      const split = splitAddsUp(total, body.splitPayments ?? []);
+      if (!split.ok) return badRequest(split.reason);
     }
+
+    const next = settlementAfterCorrection(body.paymentMethod);
 
     const tendered =
       body.paymentMethod === "CASH" && body.tenderedAmount !== undefined
@@ -472,12 +430,12 @@ export async function PATCH(request: Request) {
         // kitchen, changing what was cooked is a void-and-reorder, not an edit.
         data: {
           paymentMethod: body.paymentMethod as PaymentMethod,
-          paymentStatus: PaymentStatus.PAID,
+          paymentStatus: next.paymentStatus as PaymentStatus,
           paymentReference: body.paymentReference,
           splitPayments: (body.splitPayments ?? undefined) as never,
           tenderedAmount: tendered,
           changeAmount: tendered === null ? null : changeDue(total, tendered),
-          status: OrderStatus.COMPLETED,
+          status: next.orderStatus as OrderStatus,
           // Belongs to the shift that took the money, not the one that cooked it.
           sessionId: session.id,
         },

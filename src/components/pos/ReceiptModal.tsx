@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { X, Printer } from "lucide-react";
+import { FileText, X, Printer } from "lucide-react";
 import QRCode from "qrcode";
 import Receipt80mm, { type ReceiptData } from "./Receipt80mm";
 import { printReceiptNow } from "@/lib/receipt-print";
+import { buildInvoiceHtml } from "@/lib/invoice-html";
+import { printHtmlDocument } from "@/lib/print-document";
 import type { OrderView } from "./types";
 
 export default function ReceiptModal({
@@ -71,6 +73,10 @@ export default function ReceiptModal({
     changeAmount: order.changeAmount,
     customerName: order.customerName,
     customerPhone: order.customerPhone,
+    customerAddress: order.customerAddress,
+    deliveryType: order.deliveryType,
+    tableLabel: order.tableLabel,
+    paymentStatus: order.paymentStatus,
     notes: order.notes,
     header: business.header,
     address: business.address,
@@ -118,7 +124,39 @@ export default function ReceiptModal({
               className="h-11 px-3 flex items-center gap-1.5 rounded-lg text-sm font-semibold"
               style={{ background: "var(--s-panel-alt)" }}
             >
-              <Printer className="w-4 h-4" /> Print
+              <Printer className="w-4 h-4" /> Slip
+            </button>
+            <button
+              onClick={() =>
+                printHtmlDocument(
+                  buildInvoiceHtml({
+                    orderNumber: order.orderNumber,
+                    createdAt: order.createdAt,
+                    businessName: business.header,
+                    businessAddress: business.address,
+                    businessPhone: business.phone,
+                    customerName: order.customerName,
+                    customerPhone: order.customerPhone,
+                    customerAddress: order.customerAddress,
+                    deliveryType: order.deliveryType,
+                    tableLabel: order.tableLabel,
+                    lines: order.items,
+                    subtotal: order.subtotal,
+                    discountAmount: order.discountAmount,
+                    taxAmount: order.taxAmount,
+                    taxLines: order.tax?.lines,
+                    taxInclusive: order.tax?.inclusive,
+                    total: order.total,
+                    paymentMethod: order.paymentMethod,
+                    paymentStatus: order.paymentStatus,
+                    splitPayments: order.splitPayments,
+                  }),
+                )
+              }
+              className="h-11 px-3 flex items-center gap-1.5 rounded-lg text-sm font-semibold"
+              style={{ background: "var(--s-panel-alt)" }}
+            >
+              <FileText className="w-4 h-4" /> Invoice
             </button>
             <button
               onClick={onClose}

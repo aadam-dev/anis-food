@@ -90,6 +90,7 @@ export interface OrderView {
   tableLabel: string | null;
   customerName: string | null;
   customerPhone: string | null;
+  customerAddress?: string | null;
   notes: string | null;
   createdAt: string;
   items: {

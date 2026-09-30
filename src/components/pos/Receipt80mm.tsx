@@ -43,6 +43,10 @@ export interface ReceiptData {
   changeAmount?: number | null;
   customerName?: string | null;
   customerPhone?: string | null;
+  customerAddress?: string | null;
+  deliveryType?: string | null;
+  tableLabel?: string | null;
+  paymentStatus?: string | null;
   notes?: string | null;
   header: string;
   address: string;
@@ -64,6 +68,12 @@ const METHOD_LABELS: Record<string, string> = {
   BOLT_FOOD: "Bolt Food",
   SPLIT: "Split",
   UNPAID: "Not yet paid",
+};
+
+const FULFILLMENT_LABELS: Record<string, string> = {
+  DINE_IN: "Dine-in",
+  TAKEAWAY: "Takeaway",
+  DELIVERY: "Delivery",
 };
 
 export default function Receipt80mm({
@@ -124,6 +134,15 @@ export default function Receipt80mm({
           </>
         ) : (
           <div>Walk-in</div>
+        )}
+        {data.deliveryType && (
+          <div>
+            {FULFILLMENT_LABELS[data.deliveryType] ?? data.deliveryType}
+            {data.deliveryType === "DINE_IN" && data.tableLabel ? ` · ${data.tableLabel}` : ""}
+            {data.deliveryType === "DELIVERY" && data.customerAddress?.trim()
+              ? ` · ${data.customerAddress.trim()}`
+              : ""}
+          </div>
         )}
       </div>
 
@@ -232,9 +251,13 @@ export default function Receipt80mm({
         </>
       ) : (
         <div className="r-row">
-          <span>Paid by</span>
+          <span>{data.paymentMethod === "BOLT_FOOD" ? "Tender" : "Paid by"}</span>
           <span>{METHOD_LABELS[data.paymentMethod] ?? data.paymentMethod}</span>
         </div>
+      )}
+
+      {data.paymentMethod === "BOLT_FOOD" && (
+        <div className="r-small">Money is with Bolt. Not collected at the till.</div>
       )}
 
       {data.tenderedAmount !== null && data.tenderedAmount !== undefined && (

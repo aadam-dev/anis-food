@@ -82,7 +82,7 @@ export default function MenuGrid({
           : categories.find((entry) => entry.id === category)?.name ?? "Menu";
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 flex-1 flex-col">
       <div className="space-y-3 px-4 pt-4">
         <div className="relative">
           <Search
@@ -215,7 +215,7 @@ export default function MenuGrid({
                   type="button"
                   onClick={() => onAdd(item)}
                   disabled={locked}
-                  className="group relative flex min-h-52 flex-col overflow-hidden rounded-[1.35rem] p-0 text-left transition-transform active:scale-[0.98] disabled:opacity-45"
+                  className="group relative flex flex-col overflow-hidden rounded-[1.25rem] p-0 text-left transition-transform active:scale-[0.98] disabled:opacity-45"
                   style={{
                     background: "var(--s-panel)",
                     boxShadow:
@@ -235,10 +235,10 @@ export default function MenuGrid({
                   <DishThumb
                     name={item.name}
                     imageUrl={item.imageUrl}
-                    className="aspect-[4/3] w-full rounded-t-[1.35rem]"
+                    className="aspect-[5/4] w-full rounded-t-[1.25rem]"
                     letterClassName="text-3xl"
                   />
-                  <span className="flex flex-1 flex-col gap-1 px-3 pb-3 pt-2.5">
+                  <span className="flex flex-1 flex-col gap-1 px-2.5 pb-2.5 pt-2">
                     <span className="line-clamp-2 min-h-10 text-sm font-bold leading-snug">
                       {item.name}
                     </span>

@@ -22,13 +22,23 @@ export interface AdminExpense {
   paymentMethod: string;
 }
 
+export interface AdminDeposit {
+  id: string;
+  amount: number;
+  reason: string;
+  destination: string;
+  at: string;
+}
+
 export default function ExpensesClient({
   expenses,
+  deposits,
   categories,
   month,
   total,
 }: {
   expenses: AdminExpense[];
+  deposits: AdminDeposit[];
   categories: ExpenseCategory[];
   month: string;
   total: number;
@@ -79,6 +89,35 @@ export default function ExpensesClient({
                   id={expense.id}
                   onDone={() => router.refresh()}
                 />
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
+
+      <Panel className="mt-4">
+        <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-5">
+          <h2 className="font-semibold">Deposits</h2>
+          <Chip>Not in the month total</Chip>
+        </div>
+        {deposits.length === 0 ? (
+          <EmptyState title="No deposits this month" hint="Cash moved to MoMo or the bank shows here." />
+        ) : (
+          <ul className="divide-y border-t" style={{ borderColor: "var(--s-border)" }}>
+            {deposits.map((deposit) => (
+              <li key={deposit.id} className="flex items-center gap-3 px-4 py-3 sm:px-5">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{deposit.reason}</p>
+                  <p className="mt-0.5 text-xs" style={{ color: "var(--s-ink-faint)" }}>
+                    {deposit.destination === "MOMO" ? "Into MoMo" : "Into the bank"} ·{" "}
+                    {new Date(deposit.at).toLocaleDateString("en-GB", {
+                      day: "numeric",
+                      month: "short",
+                      timeZone: "Africa/Accra",
+                    })}
+                  </p>
+                </div>
+                <span className="money whitespace-nowrap font-semibold">{formatGHS(deposit.amount)}</span>
               </li>
             ))}
           </ul>

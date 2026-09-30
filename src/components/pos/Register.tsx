@@ -12,7 +12,6 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeftRight,
   ChefHat,
   CircleAlert,
   CloudOff,
@@ -42,8 +41,12 @@ import CartPanel from "./CartPanel";
 import MobileCartSheet from "./MobileCartSheet";
 import PaymentSheet from "./PaymentSheet";
 import ShiftPanel, { OpenShiftCard } from "./ShiftPanel";
-import OpenTickets, { SettleSheet, VoidSheet } from "./OpenTickets";
+import { SettleSheet, VoidSheet } from "./OpenTickets";
+import OrderDesk from "./OrderDesk";
+import PaymentCorrectionSheet from "./PaymentCorrectionSheet";
 import ReceiptModal from "./ReceiptModal";
+import { buildInvoiceHtml } from "@/lib/invoice-html";
+import { printHtmlDocument } from "@/lib/print-document";
 import QuantityEntrySheet from "./QuantityEntrySheet";
 import CashMovementDialog from "./CashMovementDialog";
 import CloseShiftDialog from "./CloseShiftDialog";
@@ -113,6 +116,10 @@ export default function Register({
   );
   const [view, setView] = useState<View>(initialSession?.isStale ? "tickets" : "register");
   const [tickets, setTickets] = useState<OrderView[]>(initialTickets);
+  const [shiftOrders, setShiftOrders] = useState<OrderView[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [chargeIds, setChargeIds] = useState<string[] | null>(null);
+  const [correcting, setCorrecting] = useState<OrderView | null>(null);
   const [paying, setPaying] = useState(false);
   // Phone only: the cart lives in a slide-up sheet, since there's no room for a
   // side rail. Desktop shows CartPanel inline and never opens this.
@@ -156,6 +163,30 @@ export default function Register({
     [cart],
   );
 
+  const chargingLines = useMemo(() => {
+    if (!chargeIds) return cart.lines;
+    const keep = new Set(chargeIds);
+    return cart.lines.filter((line) => keep.has(line.menuItemId));
+  }, [cart.lines, chargeIds]);
+
+  const chargingTotals = useMemo(() => {
+    const partial = chargeIds !== null && chargeIds.length < cart.lines.length;
+    return computeOrderTotals({
+      lines: chargingLines.map((line) => ({ unitPrice: line.unitPrice, quantity: line.quantity })),
+      discountAmount: partial ? 0 : cart.discount,
+    });
+  }, [chargingLines, chargeIds, cart.lines.length, cart.discount]);
+
+  const selectedTotal = useMemo(() => {
+    if (selectedIds.length === 0 || selectedIds.length >= cart.lines.length) return null;
+    const keep = new Set(selectedIds);
+    return computeOrderTotals({
+      lines: cart.lines
+        .filter((line) => keep.has(line.menuItemId))
+        .map((line) => ({ unitPrice: line.unitPrice, quantity: line.quantity })),
+    }).total;
+  }, [selectedIds, cart.lines]);
+
   const loadSession = useCallback(async () => {
     try {
       const response = await fetch("/api/pos/sessions");
@@ -192,10 +223,18 @@ export default function Register({
 
   const loadTickets = useCallback(async () => {
     try {
-      const response = await fetch("/api/pos/orders");
-      if (!response.ok) return;
-      const data = await response.json();
-      setTickets(data.orders);
+      const [openRes, shiftRes] = await Promise.all([
+        fetch("/api/pos/orders"),
+        fetch("/api/pos/orders?scope=shift"),
+      ]);
+      if (openRes.ok) {
+        const data = await openRes.json();
+        setTickets(data.orders);
+      }
+      if (shiftRes.ok) {
+        const data = await shiftRes.json();
+        setShiftOrders(data.orders);
+      }
     } catch {
       /* Offline: the rail keeps whatever it last had. */
     }
@@ -369,13 +408,14 @@ export default function Register({
             : "TAKEAWAY";
     const payload = {
       clientRef,
-      lines: cart.lines.map((line) => ({
+      lines: chargingLines.map((line) => ({
         menuItemId: line.menuItemId,
         quantity: line.quantity,
         notes: line.notes,
       })),
       paymentMethod: method,
-      discountAmount: cart.discount || undefined,
+      discountAmount:
+        chargeIds && chargeIds.length < cart.lines.length ? undefined : cart.discount || undefined,
       ...extras,
       deliveryType,
       tableId: fulfillment === "DINE_IN" ? tableId || undefined : undefined,
@@ -416,7 +456,15 @@ export default function Register({
       throw new Error(data.error ?? "Could not take that payment.");
     }
 
-    clearOrder();
+    const partial = Boolean(chargeIds && chargingLines.length > 0 && chargingLines.length < cart.lines.length);
+    if (partial && chargeIds) {
+      dispatch({ type: "removeMany", menuItemIds: chargeIds });
+      setSelectedIds((current) => current.filter((id) => !chargeIds.includes(id)));
+    } else {
+      clearOrder();
+      setSelectedIds([]);
+    }
+    setChargeIds(null);
     setPaying(false);
     setReceipt(data.order);
     void loadSession();
@@ -443,8 +491,14 @@ export default function Register({
     return map;
   }, [cart.lines]);
 
+  useEffect(() => {
+    void loadTickets();
+  }, [loadTickets]);
+
   function clearOrder() {
     dispatch({ type: "clear" });
+    setSelectedIds([]);
+    setChargeIds(null);
     setCustomerName("");
     setCustomerPhone("");
     setCustomerAddress("");
@@ -495,14 +549,14 @@ export default function Register({
 
   return (
     <div
-      className="min-h-dvh flex flex-col lg:p-4 lg:gap-3"
+      className="flex h-dvh max-h-dvh flex-col overflow-hidden lg:p-4 lg:gap-3"
       style={{
         background:
           "radial-gradient(circle at 0 100%, color-mix(in srgb, var(--s-brand) 8%, transparent), transparent 30%), var(--s-bg)",
       }}
     >
       <header
-        className="sticky top-0 z-30 border-b lg:static lg:rounded-[1.5rem] lg:border-0 lg:px-2"
+        className="z-30 shrink-0 border-b lg:rounded-[1.5rem] lg:border-0 lg:px-2"
         style={{
           background: "color-mix(in srgb, var(--s-panel) 92%, transparent)",
           backdropFilter: "blur(10px)",
@@ -570,14 +624,6 @@ export default function Register({
                   className="absolute right-0 top-full z-50 mt-1 w-56 rounded-2xl border p-1 shadow-xl"
                   style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
                 >
-                  <MenuItem
-                    icon={ArrowLeftRight}
-                    label="Cash in / out"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      setMovingCash(true);
-                    }}
-                  />
                   <MenuItem icon={LockKeyhole} label="Close shift" onClick={openClose} />
                   {backOfficeHref && (
                     <MenuItem
@@ -664,7 +710,7 @@ export default function Register({
       </header>
 
       <div
-        className={`flex-1 min-h-0 lg:grid lg:gap-3 ${
+        className={`flex min-h-0 flex-1 flex-col overflow-hidden lg:grid lg:gap-3 ${
           view === "register"
             ? "lg:grid-cols-[5.5rem_minmax(0,1fr)_22.5rem]"
             : "lg:grid-cols-[5.5rem_minmax(0,1fr)]"
@@ -680,7 +726,7 @@ export default function Register({
 
         {view === "register" && (
           <>
-            <main className="min-h-0 overflow-hidden lg:rounded-[1.5rem] lg:bg-[var(--s-panel)] lg:shadow-[var(--s-shadow)]">
+            <main className="flex min-h-0 flex-1 flex-col overflow-hidden lg:rounded-[1.5rem] lg:bg-[var(--s-panel)] lg:shadow-[var(--s-shadow)]">
               <MenuGrid
                 categories={menu.categories}
                 items={menu.items}
@@ -707,7 +753,21 @@ export default function Register({
               onCustomerPhone={setCustomerPhone}
               onCustomerAddress={setCustomerAddress}
               onClear={clearOrder}
-              onCharge={() => setPaying(true)}
+              onCharge={() => {
+                setChargeIds(null);
+                setPaying(true);
+              }}
+              selectedIds={selectedIds}
+              onToggleLine={(id) =>
+                setSelectedIds((current) =>
+                  current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id],
+                )
+              }
+              onChargeSelected={() => {
+                setChargeIds(selectedIds);
+                setPaying(true);
+              }}
+              selectedTotal={selectedTotal}
               locked={locked}
               tables={tables}
               tableId={tableId}
@@ -717,18 +777,48 @@ export default function Register({
         )}
 
         {view === "tickets" && (
-          <main className="min-h-0 overflow-hidden lg:rounded-[1.5rem] lg:bg-[var(--s-panel)] lg:shadow-[var(--s-shadow)]">
-            <OpenTickets
+          <main className="flex min-h-0 flex-1 flex-col overflow-hidden lg:rounded-[1.5rem] lg:bg-[var(--s-panel)] lg:shadow-[var(--s-shadow)]">
+            <OrderDesk
               tickets={tickets}
-              canVoid={canVoid}
+              shiftOrders={shiftOrders}
+              canVoidPaid={canVoid}
               onTakePayment={(ticket) => setSettling(ticket)}
               onVoid={(ticket) => setVoiding(ticket)}
+              onReprint={(order) => setReceipt(order)}
+              onInvoice={(order) =>
+                printHtmlDocument(
+                  buildInvoiceHtml({
+                    orderNumber: order.orderNumber,
+                    createdAt: order.createdAt,
+                    businessName: business.header,
+                    businessAddress: business.address,
+                    businessPhone: business.phone,
+                    customerName: order.customerName,
+                    customerPhone: order.customerPhone,
+                    customerAddress: order.customerAddress,
+                    deliveryType: order.deliveryType,
+                    tableLabel: order.tableLabel,
+                    lines: order.items,
+                    subtotal: order.subtotal,
+                    discountAmount: order.discountAmount,
+                    taxAmount: order.taxAmount,
+                    taxLines: order.tax?.lines,
+                    taxInclusive: order.tax?.inclusive,
+                    total: order.total,
+                    paymentMethod: order.paymentMethod,
+                    paymentStatus: order.paymentStatus,
+                    splitPayments: order.splitPayments,
+                  }),
+                )
+              }
+              onCorrect={(order) => setCorrecting(order)}
+              onChanged={() => void loadTickets()}
             />
           </main>
         )}
 
         {view === "shift" && (
-          <main className="min-h-0 overflow-hidden lg:rounded-[1.5rem] lg:bg-[var(--s-panel)] lg:shadow-[var(--s-shadow)]">
+          <main className="flex min-h-0 flex-1 flex-col overflow-hidden lg:rounded-[1.5rem] lg:bg-[var(--s-panel)] lg:shadow-[var(--s-shadow)]">
             <ShiftPanel
               session={session}
               onCashMovement={() => setMovingCash(true)}
@@ -785,8 +875,21 @@ export default function Register({
           onClose={() => setCartOpen(false)}
           onCharge={() => {
             setCartOpen(false);
+            setChargeIds(null);
             setPaying(true);
           }}
+          selectedIds={selectedIds}
+          onToggleLine={(id) =>
+            setSelectedIds((current) =>
+              current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id],
+            )
+          }
+          onChargeSelected={() => {
+            setCartOpen(false);
+            setChargeIds(selectedIds);
+            setPaying(true);
+          }}
+          selectedTotal={selectedTotal}
           locked={locked}
         />
       )}
@@ -811,9 +914,9 @@ export default function Register({
         />
       )}
 
-      {paying && !locked && (
+      {paying && !locked && chargingLines.length > 0 && (
         <PaymentSheet
-          totals={totals}
+          totals={chargingTotals}
           fulfillment={fulfillment}
           onFulfillment={setFulfillment}
           customerName={customerName}
@@ -825,7 +928,10 @@ export default function Register({
           tables={tables}
           tableId={tableId}
           onTable={setTableId}
-          onClose={() => setPaying(false)}
+          onClose={() => {
+            setPaying(false);
+            setChargeIds(null);
+          }}
           onConfirm={submitOrder}
         />
       )}
@@ -870,6 +976,13 @@ export default function Register({
         <CloseShiftDialog
           session={session}
           tickets={tickets}
+          boltTickets={shiftOrders.filter(
+            (order) =>
+              order.paymentMethod === "BOLT_FOOD" &&
+              order.paymentStatus === "PENDING" &&
+              order.status !== "CANCELLED" &&
+              order.sessionId === session.id,
+          )}
           canVoid={canVoid}
           onRefresh={refreshShift}
           onClose={() => setClosingId(null)}
@@ -877,6 +990,20 @@ export default function Register({
             setClosingId(null);
             clearOrder();
             void refreshShift();
+          }}
+        />
+      )}
+
+      {correcting && (
+        <PaymentCorrectionSheet
+          order={correcting}
+          endpoint={`/api/pos/orders/${correcting.id}`}
+          onClose={() => setCorrecting(null)}
+          onSaved={() => {
+            setCorrecting(null);
+            setBanner({ tone: "good", text: "Payment updated." });
+            void loadTickets();
+            void loadSession();
           }}
         />
       )}

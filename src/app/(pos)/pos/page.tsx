@@ -39,7 +39,11 @@ export default async function PosPage() {
       },
     }),
     prisma.order.findMany({
-      where: { paymentStatus: "PENDING", status: { not: "CANCELLED" } },
+      where: {
+        paymentStatus: "PENDING",
+        status: { not: "CANCELLED" },
+        paymentMethod: { not: "BOLT_FOOD" },
+      },
       orderBy: { createdAt: "asc" },
       include: { items: true },
       take: 100,
@@ -82,6 +86,7 @@ export default async function PosPage() {
     tableLabel: order.tableLabel,
     customerName: order.customerName,
     customerPhone: order.customerPhone,
+    customerAddress: order.customerAddress,
     notes: order.notes,
     createdAt: order.createdAt.toISOString(),
     items: order.items.map((item) => ({
@@ -113,7 +118,7 @@ export default async function PosPage() {
       initialCategories={categories as PosCategory[]}
       initialItems={menuItems}
       initialTickets={openTickets}
-      expenseCategories={canFileExpense ? expenseCategories : []}
+      expenseCategories={expenseCategories}
       canFileExpense={canFileExpense}
       canVoid={canVoid}
       backOfficeHref={backOfficeHref}

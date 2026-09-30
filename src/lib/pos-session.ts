@@ -7,6 +7,7 @@ import {
   drawerDifference,
   differenceLabel,
   splitMovements,
+  momoDeposits,
   type DenominationCount,
 } from "@/lib/cash";
 import { isStaleSession, businessDay } from "@/lib/session-utils";
@@ -75,12 +76,14 @@ export async function summariseSession(sessionId: string) {
   if (!session) return null;
 
   const takings = await takingsFor(session.id);
-  const { cashIn, cashOut } = splitMovements(
-    session.cashMovements.map((movement) => ({
-      direction: movement.direction,
-      amount: toMoney(movement.amount),
-    })),
-  );
+  const movementViews = session.cashMovements.map((movement) => ({
+    direction: movement.direction as "IN" | "OUT",
+    amount: toMoney(movement.amount),
+    kind: movement.kind,
+    destination: movement.destination,
+  }));
+  const { cashIn, cashOut } = splitMovements(movementViews);
+  const depositedToMomo = momoDeposits(movementViews);
 
   const expected = expectedCash({
     openingFloat: toMoney(session.openingFloat),
@@ -92,6 +95,7 @@ export async function summariseSession(sessionId: string) {
   const wallet = walletTotals({
     openingMomo: session.openingMomo === null ? null : toMoney(session.openingMomo),
     momoRevenue: takings.momo,
+    momoDeposits: depositedToMomo,
   });
 
   const counted =

@@ -6,6 +6,7 @@ import { ok, parseBody, badRequest, conflict, handlePrismaError } from "@/lib/ap
 import { drawerDifference } from "@/lib/cash";
 import { isStaleSession, businessDay } from "@/lib/session-utils";
 import { closeProblem, resolveClosingCash } from "@/lib/shift-close";
+import { blocksShiftClose } from "@/lib/till-rules";
 import { summariseSession } from "@/lib/pos-session";
 import { SessionStatus } from "@/generated/prisma";
 
@@ -117,9 +118,11 @@ export async function PATCH(request: Request) {
       return conflict("That shift is already closed.");
     }
 
-    const openTickets = await prisma.order.count({
+    const pending = await prisma.order.findMany({
       where: { sessionId: session.id, paymentStatus: "PENDING", status: { not: "CANCELLED" } },
+      select: { paymentStatus: true, paymentMethod: true, status: true },
     });
+    const openTickets = pending.filter(blocksShiftClose).length;
 
     const hasCount = body.cashCount && Object.keys(body.cashCount).length > 0;
     const closingCash = resolveClosingCash({

@@ -5,7 +5,7 @@ import { formatGHS, type OrderTotals } from "@/lib/money";
 import type { CartAction, CartState } from "./cartReducer";
 import type { CartLine } from "./types";
 import CartLines from "./CartLines";
-import CustomerFields, { type FulfillmentType } from "./CustomerFields";
+import { OrderContextBar, type FulfillmentType } from "./CustomerFields";
 import Button from "./ui/Button";
 
 /**
@@ -36,6 +36,10 @@ export default function MobileCartSheet({
   onClear,
   onClose,
   onCharge,
+  selectedIds = [],
+  onToggleLine,
+  onChargeSelected,
+  selectedTotal = null,
   locked = false,
   tables = [],
   tableId = "",
@@ -59,6 +63,10 @@ export default function MobileCartSheet({
   onClear: () => void;
   onClose: () => void;
   onCharge: () => void;
+  selectedIds?: string[];
+  onToggleLine?: (menuItemId: string) => void;
+  onChargeSelected?: () => void;
+  selectedTotal?: number | null;
   tables?: { id: string; label: string; area: string; occupied: boolean }[];
   tableId?: string;
   onTable?: (id: string) => void;
@@ -111,8 +119,8 @@ export default function MobileCartSheet({
           </div>
         </div>
 
-        <div className="max-h-[40%] overflow-y-auto border-b px-4 py-3" style={{ borderColor: "var(--s-border)" }}>
-          <CustomerFields
+        <div className="border-b px-4 py-3" style={{ borderColor: "var(--s-border)" }}>
+          <OrderContextBar
             fulfillment={fulfillment}
             onFulfillment={onFulfillment}
             name={customerName}
@@ -134,6 +142,8 @@ export default function MobileCartSheet({
             focusedMenuItemId={focusedMenuItemId}
             onFocus={onFocus}
             onEditQty={onEditQty}
+            selectedIds={selectedIds}
+            onToggle={onToggleLine}
           />
         </div>
 
@@ -158,7 +168,18 @@ export default function MobileCartSheet({
               <span className="font-semibold">Total</span>
               <span className="money text-2xl font-bold">{formatGHS(totals.total)}</span>
             </div>
-            <Button size="lg" className="w-full" onClick={onCharge} disabled={locked}>
+            {selectedTotal !== null && onChargeSelected && (
+              <Button size="lg" className="mb-2 w-full" onClick={onChargeSelected} disabled={locked}>
+                Charge selected {formatGHS(selectedTotal)}
+              </Button>
+            )}
+            <Button
+              size="lg"
+              tone={selectedTotal !== null ? "secondary" : "primary"}
+              className="w-full"
+              onClick={onCharge}
+              disabled={locked}
+            >
               {locked ? "Close the old shift first" : `Continue to payment · ${formatGHS(totals.total)}`}
             </Button>
           </div>

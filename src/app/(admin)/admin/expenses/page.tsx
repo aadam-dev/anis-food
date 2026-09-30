@@ -2,7 +2,11 @@ import { prisma } from "@/lib/db";
 import { toMoney, roundMoney } from "@/lib/money";
 import { businessDay, businessDayRange } from "@/lib/session-utils";
 import { PageHeader } from "@/components/admin/ui";
-import ExpensesClient, { type AdminExpense, type ExpenseCategory } from "./ExpensesClient";
+import ExpensesClient, {
+  type AdminDeposit,
+  type AdminExpense,
+  type ExpenseCategory,
+} from "./ExpensesClient";
 
 export const metadata = { title: "Expenses" };
 export const dynamic = "force-dynamic";
@@ -20,12 +24,17 @@ export default async function ExpensesPage({
   const nextMonth = m === 12 ? `${year + 1}-01-01` : `${year}-${String(m + 1).padStart(2, "0")}-01`;
   const end = businessDayRange(nextMonth).start;
 
-  const [categories, expenses] = await Promise.all([
+  const [categories, expenses, deposits] = await Promise.all([
     prisma.expenseCategory.findMany({ orderBy: { sortOrder: "asc" } }),
     prisma.expense.findMany({
       where: { incurredOn: { gte: start, lt: end } },
       orderBy: { incurredOn: "desc" },
       include: { category: { select: { name: true } } },
+    }),
+    prisma.cashMovement.findMany({
+      where: { kind: "DEPOSIT", createdAt: { gte: start, lt: end } },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, amount: true, reason: true, destination: true, createdAt: true },
     }),
   ]);
 
@@ -41,12 +50,23 @@ export default async function ExpensesPage({
   }));
 
   const cats: ExpenseCategory[] = categories.map((c) => ({ id: c.id, name: c.name }));
+  const depositRows: AdminDeposit[] = deposits.map((deposit) => ({
+    id: deposit.id,
+    amount: toMoney(deposit.amount),
+    reason: deposit.reason,
+    destination: deposit.destination ?? "BANK",
+    at: deposit.createdAt.toISOString(),
+  }));
 
   return (
     <>
-      <PageHeader title="Expenses" description="What the business spent, by month." />
+      <PageHeader
+        title="Expenses"
+        description="What the business spent. Deposits are transfers, not costs."
+      />
       <ExpensesClient
         expenses={serialized}
+        deposits={depositRows}
         categories={cats}
         month={month}
         total={total}

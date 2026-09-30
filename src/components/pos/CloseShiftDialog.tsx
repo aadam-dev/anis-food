@@ -35,6 +35,7 @@ const STEP_LABELS: Record<Exclude<Step, "done">, string> = {
 export default function CloseShiftDialog({
   session,
   tickets,
+  boltTickets = [],
   canVoid,
   onRefresh,
   onClose,
@@ -42,6 +43,8 @@ export default function CloseShiftDialog({
 }: {
   session: SessionView;
   tickets: OrderView[];
+  /** Bolt sales still waiting on a payout. Listed, and they do not block the close. */
+  boltTickets?: OrderView[];
   canVoid: boolean;
   /** Reload the shift and tickets after a settle or void. */
   onRefresh: () => Promise<void> | void;
@@ -209,8 +212,11 @@ export default function CloseShiftDialog({
               </Callout>
             ) : (
               <Callout tone="warn" title={`${unpaid.length} ticket${unpaid.length === 1 ? "" : "s"} not paid`}>
-                Take payment or {canVoid ? "void them" : "ask a manager to void them"} before
-                the shift can close — otherwise the takings will not match what left the kitchen.
+                Take payment or void them before the shift can close — otherwise the takings
+                will not match what left the kitchen.{" "}
+                {canVoid
+                  ? "A paid mistake can be voided from the orders desk."
+                  : "A paid sale still needs a manager to void."}
               </Callout>
             )}
             {flash && (
@@ -224,12 +230,13 @@ export default function CloseShiftDialog({
                   key={ticket.id}
                   ticket={ticket}
                   now={now}
-                  canVoid={canVoid}
+                  canVoid
                   onTakePayment={() => setSettling(ticket)}
                   onVoid={() => setVoiding(ticket)}
                 />
               ))}
             </div>
+            {boltTickets.length > 0 && <BoltNote tickets={boltTickets} />}
           </div>
         )}
 
@@ -415,6 +422,7 @@ export default function CloseShiftDialog({
               />
             </div>
 
+            {boltTickets.length > 0 && <BoltNote tickets={boltTickets} />}
             <SheetError message={error} />
           </div>
         )}
@@ -530,6 +538,30 @@ function Callout({
           {children}
         </p>
       </div>
+    </div>
+  );
+}
+
+function BoltNote({ tickets }: { tickets: OrderView[] }) {
+  return (
+    <div
+      className="rounded-2xl border px-4 py-3 text-sm"
+      style={{ borderColor: "var(--s-border)", background: "var(--s-panel-alt)" }}
+    >
+      <p className="font-semibold">On Bolt</p>
+      <p className="mt-0.5" style={{ color: "var(--s-ink-muted)" }}>
+        These are with Bolt, not in the drawer. They do not hold the close.
+      </p>
+      <ul className="mt-2 space-y-1">
+        {tickets.map((ticket) => (
+          <li key={ticket.id} className="flex justify-between gap-3">
+            <span>
+              {callNumber(ticket.orderNumber)} · {ticket.customerName?.trim() || "Walk-in"}
+            </span>
+            <span className="money">{formatGHS(ticket.total)}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

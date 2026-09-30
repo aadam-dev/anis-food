@@ -11,6 +11,11 @@ import {
   ORDER_SOURCE_LABELS,
   VOID_REASON_LABELS,
 } from "@/components/admin/labels";
+import ReceiptModal from "@/components/pos/ReceiptModal";
+import PaymentCorrectionSheet from "@/components/pos/PaymentCorrectionSheet";
+import { buildInvoiceHtml } from "@/lib/invoice-html";
+import { printHtmlDocument } from "@/lib/print-document";
+import type { OrderView } from "@/components/pos/types";
 
 export interface AdminOrder {
   id: string;
@@ -24,8 +29,49 @@ export interface AdminOrder {
   staff: string | null;
   customerName: string | null;
   customerPhone: string | null;
+  customerAddress: string | null;
   voidReason: string | null;
-  items: { id: string; name: string; quantity: number; lineTotal: number }[];
+  clientRef: string;
+  deliveryType: string;
+  tableLabel: string | null;
+  subtotal: number;
+  discountAmount: number;
+  taxAmount: number;
+  tax: OrderView["tax"];
+  splitPayments: OrderView["splitPayments"];
+  tenderedAmount: number | null;
+  changeAmount: number | null;
+  notes: string | null;
+  paymentReference: string | null;
+  items: { id: string; name: string; quantity: number; unitPrice: number; lineTotal: number; notes: string | null }[];
+}
+
+function asOrderView(order: AdminOrder): OrderView {
+  return {
+    id: order.id,
+    orderNumber: order.orderNumber,
+    clientRef: order.clientRef,
+    status: order.status,
+    paymentMethod: order.paymentMethod,
+    paymentStatus: order.paymentStatus,
+    paymentReference: order.paymentReference,
+    splitPayments: order.splitPayments,
+    deliveryType: order.deliveryType,
+    subtotal: order.subtotal,
+    discountAmount: order.discountAmount,
+    taxAmount: order.taxAmount,
+    total: order.total,
+    tenderedAmount: order.tenderedAmount,
+    changeAmount: order.changeAmount,
+    tax: order.tax,
+    tableLabel: order.tableLabel,
+    customerName: order.customerName,
+    customerPhone: order.customerPhone,
+    customerAddress: order.customerAddress,
+    notes: order.notes,
+    createdAt: order.createdAt,
+    items: order.items,
+  };
 }
 
 const VOID_REASONS = Object.entries(VOID_REASON_LABELS);
@@ -39,10 +85,20 @@ const FILTERS: { id: OrderFilter; label: string }[] = [
   { id: "voided", label: "Voided" },
 ];
 
-export default function OrdersClient({ orders, day }: { orders: AdminOrder[]; day: string }) {
+export default function OrdersClient({
+  orders,
+  day,
+  business,
+}: {
+  orders: AdminOrder[];
+  day: string;
+  business: { header: string; address: string; phone: string; footer: string; taxLabel: string };
+}) {
   const router = useRouter();
   const [open, setOpen] = useState<string | null>(null);
   const [voiding, setVoiding] = useState<AdminOrder | null>(null);
+  const [reprinting, setReprinting] = useState<AdminOrder | null>(null);
+  const [correcting, setCorrecting] = useState<AdminOrder | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<OrderFilter>("all");
 
@@ -209,11 +265,47 @@ export default function OrdersClient({ orders, day }: { orders: AdminOrder[]; da
                             ? ` · ${VOID_REASON_LABELS[order.voidReason] ?? order.voidReason}`
                             : ""}
                         </span>
-                        {!voided && (
-                          <AdminButton variant="danger" onClick={() => setVoiding(order)}>
-                            Void
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <AdminButton onClick={() => setReprinting(order)}>Reprint</AdminButton>
+                          <AdminButton
+                            onClick={() =>
+                              printHtmlDocument(
+                                buildInvoiceHtml({
+                                  orderNumber: order.orderNumber,
+                                  createdAt: order.createdAt,
+                                  businessName: business.header,
+                                  businessAddress: business.address,
+                                  businessPhone: business.phone,
+                                  customerName: order.customerName,
+                                  customerPhone: order.customerPhone,
+                                  customerAddress: order.customerAddress,
+                                  deliveryType: order.deliveryType,
+                                  tableLabel: order.tableLabel,
+                                  lines: order.items,
+                                  subtotal: order.subtotal,
+                                  discountAmount: order.discountAmount,
+                                  taxAmount: order.taxAmount,
+                                  taxLines: order.tax?.lines,
+                                  taxInclusive: order.tax?.inclusive,
+                                  total: order.total,
+                                  paymentMethod: order.paymentMethod,
+                                  paymentStatus: order.paymentStatus,
+                                  splitPayments: order.splitPayments,
+                                }),
+                              )
+                            }
+                          >
+                            Invoice
                           </AdminButton>
-                        )}
+                          {!voided && (
+                            <AdminButton onClick={() => setCorrecting(order)}>Fix payment</AdminButton>
+                          )}
+                          {!voided && (
+                            <AdminButton variant="danger" onClick={() => setVoiding(order)}>
+                              Void
+                            </AdminButton>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}
@@ -223,6 +315,27 @@ export default function OrdersClient({ orders, day }: { orders: AdminOrder[]; da
           </ul>
         )}
       </Panel>
+
+      {reprinting && (
+        <ReceiptModal
+          order={asOrderView(reprinting)}
+          business={business}
+          soldBy={reprinting.staff ?? "Anis"}
+          onClose={() => setReprinting(null)}
+        />
+      )}
+
+      {correcting && (
+        <PaymentCorrectionSheet
+          order={asOrderView(correcting)}
+          endpoint={`/api/admin/orders/${correcting.id}`}
+          onClose={() => setCorrecting(null)}
+          onSaved={() => {
+            setCorrecting(null);
+            router.refresh();
+          }}
+        />
+      )}
 
       {voiding && (
         <VoidDialog

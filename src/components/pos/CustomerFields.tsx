@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { Bike, ShoppingBag, UtensilsCrossed } from "lucide-react";
+import Sheet from "./ui/Sheet";
 import {
   formatGhanaPhone,
   GHANA_PHONE_HINT,
@@ -136,5 +138,54 @@ export default function CustomerFields({
         </div>
       )}
     </div>
+  );
+}
+
+const TYPE_LABEL: Record<FulfillmentType, string> = {
+  DINE_IN: "Dine-in",
+  TAKEAWAY: "Takeaway",
+  DELIVERY: "Delivery",
+};
+
+/** One line on the bill. The fields live in a sheet so the order stays visible. */
+export function OrderContextBar(props: {
+  fulfillment: FulfillmentType;
+  onFulfillment: (value: FulfillmentType) => void;
+  name: string;
+  phone: string;
+  address: string;
+  onName: (value: string) => void;
+  onPhone: (value: string) => void;
+  onAddress: (value: string) => void;
+  tables?: { id: string; label: string; area: string; occupied: boolean }[];
+  tableId?: string;
+  onTable?: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const who = props.name.trim() || "Walk-in";
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex w-full items-center justify-between gap-3 rounded-2xl px-3 py-2.5 text-left"
+        style={{ background: "var(--s-panel-alt)", boxShadow: "inset 0 0 0 1px var(--s-border)" }}
+      >
+        <span className="min-w-0">
+          <span className="block text-[10px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--s-ink-faint)" }}>
+            {TYPE_LABEL[props.fulfillment]}
+          </span>
+          <span className="block truncate text-sm font-bold">{who}</span>
+        </span>
+        <span className="shrink-0 text-xs font-bold" style={{ color: "var(--s-brand)" }}>
+          Details
+        </span>
+      </button>
+      {open && (
+        <Sheet title="Order details" subtitle="Optional. Empty is a walk-in." onClose={() => setOpen(false)}>
+          <CustomerFields {...props} />
+        </Sheet>
+      )}
+    </>
   );
 }

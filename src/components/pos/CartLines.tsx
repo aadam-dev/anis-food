@@ -17,12 +17,16 @@ export default function CartLines({
   focusedMenuItemId,
   onFocus,
   onEditQty,
+  selectedIds,
+  onToggle,
 }: {
   cart: CartState;
   dispatch: React.Dispatch<CartAction>;
   focusedMenuItemId?: string | null;
   onFocus?: (menuItemId: string) => void;
   onEditQty?: (line: CartLine) => void;
+  selectedIds?: string[];
+  onToggle?: (menuItemId: string) => void;
 }) {
   if (cart.lines.length === 0) {
     return (
@@ -36,6 +40,7 @@ export default function CartLines({
     <ul className="space-y-2 px-3 py-3">
       {cart.lines.map((line) => {
         const focused = line.menuItemId === focusedMenuItemId;
+        const selected = selectedIds?.includes(line.menuItemId) ?? false;
         return (
           <li
             key={line.menuItemId}
@@ -46,6 +51,17 @@ export default function CartLines({
                 : "var(--s-panel-alt)",
             }}
           >
+            {onToggle && (
+              <label className="mb-2 flex items-center gap-2 text-xs font-semibold" style={{ color: "var(--s-ink-muted)" }}>
+                <input
+                  type="checkbox"
+                  checked={selected}
+                  onChange={() => onToggle(line.menuItemId)}
+                  aria-label={`Select ${line.name}`}
+                />
+                {selected ? "On this check" : "Leave on the bill"}
+              </label>
+            )}
             <button
               type="button"
               onClick={() => onFocus?.(line.menuItemId)}

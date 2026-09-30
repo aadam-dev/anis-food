@@ -131,21 +131,38 @@ enum CashDirection {
   OUT
 }
 
+enum CashMovementKind {
+  IN
+  SPEND
+  DEPOSIT
+}
+
+enum DepositDestination {
+  MOMO
+  BANK
+}
+
 /// Money entering or leaving the drawer that is not a sale — a gas refill, a
-/// float top-up, change fetched from the bank. The reason is required: an
-/// unexplained movement is the exact thing this table exists to prevent.
+/// float top-up, change fetched from the bank, or a deposit into MoMo or the
+/// bank. The reason is required: an unexplained movement is the exact thing
+/// this table exists to prevent. A spend always links the expense it filed.
 model CashMovement {
-  id          String        @id @default(cuid())
+  id          String               @id @default(cuid())
   sessionId   String
-  session     PosSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  session     PosSession           @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   direction   CashDirection
-  amount      Decimal       @db.Decimal(10, 2)
+  kind        CashMovementKind     @default(IN)
+  destination DepositDestination?
+  amount      Decimal              @db.Decimal(10, 2)
   reason      String
+  expenseId   String?              @unique
+  expense     Expense?             @relation(fields: [expenseId], references: [id])
   createdById String
-  createdBy   User          @relation(fields: [createdById], references: [id])
-  createdAt   DateTime      @default(now())
+  createdBy   User                 @relation(fields: [createdById], references: [id])
+  createdAt   DateTime             @default(now())
 
   @@index([sessionId, createdAt])
+  @@index([kind])
 }
 
 // ---------------------------------------------------------------------------
@@ -493,6 +510,7 @@ model Expense {
   createdById   String?
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
+  cashMovement  CashMovement?
 
   @@index([incurredOn])
   @@index([categoryId, incurredOn])

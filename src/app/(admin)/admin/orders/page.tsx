@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { toMoney } from "@/lib/money";
 import { businessDay, businessDayRange } from "@/lib/session-utils";
+import { getSettings } from "@/lib/settings";
 import { PageHeader } from "@/components/admin/ui";
 import OrdersClient, { type AdminOrder } from "./OrdersClient";
 
@@ -15,12 +16,13 @@ export default async function OrdersPage({
   const params = await searchParams;
   const day = params.day && /^\d{4}-\d{2}-\d{2}$/.test(params.day) ? params.day : businessDay();
   const { start, end } = businessDayRange(day);
+  const settings = await getSettings();
 
   const orders = await prisma.order.findMany({
     where: { createdAt: { gte: start, lt: end } },
     orderBy: { createdAt: "desc" },
     include: {
-      items: { select: { id: true, name: true, quantity: true, lineTotal: true } },
+      items: { select: { id: true, name: true, quantity: true, unitPrice: true, lineTotal: true, notes: true } },
       staff: { select: { name: true } },
     },
     take: 300,
@@ -38,19 +40,44 @@ export default async function OrdersPage({
     staff: order.staff?.name ?? null,
     customerName: order.customerName,
     customerPhone: order.customerPhone,
+    customerAddress: order.customerAddress,
     voidReason: order.voidReason,
+    clientRef: order.clientRef,
+    deliveryType: order.deliveryType,
+    tableLabel: order.tableLabel,
+    subtotal: toMoney(order.subtotal),
+    discountAmount: toMoney(order.discountAmount),
+    taxAmount: toMoney(order.taxAmount),
+    tax: (order.transactionSnapshot as { tax?: AdminOrder["tax"] } | null)?.tax ?? null,
+    splitPayments: order.splitPayments as AdminOrder["splitPayments"],
+    tenderedAmount: order.tenderedAmount === null ? null : toMoney(order.tenderedAmount),
+    changeAmount: order.changeAmount === null ? null : toMoney(order.changeAmount),
+    notes: order.notes,
+    paymentReference: order.paymentReference,
     items: order.items.map((item) => ({
       id: item.id,
       name: item.name,
       quantity: item.quantity,
+      unitPrice: toMoney(item.unitPrice),
       lineTotal: toMoney(item.lineTotal),
+      notes: item.notes,
     })),
   }));
 
   return (
     <>
       <PageHeader title="Orders" description="Every sale rung on the chosen day." />
-      <OrdersClient orders={serialized} day={day} />
+      <OrdersClient
+        orders={serialized}
+        day={day}
+        business={{
+          header: settings.receipt_header,
+          address: settings.business_address,
+          phone: settings.business_phone,
+          footer: settings.receipt_footer,
+          taxLabel: settings.tax_label,
+        }}
+      />
     </>
   );
 }

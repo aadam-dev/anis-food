@@ -8,14 +8,15 @@ import {
   Building2,
   Split,
   Clock,
+  Bike,
 } from "lucide-react";
 import { formatGHS, roundMoney, changeDue, type OrderTotals } from "@/lib/money";
 import type { PaymentChoice } from "./types";
-import CustomerFields, { type FulfillmentType } from "./CustomerFields";
+import { OrderContextBar, type FulfillmentType } from "./CustomerFields";
 import Numpad, { CASH_SHORTCUTS } from "./Numpad";
 import Sheet, { SheetError } from "./ui/Sheet";
 import Button from "./ui/Button";
-import { FieldInput, FieldLabel } from "./ui/Field";
+import { FieldInput, FieldLabel, FieldSelect } from "./ui/Field";
 
 /**
  * Taking the money.
@@ -29,9 +30,12 @@ const METHODS: { value: PaymentChoice; label: string; icon: typeof Banknote }[] 
   { value: "MOMO", label: "MoMo", icon: Smartphone },
   { value: "CARD", label: "Card", icon: CreditCard },
   { value: "BANK_TRANSFER", label: "Transfer", icon: Building2 },
+  { value: "BOLT_FOOD", label: "Bolt", icon: Bike },
   { value: "SPLIT", label: "Split", icon: Split },
   { value: "UNPAID", label: "Pay later", icon: Clock },
 ];
+
+const SPLIT_METHODS = ["CASH", "MOMO", "CARD", "BANK_TRANSFER"] as const;
 
 export default function PaymentSheet({
   totals,
@@ -77,7 +81,12 @@ export default function PaymentSheet({
   const [method, setMethod] = useState<PaymentChoice>("CASH");
   const [tendered, setTendered] = useState("");
   const [reference, setReference] = useState("");
-  const [splitCash, setSplitCash] = useState("");
+  const [legs, setLegs] = useState<
+    { method: (typeof SPLIT_METHODS)[number]; amount: string }[]
+  >([
+    { method: "CASH", amount: "" },
+    { method: "MOMO", amount: "" },
+  ]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -85,9 +94,17 @@ export default function PaymentSheet({
   const short = method === "CASH" && tendered !== "" && tenderedValue + 0.01 < totals.total;
   const change = method === "CASH" && tendered !== "" ? changeDue(totals.total, tenderedValue) : null;
 
-  const splitCashValue = Math.min(Number(splitCash) || 0, totals.total);
-  const splitMomoValue = roundMoney(totals.total - splitCashValue);
-  const splitInvalid = method === "SPLIT" && (splitCashValue <= 0 || splitMomoValue <= 0);
+  const legAmounts = legs.map((leg, index) => {
+    if (index === legs.length - 1) {
+      const prior = legs
+        .slice(0, -1)
+        .reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0);
+      return roundMoney(Math.max(0, totals.total - prior));
+    }
+    return roundMoney(Number(leg.amount) || 0);
+  });
+  const splitInvalid =
+    method === "SPLIT" && (legs.length < 2 || legAmounts.some((amount) => amount <= 0));
 
   async function confirm() {
     setError(null);
@@ -112,10 +129,7 @@ export default function PaymentSheet({
           fulfillment === "DELIVERY" ? customerAddress.trim() || undefined : undefined,
         splitPayments:
           method === "SPLIT"
-            ? [
-                { method: "CASH", amount: splitCashValue },
-                { method: "MOMO", amount: splitMomoValue },
-              ]
+            ? legs.map((leg, index) => ({ method: leg.method, amount: legAmounts[index] }))
             : undefined,
       });
     } catch (caught) {
@@ -142,14 +156,18 @@ export default function PaymentSheet({
             busy={submitting}
             disabled={short || splitInvalid}
           >
-            {method === "UNPAID" ? "Send to kitchen" : `Take ${formatGHS(totals.total)}`}
+            {method === "UNPAID"
+              ? "Send to kitchen"
+              : method === "BOLT_FOOD"
+                ? "Send on Bolt"
+                : `Take ${formatGHS(totals.total)}`}
           </Button>
         </div>
       }
     >
       <div className="space-y-4">
-        <div className="grid grid-cols-3 gap-2">
-          {METHODS.slice(0, 3).map((entry) => (
+        <div className="grid grid-cols-4 gap-2">
+          {METHODS.slice(0, 4).map((entry) => (
             <MethodTile
               key={entry.value}
               entry={entry}
@@ -159,7 +177,7 @@ export default function PaymentSheet({
           ))}
         </div>
         <div className="grid grid-cols-3 gap-2">
-          {METHODS.slice(3).map((entry) => (
+          {METHODS.slice(4).map((entry) => (
             <MethodTile
               key={entry.value}
               entry={entry}
@@ -226,22 +244,66 @@ export default function PaymentSheet({
           </div>
         )}
 
+        {method === "BOLT_FOOD" && (
+          <p className="text-sm" style={{ color: "var(--s-ink-muted)" }}>
+            Bolt collects this. It is not cash in the drawer. Mark it paid when the payout lands.
+          </p>
+        )}
+
         {method === "SPLIT" && (
           <div className="space-y-2">
-            <FieldLabel htmlFor="split-cash">Paid in cash</FieldLabel>
-            <FieldInput
-              id="split-cash"
-              type="text"
-              inputMode="decimal"
-              value={splitCash}
-              onChange={(event) => setSplitCash(event.target.value.replace(/[^\d.]/g, ""))}
-              placeholder="0.00"
-              className="money text-right text-xl"
-            />
-            <p className="flex justify-between text-sm" style={{ color: "var(--s-ink-muted)" }}>
-              <span>The rest on Mobile Money</span>
-              <span className="money">{formatGHS(splitMomoValue)}</span>
-            </p>
+            {legs.map((leg, index) => {
+              const last = index === legs.length - 1;
+              return (
+                <div key={index} className="grid grid-cols-[1fr_8rem] gap-2">
+                  <FieldSelect
+                    aria-label={`Part ${index + 1} method`}
+                    value={leg.method}
+                    onChange={(event) => {
+                      const method = event.target.value as (typeof SPLIT_METHODS)[number];
+                      setLegs((current) => current.map((entry, i) => (i === index ? { ...entry, method } : entry)));
+                    }}
+                  >
+                    {SPLIT_METHODS.map((option) => (
+                      <option key={option} value={option}>
+                        {option === "BANK_TRANSFER" ? "Transfer" : option === "MOMO" ? "MoMo" : option === "CARD" ? "Card" : "Cash"}
+                      </option>
+                    ))}
+                  </FieldSelect>
+                  <FieldInput
+                    aria-label={`Part ${index + 1} amount`}
+                    inputMode="decimal"
+                    value={last ? legAmounts[index].toFixed(2) : leg.amount}
+                    readOnly={last}
+                    onChange={(event) => {
+                      const amount = event.target.value.replace(/[^\d.]/g, "");
+                      setLegs((current) => current.map((entry, i) => (i === index ? { ...entry, amount } : entry)));
+                    }}
+                    className="money text-right"
+                  />
+                </div>
+              );
+            })}
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                className="text-sm font-bold"
+                style={{ color: "var(--s-brand)" }}
+                onClick={() => setLegs((current) => [...current, { method: "CARD", amount: "" }])}
+              >
+                Add another tender
+              </button>
+              {legs.length > 2 && (
+                <button
+                  type="button"
+                  className="text-sm font-medium"
+                  style={{ color: "var(--s-ink-muted)" }}
+                  onClick={() => setLegs((current) => current.slice(0, -1))}
+                >
+                  Remove last
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -251,7 +313,7 @@ export default function PaymentSheet({
           </p>
         )}
 
-        <CustomerFields
+        <OrderContextBar
           fulfillment={fulfillment}
           onFulfillment={onFulfillment}
           name={customerName}

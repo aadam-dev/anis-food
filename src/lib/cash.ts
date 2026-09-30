@@ -39,6 +39,8 @@ export interface WalletInput {
   /** Null means never recorded — not zero. The distinction survives to the UI. */
   openingMomo: number | null | undefined;
   momoRevenue: number;
+  /** Cash moved from the drawer into the MoMo wallet. Not a sale. */
+  momoDeposits?: number;
 }
 
 export interface WalletTotals {
@@ -52,10 +54,15 @@ export interface WalletTotals {
  * expected closing balance unknowable. Returning null rather than assuming zero
  * keeps "we never wrote it down" distinct from "it was empty".
  */
-export function walletTotals({ openingMomo, momoRevenue }: WalletInput): WalletTotals {
+export function walletTotals({ openingMomo, momoRevenue, momoDeposits = 0 }: WalletInput): WalletTotals {
   const revenue = toMoney(momoRevenue);
+  const deposits = toMoney(momoDeposits);
   const opening = openingMomo === null || openingMomo === undefined ? null : toMoney(openingMomo);
-  return { opening, revenue, expected: opening === null ? null : roundMoney(opening + revenue) };
+  return {
+    opening,
+    revenue,
+    expected: opening === null ? null : roundMoney(opening + revenue + deposits),
+  };
 }
 
 /**
@@ -103,6 +110,19 @@ export function countedTotal(counts: DenominationCount | null | undefined): numb
 export interface CashMovementLike {
   direction: "IN" | "OUT";
   amount: number;
+  kind?: "IN" | "SPEND" | "DEPOSIT";
+  destination?: "MOMO" | "BANK" | null;
+}
+
+/** Cash deposited from the drawer into the MoMo wallet. */
+export function momoDeposits(movements: CashMovementLike[]): number {
+  let total = 0;
+  for (const movement of movements) {
+    if (movement.kind === "DEPOSIT" && movement.destination === "MOMO") {
+      total += toMoney(movement.amount);
+    }
+  }
+  return roundMoney(total);
 }
 
 export function splitMovements(movements: CashMovementLike[]): { cashIn: number; cashOut: number } {

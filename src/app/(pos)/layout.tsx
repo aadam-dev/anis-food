@@ -27,7 +27,7 @@ export default async function PosLayout({ children }: { children: React.ReactNod
   if (!canAccess(user.role, "pos")) redirect("/admin");
 
   return (
-    <div data-surface="pos" data-theme="light" className="min-h-dvh">
+    <div data-surface="pos" data-theme="light" className="h-dvh max-h-dvh overflow-hidden">
       {children}
     </div>
   );
