@@ -12,6 +12,7 @@ import {
 import { formatGHS, roundMoney, changeDue, type OrderTotals } from "@/lib/money";
 import type { PaymentChoice } from "./types";
 import CustomerFields from "./CustomerFields";
+import Numpad, { CASH_SHORTCUTS } from "./Numpad";
 import Sheet, { SheetError } from "./ui/Sheet";
 import Button from "./ui/Button";
 
@@ -30,9 +31,6 @@ const METHODS: { value: PaymentChoice; label: string; icon: typeof Banknote }[] 
   { value: "SPLIT", label: "Split", icon: Split },
   { value: "UNPAID", label: "Pay later", icon: Clock },
 ];
-
-/** Notes a cashier is most likely to be handed. */
-const QUICK_CASH = [5, 10, 20, 50, 100, 200];
 
 export default function PaymentSheet({
   totals,
@@ -137,61 +135,52 @@ export default function PaymentSheet({
       }
     >
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-2">
-            {METHODS.map((entry) => {
-              const Icon = entry.icon;
-              const selected = method === entry.value;
-              return (
-                <button
-                  key={entry.value}
-                  onClick={() => setMethod(entry.value)}
-                  className="rounded-xl px-3 py-3 text-sm font-semibold flex items-center justify-center gap-2"
-                  style={{
-                    background: selected ? "var(--s-brand)" : "var(--s-panel-alt)",
-                    color: selected ? "#fff" : "var(--s-ink)",
-                    border: selected ? "1px solid transparent" : "1px solid var(--s-border)",
-                  }}
-                >
-                  <Icon className="w-4 h-4 shrink-0" />
-                  {entry.label}
-                </button>
-              );
-            })}
+          <div className="grid grid-cols-3 gap-2">
+            {METHODS.slice(0, 3).map((entry) => (
+              <MethodTile
+                key={entry.value}
+                entry={entry}
+                selected={method === entry.value}
+                onSelect={() => setMethod(entry.value)}
+              />
+            ))}
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {METHODS.slice(3).map((entry) => (
+              <MethodTile
+                key={entry.value}
+                entry={entry}
+                selected={method === entry.value}
+                onSelect={() => setMethod(entry.value)}
+              />
+            ))}
           </div>
 
           {method === "CASH" && (
             <div>
-              <label className="block text-sm font-medium mb-1.5">Cash given</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={tendered}
-                onChange={(event) => setTendered(event.target.value.replace(/[^\d.]/g, ""))}
-                placeholder={totals.total.toFixed(2)}
-                className="money w-full rounded-xl border px-3 py-3 text-right text-xl outline-none focus:ring-2"
-                style={fieldStyle}
-              />
-              <div className="mt-2 grid grid-cols-3 gap-2">
+              <div className="mb-3 text-center">
+                <p className="text-sm font-semibold" style={{ color: "var(--s-ink-muted)" }}>
+                  Cash given
+                </p>
+                <p className="money mt-1 text-4xl font-extrabold tracking-tight">
+                  {formatGHS(Number(tendered) || 0)}
+                </p>
                 <button
+                  type="button"
                   onClick={() => setTendered(totals.total.toFixed(2))}
-                  className="rounded-lg py-2.5 text-sm font-semibold"
-                  style={{ background: "var(--s-panel-alt)" }}
+                  className="mt-2 text-sm font-bold"
+                  style={{ color: "var(--s-brand)" }}
                 >
-                  Exact
+                  Exact {formatGHS(totals.total)}
                 </button>
-                {QUICK_CASH.filter((note) => note >= totals.total)
-                  .slice(0, 2)
-                  .map((note) => (
-                    <button
-                      key={note}
-                      onClick={() => setTendered(String(note))}
-                      className="money rounded-lg py-2.5 text-sm font-semibold"
-                      style={{ background: "var(--s-panel-alt)" }}
-                    >
-                      {note}
-                    </button>
-                  ))}
               </div>
+              <Numpad
+                value={tendered}
+                onChange={setTendered}
+                maxDigits={7}
+                allowDecimal
+                shortcuts={CASH_SHORTCUTS}
+              />
               {change !== null && !short && (
                 <p className="mt-3 flex justify-between text-lg font-bold">
                   <span>Change</span>
@@ -257,5 +246,32 @@ export default function PaymentSheet({
           />
         </div>
     </Sheet>
+  );
+}
+
+function MethodTile({
+  entry,
+  selected,
+  onSelect,
+}: {
+  entry: (typeof METHODS)[number];
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const Icon = entry.icon;
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className="flex min-h-16 flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-xs font-bold"
+      style={{
+        background: selected ? "var(--s-brand)" : "var(--s-panel-alt)",
+        color: selected ? "#fff" : "var(--s-ink)",
+        boxShadow: selected ? undefined : "inset 0 0 0 1px var(--s-border)",
+      }}
+    >
+      <Icon className="w-5 h-5" />
+      {entry.label}
+    </button>
   );
 }

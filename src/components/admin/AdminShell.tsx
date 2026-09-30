@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
+  LayoutGrid,
   ReceiptText,
   UtensilsCrossed,
   Wallet,
@@ -45,6 +46,7 @@ const SECTIONS: { title: string; items: NavItem[] }[] = [
     title: "Shop",
     items: [
       { href: "/admin/menu", label: "Menu", icon: UtensilsCrossed, resource: "menu" },
+      { href: "/admin/tables", label: "Tables", icon: LayoutGrid, resource: "tables" },
       { href: "/admin/customers", label: "Customers", icon: Users, resource: "customers" },
     ],
   },
@@ -110,11 +112,10 @@ export default function AdminShell({ user, children }: AdminShellProps) {
                     href={item.href}
                     onClick={() => setDrawerOpen(false)}
                     aria-current={current ? "page" : undefined}
-                    className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors"
+                    className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-semibold transition-colors"
                     style={{
-                      background: current ? "var(--s-hover)" : "transparent",
+                      background: current ? "color-mix(in srgb, var(--s-brand) 10%, white)" : "transparent",
                       color: current ? "var(--s-brand)" : "var(--s-ink-muted)",
-                      boxShadow: current ? "inset 3px 0 0 var(--s-brand)" : undefined,
                     }}
                   >
                     <item.icon className="w-[1.15rem] h-[1.15rem] shrink-0" />

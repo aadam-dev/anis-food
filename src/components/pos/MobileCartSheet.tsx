@@ -33,6 +33,9 @@ export default function MobileCartSheet({
   onClose,
   onCharge,
   locked = false,
+  tables = [],
+  tableId = "",
+  onTable,
 }: {
   locked?: boolean;
   cart: CartState;
@@ -48,6 +51,9 @@ export default function MobileCartSheet({
   onClear: () => void;
   onClose: () => void;
   onCharge: () => void;
+  tables?: { id: string; label: string; area: string; occupied: boolean }[];
+  tableId?: string;
+  onTable?: (id: string) => void;
 }) {
   const empty = cart.lines.length === 0;
 
@@ -62,8 +68,12 @@ export default function MobileCartSheet({
       />
 
       <section
-        className="relative rounded-t-2xl border-t flex flex-col max-h-[85dvh]"
-        style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
+        className="relative flex max-h-[88dvh] flex-col rounded-t-[1.75rem]"
+        style={{
+          background: "var(--s-panel)",
+          boxShadow: "0 -12px 40px rgba(26, 29, 31, 0.12)",
+          paddingBottom: "env(safe-area-inset-bottom)",
+        }}
       >
         <div
           className="flex items-center justify-between px-4 py-3 border-b"
@@ -92,7 +102,28 @@ export default function MobileCartSheet({
         </div>
 
         <div className="px-4 py-3 border-b" style={{ borderColor: "var(--s-border)" }}>
-          <CustomerFields
+          {tables.length > 0 && (
+          <label className="mb-3 block px-4">
+            <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide" style={{ color: "var(--s-ink-faint)" }}>
+              Table
+            </span>
+            <select
+              value={tableId}
+              onChange={(event) => onTable?.(event.target.value)}
+              className="w-full rounded-2xl px-3 py-2.5 text-sm font-semibold outline-none min-h-12"
+              style={{ background: "var(--s-panel-alt)", color: "var(--s-ink)" }}
+            >
+              <option value="">Takeaway / no table</option>
+              {tables.map((table) => (
+                <option key={table.id} value={table.id} disabled={table.occupied && table.id !== tableId}>
+                  {table.area} · {table.label}
+                  {table.occupied ? " (in use)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <CustomerFields
             name={customerName}
             phone={customerPhone}
             onName={onCustomerName}

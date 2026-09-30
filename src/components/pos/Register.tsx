@@ -128,6 +128,10 @@ export default function Register({
   const [movingCash, setMovingCash] = useState(false);
   const [focusedMenuItemId, setFocusedMenuItemId] = useState<string | null>(null);
   const [qtyTarget, setQtyTarget] = useState<CartLine | null>(null);
+  const [tableId, setTableId] = useState("");
+  const [tables, setTables] = useState<
+    { id: string; label: string; area: string; seats: number; occupied: boolean }[]
+  >([]);
   const cartKey = useRef(`anis-pos-cart:${user.name}`);
   const skipSave = useRef(true);
 
@@ -281,6 +285,19 @@ export default function Register({
   }, [loadSession]);
 
   useEffect(() => {
+    let cancelled = false;
+    fetch("/api/pos/tables")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.tables) setTables(data.tables);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.id]);
+
+  useEffect(() => {
     if (!banner) return;
     const timer = setTimeout(() => setBanner(null), 5000);
     return () => clearTimeout(timer);
@@ -307,6 +324,7 @@ export default function Register({
       })),
       paymentMethod: method,
       discountAmount: cart.discount || undefined,
+      tableId: tableId || undefined,
       ...extras,
     };
 
@@ -372,6 +390,7 @@ export default function Register({
     dispatch({ type: "clear" });
     setCustomerName("");
     setCustomerPhone("");
+    setTableId("");
     setFocusedMenuItemId(null);
     setQtyTarget(null);
   }
@@ -594,6 +613,9 @@ export default function Register({
             onClear={clearOrder}
             onCharge={() => setPaying(true)}
             locked={locked}
+            tables={tables}
+            tableId={tableId}
+            onTable={setTableId}
           />
         </div>
       )}
@@ -620,17 +642,16 @@ export default function Register({
           jumping straight to payment — a phone cashier gets to catch a mis-tap. */}
       {view === "register" && count > 0 && (
         <div
-          className="lg:hidden sticky bottom-0 border-t px-3 py-2"
+          className="lg:hidden sticky bottom-0 px-3 py-2"
           style={{
-            background: "var(--s-panel)",
-            borderColor: "var(--s-border)",
+            background: "color-mix(in srgb, var(--s-bg) 92%, transparent)",
             paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))",
           }}
         >
           <button
             onClick={() => setCartOpen(true)}
-            className="w-full rounded-2xl px-4 py-3.5 font-bold text-white flex items-center justify-between"
-            style={{ background: "var(--s-brand)" }}
+            className="flex w-full min-h-14 items-center justify-between rounded-2xl px-4 py-3.5 font-bold text-white"
+            style={{ background: "var(--s-brand)", boxShadow: "0 8px 20px color-mix(in srgb, var(--s-brand) 35%, transparent)" }}
           >
             <span>
               View {count} item{count > 1 ? "s" : ""}
@@ -653,6 +674,9 @@ export default function Register({
           onCustomerName={setCustomerName}
           onCustomerPhone={setCustomerPhone}
           onClear={clearOrder}
+          tables={tables}
+          tableId={tableId}
+          onTable={setTableId}
           onClose={() => setCartOpen(false)}
           onCharge={() => {
             setCartOpen(false);

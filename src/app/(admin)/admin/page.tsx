@@ -17,7 +17,7 @@ export default async function AdminOverviewPage() {
   return (
     <>
       <PageHeader
-        title="Today"
+        title="Today's data"
         description="How the day is going, next to the same weekday last week."
       />
 
@@ -28,6 +28,7 @@ export default async function AdminOverviewPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
           label="Revenue today"
+          tint="brand"
           value={formatGHS(data.today.revenue)}
           icon={<Wallet className="w-4 h-4" />}
           detail={
@@ -50,12 +51,14 @@ export default async function AdminOverviewPage() {
         />
         <Stat
           label="Orders today"
+          tint="good"
           value={data.today.orders}
           icon={<ReceiptText className="w-4 h-4" />}
           detail={`${formatGHS(data.today.averageTicket)} average`}
         />
         <Stat
           label="Open tickets"
+          tint="warn"
           value={data.openTickets.count}
           icon={<Clock className="w-4 h-4" />}
           detail={
@@ -70,6 +73,7 @@ export default async function AdminOverviewPage() {
         />
         <Stat
           label="Till"
+          tint="accent"
           value={shift ? formatGHS(shift.expectedCash) : "Closed"}
           icon={<Wallet className="w-4 h-4" />}
           detail={shift ? `Expected cash · ${shift.openedBy.name}` : "No shift open right now"}

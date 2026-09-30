@@ -21,6 +21,9 @@ export default function CartPanel({
   onClear,
   onCharge,
   locked = false,
+  tables = [],
+  tableId = "",
+  onTable,
 }: {
   locked?: boolean;
   cart: CartState;
@@ -35,16 +38,19 @@ export default function CartPanel({
   onCustomerPhone: (value: string) => void;
   onClear: () => void;
   onCharge: () => void;
+  tables?: { id: string; label: string; area: string; occupied: boolean }[];
+  tableId?: string;
+  onTable?: (id: string) => void;
 }) {
   const empty = cart.lines.length === 0;
 
   return (
     <aside
-      className="hidden lg:flex flex-col border-l"
-      style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
+      className="hidden lg:flex flex-col"
+      style={{ background: "var(--s-bg)" }}
     >
-      <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: "var(--s-border)" }}>
-        <h2 className="font-semibold">This order</h2>
+      <div className="m-3 mb-0 flex items-center justify-between rounded-[1.25rem] px-4 py-3 s-card">
+        <h2 className="font-extrabold tracking-tight">This order</h2>
         {!empty && (
           <button
             onClick={onClear}
@@ -56,13 +62,16 @@ export default function CartPanel({
         )}
       </div>
 
-      <div className="px-4 py-3 border-b" style={{ borderColor: "var(--s-border)" }}>
+      <div className="mx-3 mt-3 rounded-[1.25rem] px-4 py-3 s-card">
+        <TablePicker tables={tables} tableId={tableId} onTable={onTable} />
+        <div className="mt-3">
         <CustomerFields
           name={customerName}
           phone={customerPhone}
           onName={onCustomerName}
           onPhone={onCustomerPhone}
         />
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -76,7 +85,7 @@ export default function CartPanel({
       </div>
 
       {!empty && (
-        <div className="border-t px-4 py-3" style={{ borderColor: "var(--s-border)" }}>
+        <div className="m-3 mt-0 rounded-[1.25rem] px-4 py-4 s-card">
           {totals.discountAmount > 0 && (
             <div className="flex justify-between text-sm mb-1" style={{ color: "var(--s-ink-muted)" }}>
               <span>Discount</span>
@@ -93,5 +102,38 @@ export default function CartPanel({
         </div>
       )}
     </aside>
+  );
+}
+
+function TablePicker({
+  tables,
+  tableId,
+  onTable,
+}: {
+  tables: { id: string; label: string; area: string; occupied: boolean }[];
+  tableId: string;
+  onTable?: (id: string) => void;
+}) {
+  if (tables.length === 0) return null;
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide" style={{ color: "var(--s-ink-faint)" }}>
+        Table
+      </span>
+      <select
+        value={tableId}
+        onChange={(event) => onTable?.(event.target.value)}
+        className="w-full rounded-2xl px-3 py-2.5 text-sm font-semibold outline-none min-h-12"
+        style={{ background: "var(--s-panel-alt)", color: "var(--s-ink)" }}
+      >
+        <option value="">Takeaway / no table</option>
+        {tables.map((table) => (
+          <option key={table.id} value={table.id} disabled={table.occupied && table.id !== tableId}>
+            {table.area} · {table.label}
+            {table.occupied ? " (in use)" : ""}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

@@ -103,37 +103,46 @@ h1, h2, h3, h4, h5, h6 {
    data-surface="admin" or "pos" on the route group's wrapper, with
    data-theme="light" | "dark" chosen from Settings.
 
-   Defaults: the till is dark (less glare across a long shift, easier on the
-   eyes at a counter, kinder to an OLED phone battery) and the admin is light
-   (reports are read, not glanced at). Both are switchable in Settings, which is
-   why every colour below is a token rather than a literal.
+   Both the till and the back office default to the light paper canvas. Dark
+   remains available in Settings. Every colour below is a token rather than a
+   literal so that switch still works.
    =========================================================================== */
 
 [data-surface] {
-  --s-radius: 0.625rem;
+  --s-radius: 1.25rem;
   --s-brand: var(--color-primary-red-ui);
   --s-brand-strong: var(--color-primary-red);
   --s-accent: var(--color-accent-orange);
   --s-good: #059669;
   --s-bad: #DC2626;
   --s-warn: #B45309;
+  --s-shadow: 0 10px 30px rgba(26, 29, 31, 0.06);
 
   background: var(--s-bg);
   color: var(--s-ink);
-  font-family: var(--font-body);
+  font-family: var(--font-pos), "Plus Jakarta Sans", sans-serif;
 }
 
-/* Light surface — the default for /admin */
+[data-surface] h1,
+[data-surface] h2,
+[data-surface] h3,
+[data-surface] h4,
+[data-surface] h5,
+[data-surface] h6 {
+  font-family: inherit;
+}
+
+/* Light surface — the default for the till and the back office */
 [data-surface][data-theme="light"] {
-  --s-bg: #F7F6F4;
+  --s-bg: #F4F6F8;
   --s-panel: #FFFFFF;
-  --s-panel-alt: #FBFAF9;
-  --s-ink: #1A1614;
-  --s-ink-muted: #6B635E;
-  --s-ink-faint: #9A918B;
-  --s-border: #E4E0DB;
-  --s-border-strong: #CFC9C2;
-  --s-hover: #F2EFEC;
+  --s-panel-alt: #F7F8FA;
+  --s-ink: #1A1D1F;
+  --s-ink-muted: #6B7280;
+  --s-ink-faint: #9CA3AF;
+  --s-border: #E8EAED;
+  --s-border-strong: #D5D8DE;
+  --s-hover: #F3F4F6;
 }
 
 /* Dark surface — the default for /pos */
@@ -179,8 +188,15 @@ body:has([data-surface][data-theme="dark"]) {
 }
 
 body:has([data-surface][data-theme="light"]) {
-  background: #f7f6f4;
+  background: #F4F6F8;
   color-scheme: light;
+}
+
+/* Soft card used by the till and the back office. */
+.s-card {
+  background: var(--s-panel);
+  border-radius: var(--s-radius);
+  box-shadow: var(--s-shadow), inset 0 0 0 1px var(--s-border);
 }
 
 /* Money must line up column to column. Tabular figures, always. */

@@ -75,7 +75,7 @@ export default function LoginForm() {
           required
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          className="w-full rounded-lg border px-3 py-2.5 outline-none focus:ring-2"
+          className="w-full rounded-2xl border px-3.5 py-3 outline-none min-h-12"
           style={fieldStyle}
         />
       </div>
@@ -101,7 +101,7 @@ export default function LoginForm() {
       <button
         type="submit"
         disabled={submitting}
-        className="w-full rounded-lg px-4 py-3 font-semibold text-white disabled:opacity-60 flex items-center justify-center gap-2"
+        className="w-full rounded-2xl px-4 py-3.5 min-h-14 font-bold text-white disabled:opacity-60 flex items-center justify-center gap-2"
         style={{ background: "var(--s-brand)" }}
       >
         {submitting && <Loader2 className="w-4 h-4 animate-spin" />}

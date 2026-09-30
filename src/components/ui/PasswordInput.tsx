@@ -52,7 +52,7 @@ export default function PasswordInput({
           value={value}
           onChange={(event) => onChange(event.target.value)}
           aria-describedby={hint ? hintId : undefined}
-          className="w-full rounded-lg border px-3 py-2.5 pr-12 outline-none focus:ring-2"
+          className="w-full rounded-2xl border px-3.5 py-3 pr-12 outline-none min-h-12"
           style={{
             background: "var(--s-panel-alt)",
             borderColor: "var(--s-border)",

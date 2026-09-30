@@ -14,13 +14,7 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <div
-          className="rounded-xl border p-6"
-          style={{
-            background: "var(--s-panel)",
-            borderColor: "var(--s-border)",
-          }}
-        >
+        <div className="s-card p-6">
           {/* useSearchParams needs a boundary or the whole route bails to CSR. */}
           <Suspense fallback={<div className="h-64" aria-hidden />}>
             <LoginForm />

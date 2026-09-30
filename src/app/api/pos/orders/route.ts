@@ -67,6 +67,7 @@ const createSchema = z.object({
   customerName: z.string().max(120).optional(),
   customerPhone: z.string().max(30).optional(),
   notes: z.string().max(500).optional(),
+  tableId: z.string().min(1).optional(),
 });
 
 const settleSchema = z.object({
@@ -240,6 +241,18 @@ export async function POST(request: Request) {
       }
     }
 
+    if (body.tableId) {
+      const taken = await prisma.order.findFirst({
+        where: {
+          tableId: body.tableId,
+          isDemo: false,
+          status: { notIn: [OrderStatus.CANCELLED, OrderStatus.COMPLETED] },
+        },
+        select: { id: true },
+      });
+      if (taken) return badRequest("That table already has an open ticket.");
+    }
+
     const day = businessDay();
     const ip = clientIp(request);
 
@@ -283,6 +296,7 @@ export async function POST(request: Request) {
           customerPhone: body.customerPhone,
           staffId: auth.user.sub,
           notes: body.notes,
+          tableId: body.tableId ?? null,
           items: {
             create: lines.map((line) => ({
               menuItemId: line.menuItemId,

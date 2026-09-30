@@ -149,17 +149,12 @@ export default function MenuGrid({
                   key={item.id}
                   onClick={() => onAdd(item)}
                   disabled={locked}
-                  className="relative overflow-hidden text-left active:scale-[0.97] transition-transform flex flex-col disabled:opacity-45 disabled:active:scale-100 rounded-[1.25rem]"
-                  style={{
-                    background:
-                      qty > 0
-                        ? "color-mix(in srgb, var(--s-brand) 14%, var(--s-panel))"
-                        : "var(--s-panel)",
-                    boxShadow:
-                      qty > 0
-                        ? "inset 0 0 0 1.5px var(--s-brand)"
-                        : "inset 0 0 0 1px var(--s-border)",
-                  }}
+                  className="s-card relative overflow-hidden text-left active:scale-[0.97] transition-transform flex flex-col disabled:opacity-45 disabled:active:scale-100"
+                  style={
+                    qty > 0
+                      ? { boxShadow: "var(--s-shadow), inset 0 0 0 1.5px var(--s-brand)" }
+                      : undefined
+                  }
                 >
                   {qty > 0 && (
                     <span
