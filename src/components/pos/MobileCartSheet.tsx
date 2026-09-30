@@ -3,8 +3,10 @@
 import { X } from "lucide-react";
 import { formatGHS, type OrderTotals } from "@/lib/money";
 import type { CartAction, CartState } from "./cartReducer";
+import type { CartLine } from "./types";
 import CartLines from "./CartLines";
-import CustomerFields from "./CustomerFields";
+import CustomerFields, { type FulfillmentType } from "./CustomerFields";
+import Button from "./ui/Button";
 
 /**
  * The cart, on a phone.
@@ -20,46 +22,74 @@ export default function MobileCartSheet({
   cart,
   totals,
   dispatch,
+  focusedMenuItemId,
+  onFocus,
+  onEditQty,
+  fulfillment,
+  onFulfillment,
   customerName,
   customerPhone,
+  customerAddress,
   onCustomerName,
   onCustomerPhone,
+  onCustomerAddress,
   onClear,
   onClose,
   onCharge,
+  locked = false,
+  tables = [],
+  tableId = "",
+  onTable,
 }: {
+  locked?: boolean;
   cart: CartState;
   totals: OrderTotals;
   dispatch: React.Dispatch<CartAction>;
+  focusedMenuItemId?: string | null;
+  onFocus?: (menuItemId: string) => void;
+  onEditQty?: (line: CartLine) => void;
+  fulfillment: FulfillmentType;
+  onFulfillment: (value: FulfillmentType) => void;
   customerName: string;
   customerPhone: string;
+  customerAddress: string;
   onCustomerName: (value: string) => void;
   onCustomerPhone: (value: string) => void;
+  onCustomerAddress: (value: string) => void;
   onClear: () => void;
   onClose: () => void;
   onCharge: () => void;
+  tables?: { id: string; label: string; area: string; occupied: boolean }[];
+  tableId?: string;
+  onTable?: (id: string) => void;
 }) {
   const empty = cart.lines.length === 0;
 
   return (
     <div className="lg:hidden fixed inset-0 z-40 flex flex-col justify-end">
-      {/* Tap the dimmed menu behind to go back and keep adding. */}
       <button
         aria-label="Close order"
         onClick={onClose}
         className="absolute inset-0"
-        style={{ background: "rgba(0,0,0,0.5)" }}
+        style={{ background: "rgba(26, 29, 31, 0.28)" }}
       />
 
       <section
-        className="relative rounded-t-2xl border-t flex flex-col max-h-[85dvh]"
-        style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
+        className="relative flex h-[min(92dvh,100%)] max-h-[92dvh] flex-col rounded-t-[1.75rem] sm:h-auto sm:max-h-[90dvh]"
+        style={{
+          background: "var(--s-panel)",
+          boxShadow: "0 -12px 40px rgba(26, 29, 31, 0.12)",
+          paddingBottom: "env(safe-area-inset-bottom)",
+        }}
       >
         <div
           className="flex items-center justify-between px-4 py-3 border-b"
           style={{ borderColor: "var(--s-border)" }}
         >
-          <h2 className="font-semibold">This order</h2>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: "var(--s-ink-faint)" }}>Step 1 of 2</p>
+            <h2 className="font-extrabold">Review order</h2>
+          </div>
           <div className="flex items-center gap-1">
             {!empty && (
               <button
@@ -81,17 +111,30 @@ export default function MobileCartSheet({
           </div>
         </div>
 
-        <div className="px-4 py-3 border-b" style={{ borderColor: "var(--s-border)" }}>
+        <div className="max-h-[40%] overflow-y-auto border-b px-4 py-3" style={{ borderColor: "var(--s-border)" }}>
           <CustomerFields
+            fulfillment={fulfillment}
+            onFulfillment={onFulfillment}
             name={customerName}
             phone={customerPhone}
+            address={customerAddress}
             onName={onCustomerName}
             onPhone={onCustomerPhone}
+            onAddress={onCustomerAddress}
+            tables={tables}
+            tableId={tableId}
+            onTable={onTable}
           />
         </div>
 
         <div className="flex-1 overflow-y-auto overscroll-contain">
-          <CartLines cart={cart} dispatch={dispatch} />
+          <CartLines
+            cart={cart}
+            dispatch={dispatch}
+            focusedMenuItemId={focusedMenuItemId}
+            onFocus={onFocus}
+            onEditQty={onEditQty}
+          />
         </div>
 
         {!empty && (
@@ -115,13 +158,9 @@ export default function MobileCartSheet({
               <span className="font-semibold">Total</span>
               <span className="money text-2xl font-bold">{formatGHS(totals.total)}</span>
             </div>
-            <button
-              onClick={onCharge}
-              className="w-full rounded-xl px-4 py-3.5 font-bold text-white"
-              style={{ background: "var(--s-brand)" }}
-            >
-              Charge {formatGHS(totals.total)}
-            </button>
+            <Button size="lg" className="w-full" onClick={onCharge} disabled={locked}>
+              {locked ? "Close the old shift first" : `Continue to payment · ${formatGHS(totals.total)}`}
+            </Button>
           </div>
         )}
       </section>

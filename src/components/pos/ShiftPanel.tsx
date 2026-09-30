@@ -1,208 +1,312 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, LogOut, ArrowDownLeft, ArrowUpRight } from "lucide-react";
+import { Banknote, LogOut, Smartphone } from "lucide-react";
+import AnisLogo from "@/components/brand/AnisLogo";
 import { formatGHS } from "@/lib/money";
-import { countedTotal, drawerDifference, differenceLabel, type DenominationCount } from "@/lib/cash";
-import DenominationCounter from "./DenominationCounter";
+import Numpad, { CASH_SHORTCUTS } from "./Numpad";
+import Button from "./ui/Button";
+import { SheetError } from "./ui/Sheet";
+import { posRequest, usePosAction } from "./usePosAction";
 import type { SessionView } from "./types";
 
 /**
- * Opening, running and closing the drawer.
+ * Opening the drawer when no shift is open.
  *
- * Doubles as the gate: when no shift is open (or one was left open from a
- * previous day) this is the only screen the till will show, because taking money
- * into a drawer nobody has counted is how a day ends unreconcilable.
+ * One clear amount at a time. The big figure is a readout, not a text box —
+ * every digit comes from the pad below. Mobile Money is optional and stays on
+ * its own step so the cashier never wonders which field the pad is writing to.
  */
-export default function ShiftPanel({
-  session,
-  gate,
+export function OpenShiftCard({
+  userName,
   defaultOpeningFloat,
-  onChanged,
+  loadError,
+  onOpened,
   onSignOut,
+  backOfficeHref,
 }: {
-  session: SessionView | null;
-  gate: "none" | "stale" | "active" | "error";
+  userName: string;
   defaultOpeningFloat: number;
-  onChanged: () => void;
+  loadError?: boolean;
+  onOpened: () => void;
   onSignOut: () => void;
+  backOfficeHref?: string;
 }) {
-  const [float, setFloat] = useState(String(defaultOpeningFloat));
-  const [openingMomo, setOpeningMomo] = useState("");
-  const [counts, setCounts] = useState<DenominationCount>({});
-  const [closingMomo, setClosingMomo] = useState("");
-  const [movementAmount, setMovementAmount] = useState("");
-  const [movementReason, setMovementReason] = useState("");
-  const [movementDirection, setMovementDirection] = useState<"IN" | "OUT">("OUT");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [step, setStep] = useState<"cash" | "momo">("cash");
+  const [cash, setCash] = useState(defaultOpeningFloat > 0 ? String(defaultOpeningFloat) : "");
+  const [momo, setMomo] = useState("");
+  const [includeMomo, setIncludeMomo] = useState(false);
+  const [replaceFirst, setReplaceFirst] = useState(defaultOpeningFloat > 0);
+  const { run, busy, error } = usePosAction();
 
-  async function post(path: string, method: string, body: unknown) {
-    setBusy(true);
-    setError(null);
-    try {
-      const response = await fetch(path, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setError(data.error ?? "That did not work.");
-        return false;
-      }
-      onChanged();
-      return true;
-    } catch {
-      setError("No connection. The shift can only be changed online.");
-      return false;
-    } finally {
-      setBusy(false);
-    }
+  function goCash() {
+    setStep("cash");
+    setReplaceFirst(cash !== "");
+  }
+  function goMomo() {
+    setIncludeMomo(true);
+    setStep("momo");
+    setReplaceFirst(momo !== "");
   }
 
-  const panelStyle = { background: "var(--s-panel)", borderColor: "var(--s-border)" };
-  const fieldStyle = {
-    background: "var(--s-panel-alt)",
-    borderColor: "var(--s-border)",
-    color: "var(--s-ink)",
-  };
+  async function open() {
+    const done = await run(() =>
+      posRequest("/api/pos/sessions", "POST", {
+        openingFloat: Number(cash) || 0,
+        openingMomo: includeMomo && momo !== "" ? Number(momo) || 0 : null,
+      }),
+    );
+    if (done) onOpened();
+  }
 
-  // ---- No shift open -------------------------------------------------------
-  if (gate === "none" || gate === "error") {
-    return (
-      <Centered>
-        <div className="rounded-2xl border p-5" style={panelStyle}>
-          <h1 className="text-xl font-bold">Open the till</h1>
-          <p className="mt-1 text-sm" style={{ color: "var(--s-ink-muted)" }}>
-            Count what is in the drawer before the first sale. Everything today is
-            measured against this number.
-          </p>
+  const firstName = userName.split(" ")[0] || userName;
+  const editingCash = step === "cash";
+  const display = editingCash ? cash : momo;
 
-          <label className="mt-5 block text-sm font-medium mb-1.5">Cash in the drawer</label>
-          <input
-            type="text"
-            inputMode="decimal"
-            value={float}
-            onChange={(event) => setFloat(event.target.value.replace(/[^\d.]/g, ""))}
-            className="money w-full rounded-xl border px-3 py-3 text-right text-xl outline-none focus:ring-2"
-            style={fieldStyle}
-          />
-
-          <label className="mt-4 block text-sm font-medium mb-1.5">
-            Mobile Money balance{" "}
-            <span style={{ color: "var(--s-ink-faint)" }}>(optional)</span>
-          </label>
-          <input
-            type="text"
-            inputMode="decimal"
-            value={openingMomo}
-            onChange={(event) => setOpeningMomo(event.target.value.replace(/[^\d.]/g, ""))}
-            placeholder="Leave blank if you are not checking it"
-            className="money w-full rounded-xl border px-3 py-3 text-right outline-none focus:ring-2"
-            style={fieldStyle}
-          />
-          <p className="mt-1.5 text-xs" style={{ color: "var(--s-ink-faint)" }}>
-            Left blank means &quot;not recorded&quot; — which the reports will say plainly,
-            rather than pretending it was zero.
-          </p>
-
-          {error && (
-            <p role="alert" className="mt-3 text-sm" style={{ color: "var(--s-bad)" }}>
-              {error}
-            </p>
+  return (
+    <div
+      className="min-h-dvh flex flex-col"
+      style={{
+        background:
+          "radial-gradient(120% 80% at 50% -10%, color-mix(in srgb, var(--s-brand) 18%, transparent), transparent 55%), var(--s-bg)",
+      }}
+    >
+      <header
+        className="flex items-center justify-between px-5 pt-5 pb-2"
+        style={{ paddingTop: "max(1.25rem, env(safe-area-inset-top))" }}
+      >
+        <AnisLogo className="h-8 w-auto" />
+        <div className="flex items-center gap-1">
+          {backOfficeHref && (
+            <a
+              href={backOfficeHref}
+              className="rounded-full px-3 py-2 text-sm font-semibold"
+              style={{ color: "var(--s-ink-muted)" }}
+            >
+              Back office
+            </a>
           )}
-
           <button
-            disabled={busy}
-            onClick={() =>
-              post("/api/pos/sessions", "POST", {
-                openingFloat: Number(float) || 0,
-                openingMomo: openingMomo.trim() === "" ? null : Number(openingMomo) || 0,
-              })
-            }
-            className="mt-5 w-full rounded-xl px-4 py-4 font-bold text-white disabled:opacity-50 flex items-center justify-center gap-2"
-            style={{ background: "var(--s-brand)" }}
-          >
-            {busy && <Loader2 className="w-4 h-4 animate-spin" />}
-            Start the shift
-          </button>
-
-          <button
+            type="button"
             onClick={onSignOut}
-            className="mt-2 w-full rounded-xl px-4 py-3 text-sm font-semibold flex items-center justify-center gap-2"
+            className="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold"
             style={{ color: "var(--s-ink-muted)" }}
           >
             <LogOut className="w-4 h-4" /> Sign out
           </button>
         </div>
-      </Centered>
-    );
-  }
+      </header>
 
-  if (!session) return null;
-
-  const counted = Object.keys(counts).length > 0 ? countedTotal(counts) : null;
-  const projected = drawerDifference(session.expectedCash, counted);
-
-  // ---- A shift left open from a previous day -------------------------------
-  if (gate === "stale") {
-    return (
-      <Centered>
-        <div className="rounded-2xl border p-5" style={panelStyle}>
-          <h1 className="text-xl font-bold" style={{ color: "var(--s-warn)" }}>
-            Yesterday&apos;s till is still open
-          </h1>
-          <p className="mt-1 text-sm" style={{ color: "var(--s-ink-muted)" }}>
-            {session.openedBy.name} opened this on {session.businessDay} and it was never
-            closed. Close it now so that day&apos;s takings stay on that day — today&apos;s
-            sales cannot start until it is done.
-          </p>
-          <CloseForm />
-        </div>
-      </Centered>
-    );
-  }
-
-  // ---- Running shift -------------------------------------------------------
-  return (
-    <div className="flex-1 overflow-y-auto px-4 py-5 pb-24 max-w-lg mx-auto w-full space-y-4">
-      <section className="rounded-2xl border p-4" style={panelStyle}>
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="font-bold">This shift</h1>
-            <p className="text-sm" style={{ color: "var(--s-ink-muted)" }}>
-              Opened by {session.openedBy.name} ·{" "}
-              {new Date(session.openedAt).toLocaleTimeString("en-GB", {
-                timeZone: "Africa/Accra",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
+      <div className="flex-1 flex items-center justify-center px-4 py-4">
+        <section
+          className="w-full max-w-md overflow-hidden rounded-[1.75rem] border shadow-2xl"
+          style={{
+            background: "var(--s-panel)",
+            borderColor: "var(--s-border)",
+            boxShadow: "0 24px 60px rgba(0,0,0,0.35)",
+          }}
+        >
+          <div className="px-5 pt-6 pb-4">
+            <p
+              className="text-[11px] font-bold uppercase tracking-[0.14em]"
+              style={{ color: "var(--s-ink-faint)" }}
+            >
+              Welcome, {firstName}
             </p>
+            <h1 className="mt-1 text-[1.65rem] font-bold tracking-tight leading-tight">
+              Open the till
+            </h1>
+            <p className="mt-1.5 text-sm leading-relaxed" style={{ color: "var(--s-ink-muted)" }}>
+              Punch what is in the drawer. Today&apos;s sales are measured against this number.
+            </p>
+            {loadError && (
+              <div className="mt-3">
+                <SheetError message="Could not check for an open shift. If one is open on another device, opening here will say so." />
+              </div>
+            )}
           </div>
-          <span className="money text-sm" style={{ color: "var(--s-ink-faint)" }}>
-            {session.takings.orderCount} order{session.takings.orderCount === 1 ? "" : "s"}
-          </span>
-        </div>
 
-        <dl className="mt-4 space-y-1.5 text-sm">
+          {/* Segmented control: one field at a time, no competing cursors. */}
+          <div className="px-5">
+            <div
+              className="grid grid-cols-2 gap-1 rounded-2xl p-1"
+              style={{ background: "var(--s-panel-alt)" }}
+              role="tablist"
+              aria-label="What to enter"
+            >
+              <SegmentTab
+                active={editingCash}
+                onClick={goCash}
+                icon={Banknote}
+                label="Cash"
+              />
+              <SegmentTab
+                active={!editingCash}
+                onClick={goMomo}
+                icon={Smartphone}
+                label="Mobile Money"
+              />
+            </div>
+          </div>
+
+          <div className="px-5 pt-5 pb-2 text-center">
+            <p className="text-sm font-semibold" style={{ color: "var(--s-ink-muted)" }}>
+              {editingCash ? "Cash in the drawer" : "Mobile Money balance"}
+            </p>
+            <p
+              className="money mt-1 text-[2.75rem] font-bold tracking-tight leading-none tabular-nums"
+              aria-live="polite"
+            >
+              {formatGHS(Number(display) || 0)}
+            </p>
+            {!editingCash && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIncludeMomo(false);
+                  setMomo("");
+                  goCash();
+                }}
+                className="mt-3 text-sm font-semibold underline-offset-2 hover:underline"
+                style={{ color: "var(--s-ink-muted)" }}
+              >
+                Skip Mobile Money
+              </button>
+            )}
+          </div>
+
+          <div className="px-4 pb-2">
+            <Numpad
+              value={display}
+              onChange={editingCash ? setCash : setMomo}
+              maxDigits={7}
+              allowDecimal
+              shortcuts={CASH_SHORTCUTS}
+              replaceFirst={replaceFirst}
+              onReplaceConsumed={() => setReplaceFirst(false)}
+            />
+          </div>
+
+          <div
+            className="space-y-2 border-t px-5 pt-4"
+            style={{
+              borderColor: "var(--s-border)",
+              paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))",
+            }}
+          >
+            <SheetError message={error} />
+            <Button size="lg" className="w-full" busy={busy} onClick={open}>
+              Start with {formatGHS(Number(cash) || 0)} cash
+              {includeMomo && momo !== "" ? ` · MoMo ${formatGHS(Number(momo) || 0)}` : ""}
+            </Button>
+            {editingCash && !includeMomo && (
+              <p className="text-center text-xs" style={{ color: "var(--s-ink-faint)" }}>
+                MoMo left blank means &quot;not checked&quot; — not zero.
+              </p>
+            )}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function SegmentTab({
+  active,
+  onClick,
+  icon: Icon,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: typeof Banknote;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className="flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-bold transition-colors"
+      style={{
+        background: active ? "var(--s-panel)" : "transparent",
+        color: active ? "var(--s-ink)" : "var(--s-ink-muted)",
+        boxShadow: active ? "0 1px 3px rgba(0,0,0,0.25)" : undefined,
+      }}
+    >
+      <Icon className="w-4 h-4" />
+      {label}
+    </button>
+  );
+}
+
+/**
+ * The running shift: what has been taken, what the drawer should hold, and the
+ * two things a cashier does here — move cash in or out, and close.
+ */
+export default function ShiftPanel({
+  session,
+  onCashMovement,
+  onCloseShift,
+}: {
+  session: SessionView;
+  onCashMovement: () => void;
+  onCloseShift: () => void;
+}) {
+  const time = (iso: string) =>
+    new Date(iso).toLocaleTimeString("en-GB", {
+      timeZone: "Africa/Accra",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+  return (
+    <div className="flex-1 overflow-y-auto px-4 py-5 pb-24 max-w-3xl mx-auto w-full space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-sm" style={{ color: "var(--s-ink-muted)" }}>
+            {session.isStale ? `Shift from ${session.businessDay}` : "This shift"} · opened by{" "}
+            {session.openedBy.name} at {time(session.openedAt)}
+          </p>
+          <h1 className="text-2xl font-bold tracking-tight">
+            <span className="money">{formatGHS(session.takings.gross)}</span> taken
+          </h1>
+        </div>
+        <div className="flex gap-2">
+          <Button tone="secondary" onClick={onCashMovement}>
+            Cash in / out
+          </Button>
+          <Button onClick={onCloseShift}>Close shift</Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Stat label="Orders" value={String(session.takings.orderCount)} />
+        <Stat label="Cash sales" value={formatGHS(session.takings.cash)} />
+        <Stat label="MoMo sales" value={formatGHS(session.takings.momo)} />
+        <Stat label="Drawer should hold" value={formatGHS(session.expectedCash)} strong />
+      </div>
+
+      <section
+        className="rounded-[1.5rem] border p-5"
+        style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
+      >
+        <h2 className="font-semibold">The drawer</h2>
+        <dl className="mt-3 space-y-1.5 text-sm">
           <Row label="Opening float" value={formatGHS(session.openingFloat)} />
-          <Row label="Cash taken" value={formatGHS(session.takings.cash)} />
-          {session.cashIn > 0 && <Row label="Cash in" value={`+${formatGHS(session.cashIn)}`} />}
+          <Row label="Cash sales" value={`+${formatGHS(session.takings.cash)}`} />
+          {session.cashIn > 0 && <Row label="Cash put in" value={`+${formatGHS(session.cashIn)}`} />}
           {session.cashOut > 0 && (
-            <Row label="Cash out" value={`−${formatGHS(session.cashOut)}`} />
+            <Row label="Cash taken out" value={`−${formatGHS(session.cashOut)}`} />
           )}
           <div
-            className="flex justify-between pt-2 mt-2 border-t font-bold"
+            className="flex justify-between border-t pt-2 mt-2 font-bold"
             style={{ borderColor: "var(--s-border)" }}
           >
             <dt>Should be in the drawer</dt>
             <dd className="money">{formatGHS(session.expectedCash)}</dd>
           </div>
-        </dl>
-
-        <dl className="mt-4 space-y-1.5 text-sm">
-          <Row label="Mobile Money taken" value={formatGHS(session.takings.momo)} />
           <Row
             label="Mobile Money should be"
             value={
@@ -211,189 +315,91 @@ export default function ShiftPanel({
                 : formatGHS(session.expectedMomo)
             }
           />
-          <Row label="Everything taken" value={formatGHS(session.takings.gross)} />
         </dl>
       </section>
 
-      <section className="rounded-2xl border p-4" style={panelStyle}>
-        <h2 className="font-semibold">Money in or out</h2>
-        <p className="mt-1 text-sm" style={{ color: "var(--s-ink-muted)" }}>
-          Anything that is not a sale — buying gas, fetching change, paying a supplier
-          from the till.
-        </p>
-
-        <div className="mt-3 grid grid-cols-2 gap-2">
+      <section
+        className="rounded-[1.5rem] border p-5"
+        style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
+      >
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold">Cash in and out</h2>
           <button
-            onClick={() => setMovementDirection("OUT")}
-            className="flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-sm font-semibold"
-            style={{
-              background: movementDirection === "OUT" ? "var(--s-brand)" : "var(--s-panel-alt)",
-              color: movementDirection === "OUT" ? "#fff" : "var(--s-ink-muted)",
-            }}
+            type="button"
+            onClick={onCashMovement}
+            className="text-sm font-semibold"
+            style={{ color: "var(--s-brand)" }}
           >
-            <ArrowUpRight className="w-4 h-4" /> Took out
-          </button>
-          <button
-            onClick={() => setMovementDirection("IN")}
-            className="flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-sm font-semibold"
-            style={{
-              background: movementDirection === "IN" ? "var(--s-brand)" : "var(--s-panel-alt)",
-              color: movementDirection === "IN" ? "#fff" : "var(--s-ink-muted)",
-            }}
-          >
-            <ArrowDownLeft className="w-4 h-4" /> Put in
+            Record one
           </button>
         </div>
-
-        <input
-          type="text"
-          inputMode="decimal"
-          value={movementAmount}
-          onChange={(event) => setMovementAmount(event.target.value.replace(/[^\d.]/g, ""))}
-          placeholder="Amount"
-          className="money mt-2 w-full rounded-xl border px-3 py-3 text-right outline-none focus:ring-2"
-          style={fieldStyle}
-        />
-        <input
-          type="text"
-          value={movementReason}
-          onChange={(event) => setMovementReason(event.target.value)}
-          placeholder="What was it for?"
-          className="mt-2 w-full rounded-xl border px-3 py-3 outline-none focus:ring-2"
-          style={fieldStyle}
-        />
-        <button
-          disabled={busy || !movementAmount || movementReason.trim().length < 3}
-          onClick={async () => {
-            const done = await post("/api/pos/cash-movements", "POST", {
-              direction: movementDirection,
-              amount: Number(movementAmount) || 0,
-              reason: movementReason.trim(),
-            });
-            if (done) {
-              setMovementAmount("");
-              setMovementReason("");
-            }
-          }}
-          className="mt-2 w-full rounded-xl px-4 py-3 font-semibold disabled:opacity-50"
-          style={{ background: "var(--s-panel-alt)", color: "var(--s-ink)" }}
-        >
-          Record it
-        </button>
-
-        {session.movements.length > 0 && (
-          <ul className="mt-3 space-y-1.5 text-sm">
-            {session.movements.map((movement) => (
-              <li key={movement.id} className="flex justify-between gap-3">
-                <span className="min-w-0 truncate" style={{ color: "var(--s-ink-muted)" }}>
-                  {movement.reason}
-                </span>
-                <span
-                  className="money whitespace-nowrap"
-                  style={{
-                    color: movement.direction === "IN" ? "var(--s-good)" : "var(--s-bad)",
-                  }}
-                >
-                  {movement.direction === "IN" ? "+" : "−"}
-                  {formatGHS(movement.amount)}
-                </span>
-              </li>
-            ))}
-          </ul>
+        {session.movements.length === 0 ? (
+          <p className="mt-2 text-sm" style={{ color: "var(--s-ink-faint)" }}>
+            Nothing yet. Buying gas or fetching change from the till goes here.
+          </p>
+        ) : (
+          <ol className="mt-3 space-y-2">
+            {session.movements.map((movement) => {
+              const incoming = movement.direction === "IN";
+              return (
+                <li key={movement.id} className="flex items-center gap-3">
+                  <span
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold"
+                    style={{
+                      color: incoming ? "var(--s-good)" : "var(--s-bad)",
+                      background: `color-mix(in srgb, ${incoming ? "var(--s-good)" : "var(--s-bad)"} 14%, transparent)`,
+                    }}
+                  >
+                    {incoming ? "+" : "−"}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{movement.reason}</p>
+                    <p className="text-xs" style={{ color: "var(--s-ink-faint)" }}>
+                      {movement.by} · {time(movement.at)}
+                    </p>
+                  </div>
+                  <span
+                    className="money whitespace-nowrap text-sm font-bold"
+                    style={{ color: incoming ? "var(--s-good)" : "var(--s-bad)" }}
+                  >
+                    {incoming ? "+" : "−"}
+                    {formatGHS(movement.amount)}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
         )}
-      </section>
-
-      <section className="rounded-2xl border p-4" style={panelStyle}>
-        <h2 className="font-semibold">Close the shift</h2>
-        <CloseForm />
       </section>
     </div>
   );
-
-  function CloseForm() {
-    return (
-      <>
-        <p className="mt-1 mb-3 text-sm" style={{ color: "var(--s-ink-muted)" }}>
-          Count what is actually in the drawer.
-        </p>
-
-        <DenominationCounter counts={counts} onChange={setCounts} />
-
-        <label className="mt-4 block text-sm font-medium mb-1.5">
-          Mobile Money balance now{" "}
-          <span style={{ color: "var(--s-ink-faint)" }}>(optional)</span>
-        </label>
-        <input
-          type="text"
-          inputMode="decimal"
-          value={closingMomo}
-          onChange={(event) => setClosingMomo(event.target.value.replace(/[^\d.]/g, ""))}
-          className="money w-full rounded-xl border px-3 py-3 text-right outline-none focus:ring-2"
-          style={fieldStyle}
-        />
-
-        {counted !== null && (
-          <div
-            className="mt-4 rounded-xl px-3 py-3"
-            style={{ background: "var(--s-hover)" }}
-          >
-            <div className="flex justify-between text-sm">
-              <span style={{ color: "var(--s-ink-muted)" }}>Should be</span>
-              <span className="money">{formatGHS(session!.expectedCash)}</span>
-            </div>
-            <div className="flex justify-between text-sm mt-1">
-              <span style={{ color: "var(--s-ink-muted)" }}>Counted</span>
-              <span className="money">{formatGHS(counted)}</span>
-            </div>
-            <div className="flex justify-between font-bold mt-2 pt-2 border-t" style={{ borderColor: "var(--s-border)" }}>
-              <span>Difference</span>
-              <span
-                className="money"
-                style={{
-                  color:
-                    projected === 0
-                      ? "var(--s-good)"
-                      : projected === null
-                        ? "var(--s-ink-muted)"
-                        : "var(--s-warn)",
-                }}
-              >
-                {differenceLabel(projected)}
-              </span>
-            </div>
-          </div>
-        )}
-
-        {error && (
-          <p role="alert" className="mt-3 text-sm" style={{ color: "var(--s-bad)" }}>
-            {error}
-          </p>
-        )}
-
-        <button
-          disabled={busy || counted === null}
-          onClick={() =>
-            post("/api/pos/sessions", "PATCH", {
-              sessionId: session!.id,
-              cashCount: counts,
-              closingMomo: closingMomo.trim() === "" ? null : Number(closingMomo) || 0,
-            })
-          }
-          className="mt-4 w-full rounded-xl px-4 py-4 font-bold text-white disabled:opacity-50 flex items-center justify-center gap-2"
-          style={{ background: "var(--s-brand)" }}
-        >
-          {busy && <Loader2 className="w-4 h-4 animate-spin" />}
-          {counted === null ? "Count the drawer first" : "Close the shift"}
-        </button>
-      </>
-    );
-  }
 }
 
-function Centered({ children }: { children: React.ReactNode }) {
+function Stat({
+  label,
+  value,
+  strong = false,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+}) {
   return (
-    <div className="min-h-dvh flex items-center justify-center px-4 py-8">
-      <div className="w-full max-w-md">{children}</div>
+    <div
+      className="rounded-[1.25rem] border p-4"
+      style={{
+        background: strong
+          ? "color-mix(in srgb, var(--s-brand) 10%, var(--s-panel))"
+          : "var(--s-panel)",
+        borderColor: strong
+          ? "color-mix(in srgb, var(--s-brand) 40%, var(--s-border))"
+          : "var(--s-border)",
+      }}
+    >
+      <p className="text-xs font-semibold" style={{ color: "var(--s-ink-muted)" }}>
+        {label}
+      </p>
+      <p className="money mt-1 text-lg font-bold tracking-tight">{value}</p>
     </div>
   );
 }

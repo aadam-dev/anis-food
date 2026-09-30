@@ -11,11 +11,11 @@ export const metadata: Metadata = {
   // Its own manifest, so staff install the back office rather than the
   // customer-facing site. Overrides the root layout's public manifest.
   manifest: "/app/manifest.webmanifest",
-  appleWebApp: { capable: true, title: "Anis Till", statusBarStyle: "black-translucent" },
+  appleWebApp: { capable: true, title: "Anis Till", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#F70E07",
+  themeColor: "#F4F6F8",
   viewportFit: "cover",
 };
 

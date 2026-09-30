@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { requireResource } from "@/lib/api-auth";
-import { getMonthlyReport } from "@/lib/reports";
+import { getMonthlyReport, getVatReturn } from "@/lib/reports";
 import { getSessionsForMonth } from "@/lib/report-sessions";
 import { PAYMENT_LABELS } from "@/components/admin/labels";
 
@@ -25,9 +25,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Bad month" }, { status: 400 });
   }
 
-  const [report, sessions] = await Promise.all([
+  const [report, sessions, vat] = await Promise.all([
     getMonthlyReport(month),
     getSessionsForMonth(month),
+    getVatReturn(month),
   ]);
 
   if (format === "csv") {
@@ -58,6 +59,15 @@ export async function GET(request: Request) {
     line("Day", "Cashier", "Expected", "Counted", "Difference");
     for (const s of sessions) {
       line(s.businessDay, s.openedBy, s.expectedCash ?? "", s.closingCash ?? "", s.differenceLabel);
+    }
+    line("");
+    line("VAT RETURN");
+    if (!vat.active) {
+      line("No VAT charged this month (tax engine off).");
+    } else {
+      line("Taxable sales (excl. tax)", vat.taxable);
+      for (const levy of vat.byLevy) line(levy.label, levy.amount);
+      line("Total tax collected", vat.taxTotal);
     }
 
     return new NextResponse(rows.join("\n"), {
@@ -127,6 +137,25 @@ export async function GET(request: Request) {
       counted: s.closingCash ?? undefined,
       difference: s.differenceLabel,
     });
+  }
+
+  const vatSheet = workbook.addWorksheet("VAT return");
+  vatSheet.columns = [{ width: 24 }, { width: 16 }];
+  vatSheet.addRow([`VAT return — ${month}`]);
+  vatSheet.getRow(1).font = { bold: true, size: 14 };
+  vatSheet.addRow([]);
+  if (!vat.active) {
+    vatSheet.addRow(["No VAT charged this month (tax engine off)."]);
+  } else {
+    const taxable = vatSheet.addRow(["Taxable sales (excl. tax)", vat.taxable]);
+    taxable.getCell(2).numFmt = money;
+    for (const levy of vat.byLevy) {
+      const row = vatSheet.addRow([levy.label, levy.amount]);
+      row.getCell(2).numFmt = money;
+    }
+    const total = vatSheet.addRow(["Total tax collected", vat.taxTotal]);
+    total.getCell(2).numFmt = money;
+    total.font = { bold: true };
   }
 
   const buffer = await workbook.xlsx.writeBuffer();

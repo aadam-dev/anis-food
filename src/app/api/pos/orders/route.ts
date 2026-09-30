@@ -5,6 +5,7 @@ import { requireResource, logAudit, clientIp } from "@/lib/api-auth";
 import { ok, parseBody, badRequest, conflict, handlePrismaError } from "@/lib/api-utils";
 import { computeOrderTotals, toMoney, roundMoney, changeDue } from "@/lib/money";
 import { businessDay, formatOrderNumber } from "@/lib/session-utils";
+import { saleBlockedReason } from "@/lib/shift-close";
 import { getSettings, getTaxConfig } from "@/lib/settings";
 import { taxBreakdown } from "@/lib/tax";
 import {
@@ -34,7 +35,7 @@ import {
 
 const lineSchema = z.object({
   menuItemId: z.string().min(1),
-  quantity: z.number().int().min(1).max(99),
+  quantity: z.number().int().min(1).max(999),
   notes: z.string().max(200).optional(),
 });
 
@@ -63,8 +64,11 @@ const createSchema = z.object({
   discountAmount: z.number().min(0).max(1000000).optional(),
   deliveryType: z.enum(["DINE_IN", "TAKEAWAY", "DELIVERY"]).default("DINE_IN"),
   source: z.enum(["POS", "ONLINE", "BOLT", "WALK_IN"]).default("POS"),
+  /** Dine-in table this order is seated at. */
+  tableId: z.string().optional(),
   customerName: z.string().max(120).optional(),
   customerPhone: z.string().max(30).optional(),
+  customerAddress: z.string().max(200).optional(),
   notes: z.string().max(500).optional(),
 });
 
@@ -92,6 +96,7 @@ function serialiseOrder(
     id: order.id,
     orderNumber: order.orderNumber,
     clientRef: order.clientRef,
+    sessionId: order.sessionId,
     status: order.status,
     paymentMethod: order.paymentMethod,
     paymentStatus: order.paymentStatus,
@@ -105,8 +110,10 @@ function serialiseOrder(
     tenderedAmount: order.tenderedAmount === null ? null : toMoney(order.tenderedAmount),
     changeAmount: order.changeAmount === null ? null : toMoney(order.changeAmount),
     tax: snapshot?.tax ?? null,
+    tableLabel: order.tableLabel,
     customerName: order.customerName,
     customerPhone: order.customerPhone,
+    customerAddress: order.customerAddress,
     notes: order.notes,
     createdAt: order.createdAt.toISOString(),
     items: order.items.map((item) => ({
@@ -171,6 +178,8 @@ export async function POST(request: Request) {
         "No shift is open. Open the till first so this sale is counted in the right shift.",
       );
     }
+    const blocked = saleBlockedReason(session?.openedAt);
+    if (blocked) return conflict(blocked, { stale: true });
 
     // Rule 2. Re-read every price from the database. What the client sent about
     // money is ignored entirely.
@@ -236,6 +245,27 @@ export async function POST(request: Request) {
       }
     }
 
+    // Resolve the table now so the label can be snapshotted onto the order and
+    // never drift if the table is later renamed.
+    const table = body.tableId
+      ? await prisma.restaurantTable.findUnique({
+          where: { id: body.tableId },
+          select: { id: true, label: true },
+        })
+      : null;
+    if (body.tableId && !table) return badRequest("That table is not on the floor.");
+    if (table) {
+      const taken = await prisma.order.findFirst({
+        where: {
+          tableId: table.id,
+          isDemo: false,
+          status: { notIn: [OrderStatus.CANCELLED, OrderStatus.COMPLETED] },
+        },
+        select: { id: true },
+      });
+      if (taken) return badRequest("That table already has an open ticket.");
+    }
+
     const day = businessDay();
     const ip = clientIp(request);
 
@@ -262,6 +292,8 @@ export async function POST(request: Request) {
           orderNumber,
           clientRef: body.clientRef,
           sessionId: session?.id ?? null,
+          tableId: table?.id ?? null,
+          tableLabel: table?.label ?? null,
           status: isUnpaid ? OrderStatus.PREPARING : OrderStatus.COMPLETED,
           source: body.source as OrderSource,
           deliveryType: body.deliveryType as DeliveryType,
@@ -277,6 +309,7 @@ export async function POST(request: Request) {
           changeAmount: tendered === null ? null : changeDue(orderTotal, tendered),
           customerName: body.customerName,
           customerPhone: body.customerPhone,
+          customerAddress: body.customerAddress,
           staffId: auth.user.sub,
           notes: body.notes,
           items: {

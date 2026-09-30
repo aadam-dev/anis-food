@@ -8,6 +8,9 @@ const withSerwist = withSerwistInit({
 });
 
 const nextConfig: NextConfig = {
+  outputFileTracingIncludes: {
+    "*": ["./prisma/migrations/**/*", "./scripts/db-migrate.mjs"],
+  },
   images: {
     // Restrict to known hosts to mitigate Image Optimizer DoS (GHSA-9g9p-9gw9-jx7f).
     remotePatterns: [

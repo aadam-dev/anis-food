@@ -1,10 +1,28 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Search, X } from "lucide-react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { LayoutGrid, Search, Star, X } from "lucide-react";
 import { formatGHS } from "@/lib/money";
 import { callNumber } from "@/lib/session-utils";
 import type { OrderView, PosCategory, PosMenuItem } from "./types";
+import DishThumb from "./DishThumb";
+
+function normalize(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function matchesSearch(item: PosMenuItem, categoryName: string | undefined, needle: string): boolean {
+  const tokens = normalize(needle).split(" ").filter(Boolean);
+  if (tokens.length === 0) return true;
+  const haystack = normalize(`${item.name} ${categoryName ?? ""} ${item.slug ?? ""}`);
+  return tokens.every((token) => haystack.includes(token));
+}
 
 export default function MenuGrid({
   categories,
@@ -13,6 +31,7 @@ export default function MenuGrid({
   tickets,
   onAdd,
   onOpenTicket,
+  locked = false,
 }: {
   categories: PosCategory[];
   items: PosMenuItem[];
@@ -20,9 +39,12 @@ export default function MenuGrid({
   tickets: OrderView[];
   onAdd: (item: PosMenuItem) => void;
   onOpenTicket: (ticket: OrderView) => void;
+  /** True while an old shift is still open: the menu is visible but cannot ring. */
+  locked?: boolean;
 }) {
-  const [category, setCategory] = useState<string>("popular");
+  const [category, setCategory] = useState<string>("all");
   const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -30,52 +52,82 @@ export default function MenuGrid({
     return () => clearInterval(timer);
   }, []);
 
+  const categoryNames = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const entry of categories) map[entry.id] = entry.name;
+    return map;
+  }, [categories]);
+
   const visible = useMemo(() => {
-    const needle = search.trim().toLowerCase();
+    const needle = deferredSearch.trim();
+    let list = items;
     if (needle) {
-      // Search cuts across categories: at the counter you know the dish, not
-      // which tab it lives under.
-      return items.filter((item) => item.name.toLowerCase().includes(needle));
-    }
-    if (category === "popular") {
+      list = items.filter((item) => matchesSearch(item, categoryNames[item.categoryId], needle));
+    } else if (category === "popular") {
       const popular = items.filter((item) => item.isPopular);
-      return popular.length > 0 ? popular : items;
+      list = popular.length > 0 ? popular : items;
+    } else if (category !== "all") {
+      list = items.filter((item) => item.categoryId === category);
     }
-    return items.filter((item) => item.categoryId === category);
-  }, [items, category, search]);
+    return list;
+  }, [items, category, deferredSearch, categoryNames]);
+
+  const heading =
+    deferredSearch.trim()
+      ? "Search results"
+      : category === "all"
+        ? "All dishes"
+        : category === "popular"
+          ? "Popular dishes"
+          : categories.find((entry) => entry.id === category)?.name ?? "Menu";
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col">
-      <div className="px-3 pt-3">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="space-y-3 px-4 pt-4">
         <div className="relative">
           <Search
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4"
-            style={{ color: "var(--s-ink-faint)" }}
+            className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2"
+            style={{ color: "var(--s-ink-muted)" }}
           />
           <input
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search the menu"
+            placeholder="Search dishes, e.g. jollof or fries"
             aria-label="Search the menu"
-            className="w-full rounded-xl border pl-9 pr-10 py-3 outline-none"
+            className="w-full min-h-14 rounded-[1.25rem] border pl-12 pr-12 text-base font-medium outline-none transition-[box-shadow,border-color] focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--s-brand)_35%,transparent)]"
             style={{
-              background: "var(--s-panel-alt)",
+              background: "var(--s-panel)",
               borderColor: "var(--s-border)",
               color: "var(--s-ink)",
+              boxShadow: "var(--s-shadow)",
             }}
           />
           {search && (
             <button
               type="button"
               onClick={() => setSearch("")}
-              className="absolute right-1 top-1/2 -translate-y-1/2 h-9 w-9 grid place-items-center rounded-lg"
+              className="absolute right-2 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-xl"
               style={{ color: "var(--s-ink-muted)" }}
               aria-label="Clear search"
             >
-              <X className="w-4 h-4" />
+              <X className="h-4 w-4" />
             </button>
           )}
+        </div>
+
+        <div className="flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-[0.12em]" style={{ color: "var(--s-ink-faint)" }}>
+              Menu
+            </p>
+            <h1 className="truncate text-lg font-extrabold">
+              {heading}
+              <span className="ml-2 text-xs font-bold" style={{ color: "var(--s-brand)" }}>
+                {visible.length} item{visible.length === 1 ? "" : "s"}
+              </span>
+            </h1>
+          </div>
         </div>
       </div>
 
@@ -113,60 +165,95 @@ export default function MenuGrid({
         </div>
       )}
 
-      {!search && (
-        <div className="flex gap-2 overflow-x-auto px-3 py-3 no-scrollbar">
+      <div className="flex gap-2 overflow-x-auto px-4 py-3 no-scrollbar">
+        <CategoryChip
+          active={!search && category === "all"}
+          onClick={() => {
+            setSearch("");
+            setCategory("all");
+          }}
+          label="All"
+          icon={<LayoutGrid className="h-3.5 w-3.5" />}
+          count={items.length}
+        />
+        <CategoryChip
+          active={!search && category === "popular"}
+          onClick={() => {
+            setSearch("");
+            setCategory("popular");
+          }}
+          label="Popular"
+          icon={<Star className="h-3.5 w-3.5" />}
+          count={items.filter((item) => item.isPopular).length}
+        />
+        {categories.map((entry) => (
           <CategoryChip
-            active={category === "popular"}
-            onClick={() => setCategory("popular")}
-            label="Popular"
+            key={entry.id}
+            active={!search && category === entry.id}
+            onClick={() => {
+              setSearch("");
+              setCategory(entry.id);
+            }}
+            label={entry.name}
+            count={items.filter((item) => item.categoryId === entry.id).length}
           />
-          {categories.map((entry) => (
-            <CategoryChip
-              key={entry.id}
-              active={category === entry.id}
-              onClick={() => setCategory(entry.id)}
-              label={entry.name}
-            />
-          ))}
-        </div>
-      )}
+        ))}
+      </div>
 
-      <div className="flex-1 overflow-y-auto px-3 pb-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
         {visible.length === 0 ? (
           <p className="py-12 text-center text-sm" style={{ color: "var(--s-ink-muted)" }}>
-            Nothing here. Try another search.
+            Nothing matched. Try another word or clear the search.
           </p>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
             {visible.map((item) => {
               const qty = quantities[item.id] ?? 0;
               return (
                 <button
                   key={item.id}
+                  type="button"
                   onClick={() => onAdd(item)}
-                  className="relative rounded-2xl border overflow-hidden text-left active:scale-[0.98] transition-transform flex flex-col"
+                  disabled={locked}
+                  className="group relative flex min-h-52 flex-col overflow-hidden rounded-[1.35rem] p-0 text-left transition-transform active:scale-[0.98] disabled:opacity-45"
                   style={{
-                    background: qty > 0 ? "color-mix(in srgb, var(--s-brand) 12%, var(--s-panel))" : "var(--s-panel)",
-                    borderColor: qty > 0 ? "var(--s-brand)" : "var(--s-border)",
+                    background: "var(--s-panel)",
+                    boxShadow:
+                      qty > 0
+                        ? "var(--s-shadow), inset 0 0 0 1.5px var(--s-brand)"
+                        : "0 10px 28px rgba(26, 29, 31, 0.06), 0 1px 2px rgba(26, 29, 31, 0.04)",
                   }}
                 >
                   {qty > 0 && (
                     <span
-                      className="absolute top-2 right-2 z-10 min-w-6 h-6 px-1.5 rounded-full grid place-items-center text-xs font-bold text-white"
+                      className="absolute top-2.5 right-2.5 z-10 grid min-w-6 place-items-center rounded-full px-1.5 h-6 text-xs font-bold text-white"
                       style={{ background: "var(--s-brand)" }}
                     >
                       {qty}
                     </span>
                   )}
-                  <ItemThumb item={item} />
-                  <span className="px-3 pt-2 block text-sm font-semibold leading-snug line-clamp-2">
-                    {item.name}
-                  </span>
-                  <span
-                    className="money px-3 pb-3 pt-1 block text-sm font-bold"
-                    style={{ color: "var(--s-brand)" }}
-                  >
-                    {formatGHS(item.price)}
+                  <DishThumb
+                    name={item.name}
+                    imageUrl={item.imageUrl}
+                    className="aspect-[4/3] w-full rounded-t-[1.35rem]"
+                    letterClassName="text-3xl"
+                  />
+                  <span className="flex flex-1 flex-col gap-1 px-3 pb-3 pt-2.5">
+                    <span className="line-clamp-2 min-h-10 text-sm font-bold leading-snug">
+                      {item.name}
+                    </span>
+                    <span className="mt-auto flex items-center justify-between gap-2">
+                      <span className="money text-sm font-extrabold">{formatGHS(item.price)}</span>
+                      <span
+                        className="rounded-full px-2.5 py-1 text-[10px] font-extrabold"
+                        style={{
+                          background: qty > 0 ? "var(--s-brand)" : "color-mix(in srgb, var(--s-brand) 12%, transparent)",
+                          color: qty > 0 ? "#fff" : "var(--s-brand)",
+                        }}
+                      >
+                        {qty > 0 ? `Added · ${qty}` : "Add"}
+                      </span>
+                    </span>
                   </span>
                 </button>
               );
@@ -178,69 +265,37 @@ export default function MenuGrid({
   );
 }
 
-// A warm tint derived from the name, so the items that have no photo yet look
-// like a deliberate set of tiles rather than broken images. The first letter
-// sits in the middle — enough for a cashier to tell dishes apart at a glance.
-const THUMB_TINTS = ["#F70E07", "#F07704", "#D40D06", "#B45309", "#9A3412", "#7C2D12"];
-
-function ItemThumb({ item }: { item: PosMenuItem }) {
-  const [failed, setFailed] = useState(false);
-  const showImage = item.imageUrl && !failed;
-
-  if (showImage) {
-    return (
-      <span className="block w-full aspect-[4/3] overflow-hidden" style={{ background: "var(--s-panel-alt)" }}>
-        {/* eslint-disable-next-line @next/next/no-img-element -- POS grid needs the
-            service worker to cache these directly; next/image's loader would not. */}
-        <img
-          src={item.imageUrl!}
-          alt=""
-          loading="lazy"
-          onError={() => setFailed(true)}
-          className="w-full h-full object-cover"
-        />
-      </span>
-    );
-  }
-
-  const tint = THUMB_TINTS[hashString(item.name) % THUMB_TINTS.length];
-  return (
-    <span
-      className="w-full aspect-[4/3] grid place-items-center text-2xl font-bold text-white/90"
-      style={{ background: tint }}
-      aria-hidden="true"
-    >
-      {item.name.trim().charAt(0).toUpperCase()}
-    </span>
-  );
-}
-
-function hashString(value: string): number {
-  let hash = 0;
-  for (let i = 0; i < value.length; i++) hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
-  return hash;
-}
-
 function CategoryChip({
   active,
   onClick,
   label,
+  icon,
+  count,
 }: {
   active: boolean;
   onClick: () => void;
   label: string;
+  icon?: React.ReactNode;
+  count?: number;
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
-      className="shrink-0 rounded-full border px-4 py-2 text-sm font-semibold whitespace-nowrap"
+      className="flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-bold whitespace-nowrap transition-colors"
       style={{
         background: active ? "var(--s-brand)" : "var(--s-panel)",
-        borderColor: active ? "var(--s-brand)" : "var(--s-border)",
         color: active ? "#fff" : "var(--s-ink-muted)",
+        boxShadow: active ? undefined : "0 1px 2px rgba(26,29,31,0.05), inset 0 0 0 1px var(--s-border)",
       }}
     >
+      {icon}
       {label}
+      {count !== undefined && (
+        <span className="money text-[10px]" style={{ opacity: 0.72 }}>
+          {count}
+        </span>
+      )}
     </button>
   );
 }

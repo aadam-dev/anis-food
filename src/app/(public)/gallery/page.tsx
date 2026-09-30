@@ -5,6 +5,7 @@ import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import PageHeader from "@/components/public/PageHeader";
 
 type GalleryCategory = "all" | "food" | "interior" | "events";
 
@@ -48,26 +49,16 @@ export default function GalleryPage() {
       : galleryImages.filter((img) => img.category === filter);
 
   return (
-    <div className="py-12 md:py-16 bg-[#F9FAFB] min-h-screen">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <motion.div
-          className="text-center mb-12"
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          <span className="text-primary-red font-bold tracking-widest uppercase text-sm">
-            Gallery
-          </span>
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4 display-font mt-2">
-            Our Food & Space
-          </h1>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            A look at our dishes, atmosphere, and special moments
-          </p>
-        </motion.div>
-
+    <>
+      <PageHeader
+        eyebrow="Gallery"
+        title="Our food &"
+        highlight="our space"
+        subtitle="A look at our dishes, the room, and the moments in between."
+        image="/images/gallery/food-servings.jpg"
+      />
+      <div className="bg-warm py-16 md:py-20 min-h-screen">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Filter pills */}
         <motion.div
           className="flex flex-wrap justify-center gap-2 mb-10"
@@ -183,7 +174,8 @@ export default function GalleryPage() {
             </motion.div>
           )}
         </AnimatePresence>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

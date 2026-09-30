@@ -21,8 +21,8 @@ const manifest = {
   scope: "/",
   display: "standalone",
   orientation: "portrait",
-  theme_color: "#121110",
-  background_color: "#121110",
+  theme_color: "#F4F6F8",
+  background_color: "#F4F6F8",
   categories: ["business", "productivity"],
   icons: [
     { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },

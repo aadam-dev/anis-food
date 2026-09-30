@@ -9,8 +9,23 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronDown, CloudOff, LogOut, Receipt, Store, Wallet } from "lucide-react";
+import {
+  ArrowLeftRight,
+  ChefHat,
+  CircleAlert,
+  CloudOff,
+  LayoutDashboard,
+  LockKeyhole,
+  LogOut,
+  MoreHorizontal,
+  Receipt,
+  ReceiptText,
+  Store,
+  UserRound,
+  Wallet,
+} from "lucide-react";
 import AnisLogo from "@/components/brand/AnisLogo";
 import { computeOrderTotals, formatGHS } from "@/lib/money";
 import {
@@ -26,10 +41,16 @@ import MenuGrid from "./MenuGrid";
 import CartPanel from "./CartPanel";
 import MobileCartSheet from "./MobileCartSheet";
 import PaymentSheet from "./PaymentSheet";
-import ShiftPanel from "./ShiftPanel";
-import OpenTickets, { SettleSheet } from "./OpenTickets";
+import ShiftPanel, { OpenShiftCard } from "./ShiftPanel";
+import OpenTickets, { SettleSheet, VoidSheet } from "./OpenTickets";
 import ReceiptModal from "./ReceiptModal";
+import QuantityEntrySheet from "./QuantityEntrySheet";
+import CashMovementDialog from "./CashMovementDialog";
+import CloseShiftDialog from "./CloseShiftDialog";
+import type { FulfillmentType } from "./CustomerFields";
+import Button from "./ui/Button";
 import type {
+  CartLine,
   OrderView,
   PosCategory,
   PosMenuItem,
@@ -39,6 +60,11 @@ import type {
 
 type View = "register" | "tickets" | "shift";
 type Gate = "none" | "stale" | "active" | "error";
+
+interface ExpenseCategoryOption {
+  id: string;
+  name: string;
+}
 
 interface RegisterProps {
   user: { name: string; role: string };
@@ -54,6 +80,11 @@ interface RegisterProps {
   initialCategories: PosCategory[];
   initialItems: PosMenuItem[];
   initialTickets: OrderView[];
+  expenseCategories?: ExpenseCategoryOption[];
+  canFileExpense?: boolean;
+  canVoid?: boolean;
+  /** Set for roles that may use the back office. */
+  backOfficeHref?: string;
 }
 
 export default function Register({
@@ -64,6 +95,10 @@ export default function Register({
   initialCategories,
   initialItems,
   initialTickets,
+  expenseCategories = [],
+  canFileExpense = false,
+  canVoid = false,
+  backOfficeHref,
 }: RegisterProps) {
   const router = useRouter();
   const [cart, dispatch] = useReducer(cartReducer, emptyCart);
@@ -76,7 +111,7 @@ export default function Register({
   const [gate, setGate] = useState<Gate>(
     !initialSession ? "none" : initialSession.isStale ? "stale" : "active",
   );
-  const [view, setView] = useState<View>("register");
+  const [view, setView] = useState<View>(initialSession?.isStale ? "tickets" : "register");
   const [tickets, setTickets] = useState<OrderView[]>(initialTickets);
   const [paying, setPaying] = useState(false);
   // Phone only: the cart lives in a slide-up sheet, since there's no room for a
@@ -90,9 +125,24 @@ export default function Register({
   const [menuOpen, setMenuOpen] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [customerAddress, setCustomerAddress] = useState("");
+  const [fulfillment, setFulfillment] = useState<FulfillmentType>("TAKEAWAY");
   const [settling, setSettling] = useState<OrderView | null>(null);
+  const [voiding, setVoiding] = useState<OrderView | null>(null);
+  // Bound to the session id so a freshly opened shift never inherits a leftover
+  // "closing" flag from the shift that just finished.
+  const [closingId, setClosingId] = useState<string | null>(null);
+  const [movingCash, setMovingCash] = useState(false);
+  const [focusedMenuItemId, setFocusedMenuItemId] = useState<string | null>(null);
+  const [qtyTarget, setQtyTarget] = useState<CartLine | null>(null);
+  const [tableId, setTableId] = useState("");
+  const [tables, setTables] = useState<
+    { id: string; label: string; area: string; seats: number; occupied: boolean }[]
+  >([]);
   const cartKey = useRef(`anis-pos-cart:${user.name}`);
   const skipSave = useRef(true);
+
+  const locked = gate === "stale";
 
   const totals = useMemo(
     () =>
@@ -113,6 +163,7 @@ export default function Register({
         router.push("/login");
         return;
       }
+      if (!response.ok) throw new Error("session load failed");
       const data = await response.json();
       if (!data.session) {
         setSession(null);
@@ -122,7 +173,9 @@ export default function Register({
         setGate(data.session.isStale ? "stale" : "active");
       }
     } catch {
-      setGate("error");
+      // Keep the last good shift on screen rather than dropping the cashier to
+      // an "open the till" card they cannot use while a shift is open.
+      setGate((current) => (current === "none" ? "error" : current));
     }
   }, [router]);
 
@@ -148,6 +201,10 @@ export default function Register({
     }
   }, []);
 
+  const refreshShift = useCallback(async () => {
+    await Promise.all([loadSession(), loadTickets()]);
+  }, [loadSession, loadTickets]);
+
   // Restore a cart abandoned by a crash, a lock screen or a PWA relaunch. A
   // cashier halfway through a large order should not have to start again.
   useEffect(() => {
@@ -157,14 +214,34 @@ export default function Register({
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed.lines) && parsed.lines.length > 0) {
           dispatch({ type: "replace", lines: parsed.lines, discount: parsed.discount ?? 0 });
+          const last = parsed.lines[parsed.lines.length - 1];
+          if (last?.menuItemId) setFocusedMenuItemId(last.menuItemId);
         }
         if (typeof parsed.customerName === "string") setCustomerName(parsed.customerName);
         if (typeof parsed.customerPhone === "string") setCustomerPhone(parsed.customerPhone);
+        if (typeof parsed.customerAddress === "string") setCustomerAddress(parsed.customerAddress);
+        if (
+          parsed.fulfillment === "DINE_IN" ||
+          parsed.fulfillment === "TAKEAWAY" ||
+          parsed.fulfillment === "DELIVERY"
+        ) {
+          setFulfillment(parsed.fulfillment);
+        }
+        if (typeof parsed.tableId === "string") setTableId(parsed.tableId);
       }
     } catch {
       /* Corrupt entry: start with an empty cart rather than failing to load. */
     }
   }, []);
+
+  // Old saves may lack imageUrl — fill from the live menu without wiping qty.
+  useEffect(() => {
+    if (menu.items.length === 0 || cart.lines.length === 0) return;
+    if (cart.lines.every((line) => line.imageUrl !== undefined)) return;
+    const byId: Record<string, string | null> = {};
+    for (const item of menu.items) byId[item.id] = item.imageUrl;
+    dispatch({ type: "enrichImages", byId });
+  }, [menu.items, cart.lines]);
 
   useEffect(() => {
     // The first run is the empty cart from before restore. Writing it would
@@ -176,12 +253,19 @@ export default function Register({
     try {
       localStorage.setItem(
         cartKey.current,
-        JSON.stringify({ ...cart, customerName, customerPhone }),
+        JSON.stringify({
+          ...cart,
+          customerName,
+          customerPhone,
+          customerAddress,
+          fulfillment,
+          tableId,
+        }),
       );
     } catch {
       /* Storage full or blocked. Not worth interrupting service over. */
     }
-  }, [cart, customerName, customerPhone]);
+  }, [cart, customerName, customerPhone, customerAddress, fulfillment, tableId]);
 
   useEffect(() => {
     const update = () => setOnline(navigator.onLine);
@@ -217,12 +301,52 @@ export default function Register({
     };
   }, [loadSession, loadTickets, loadMenu]);
 
+  // A shift can go stale while the till sits open past midnight.
+  useEffect(() => {
+    const timer = setInterval(() => void loadSession(), 5 * 60_000);
+    return () => clearInterval(timer);
+  }, [loadSession]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/pos/tables")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!cancelled && Array.isArray(data?.tables)) {
+          setTables(
+            data.tables.map(
+              (table: {
+                id: string;
+                label: string;
+                area?: string;
+                zone?: string;
+                seats?: number;
+                occupied?: boolean;
+                openOrder?: unknown;
+              }) => ({
+                id: table.id,
+                label: table.label,
+                area: table.area ?? table.zone ?? "Floor",
+                seats: table.seats ?? 0,
+                occupied: Boolean(table.occupied ?? table.openOrder),
+              }),
+            ),
+          );
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.id]);
+
   useEffect(() => {
     if (!banner) return;
     const timer = setTimeout(() => setBanner(null), 5000);
     return () => clearTimeout(timer);
   }, [banner]);
 
+  /** Throws with a readable message so the payment sheet can show it in place. */
   async function submitOrder(
     method: PaymentChoice,
     extras: {
@@ -231,9 +355,18 @@ export default function Register({
       splitPayments?: { method: string; amount: number; ref?: string }[];
       customerName?: string;
       customerPhone?: string;
+      customerAddress?: string;
     },
   ) {
     const clientRef = crypto.randomUUID();
+    const deliveryType =
+      fulfillment === "DINE_IN" && tableId
+        ? "DINE_IN"
+        : fulfillment === "DELIVERY"
+          ? "DELIVERY"
+          : fulfillment === "DINE_IN"
+            ? "DINE_IN"
+            : "TAKEAWAY";
     const payload = {
       clientRef,
       lines: cart.lines.map((line) => ({
@@ -244,32 +377,21 @@ export default function Register({
       paymentMethod: method,
       discountAmount: cart.discount || undefined,
       ...extras,
+      deliveryType,
+      tableId: fulfillment === "DINE_IN" ? tableId || undefined : undefined,
+      customerAddress:
+        fulfillment === "DELIVERY"
+          ? extras.customerAddress?.trim() || customerAddress.trim() || undefined
+          : undefined,
     };
 
+    let response: Response;
     try {
-      const response = await fetch("/api/pos/orders", {
+      response = await fetch("/api/pos/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-
-      if (response.status === 401) {
-        router.push("/login");
-        return;
-      }
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setBanner({ tone: "bad", text: data.error ?? "Could not take that payment." });
-        return;
-      }
-
-      clearOrder();
-      setPaying(false);
-      setReceipt(data.order);
-      void loadSession();
-      void loadTickets();
     } catch {
       // No connection. Keep the sale rather than losing it — the clientRef makes
       // replaying it safe even if the request actually did reach the server.
@@ -280,7 +402,25 @@ export default function Register({
         tone: "good",
         text: "Saved on this device. It will send itself when the network is back.",
       });
+      return;
     }
+
+    if (response.status === 401) {
+      router.push("/login");
+      throw new Error("You have been signed out. Sign in again to carry on.");
+    }
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      if (response.status === 409) void loadSession();
+      throw new Error(data.error ?? "Could not take that payment.");
+    }
+
+    clearOrder();
+    setPaying(false);
+    setReceipt(data.order);
+    void loadSession();
+    void loadTickets();
   }
 
   async function handleSignOut() {
@@ -291,7 +431,7 @@ export default function Register({
       });
       return;
     }
-    await fetch("/api/auth/logout", { method: "POST" });
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined);
     router.push("/login");
   }
 
@@ -307,58 +447,116 @@ export default function Register({
     dispatch({ type: "clear" });
     setCustomerName("");
     setCustomerPhone("");
+    setCustomerAddress("");
+    setFulfillment("TAKEAWAY");
+    setTableId("");
+    setFocusedMenuItemId(null);
+    setQtyTarget(null);
+  }
+
+  function addItem(item: PosMenuItem) {
+    if (locked) return;
+    dispatch({ type: "add", item });
+    setFocusedMenuItemId(item.id);
+  }
+
+  function editQty(line: CartLine) {
+    setFocusedMenuItemId(line.menuItemId);
+    setQtyTarget(line);
+  }
+
+  function openClose() {
+    setMenuOpen(false);
+    void loadTickets();
+    setClosingId(session?.id ?? null);
   }
 
   const count = cartCount(cart);
   const firstName = user.name.split(" ")[0] || user.name;
+  const staleTickets = session ? tickets.filter((ticket) => ticket.sessionId === session.id).length : 0;
 
-  // No shift, or a shift left open from a previous day. Either way the cashier
-  // deals with the drawer before anything else can happen.
-  if (gate === "none" || gate === "stale" || gate === "error") {
+  // No shift at all: the drawer is counted in before anything else. A shift that
+  // is merely old gets the full till below, so its tickets can be dealt with.
+  if (gate === "none" || gate === "error" || !session) {
     return (
-      <ShiftPanel
-        session={session}
-        gate={gate}
+      <OpenShiftCard
+        userName={user.name}
         defaultOpeningFloat={defaultOpeningFloat}
-        onChanged={() => {
-          void loadSession();
-          void loadTickets();
+        loadError={gate === "error"}
+        onOpened={() => {
+          setView("register");
+          void refreshShift();
         }}
         onSignOut={handleSignOut}
+        backOfficeHref={backOfficeHref}
       />
     );
   }
 
   return (
-    <div className="min-h-dvh flex flex-col">
+    <div
+      className="min-h-dvh flex flex-col lg:p-4 lg:gap-3"
+      style={{
+        background:
+          "radial-gradient(circle at 0 100%, color-mix(in srgb, var(--s-brand) 8%, transparent), transparent 30%), var(--s-bg)",
+      }}
+    >
       <header
-        className="sticky top-0 z-30 border-b"
+        className="sticky top-0 z-30 border-b lg:static lg:rounded-[1.5rem] lg:border-0 lg:px-2"
         style={{
-          background: "var(--s-panel)",
+          background: "color-mix(in srgb, var(--s-panel) 92%, transparent)",
+          backdropFilter: "blur(10px)",
           borderColor: "var(--s-border)",
           paddingTop: "env(safe-area-inset-top)",
+          boxShadow: "var(--s-shadow)",
         }}
       >
-        <div className="flex items-center gap-2.5 px-3 pt-2 pb-1">
+        <div className="flex items-center gap-3 px-3 pt-2 pb-1.5 lg:px-4">
           <AnisLogo className="h-8 w-auto shrink-0" />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold leading-tight">{firstName}</p>
+            <p className="truncate text-sm font-bold leading-tight">{firstName}</p>
             <p className="truncate text-[11px] leading-tight" style={{ color: "var(--s-ink-muted)" }}>
-              {session
-                ? `${session.takings.orderCount} sale${session.takings.orderCount === 1 ? "" : "s"} · ${formatGHS(session.takings.gross)}`
-                : "No shift open"}
+              <span className="money">
+                {session.takings.orderCount} sale{session.takings.orderCount === 1 ? "" : "s"} ·{" "}
+                {formatGHS(session.takings.gross)}
+              </span>
             </p>
           </div>
+
+          <nav
+            className="hidden md:grid lg:hidden grid-cols-3 gap-1 rounded-2xl p-1"
+            style={{ background: "var(--s-panel-alt)" }}
+            aria-label="Till sections"
+          >
+            <Tabs view={view} setView={setView} ticketCount={tickets.length} />
+          </nav>
+
+          <Link
+            href="/pos/kitchen"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border"
+            style={{ borderColor: "var(--s-border)", color: "var(--s-ink)" }}
+            aria-label="Kitchen display"
+          >
+            <ChefHat className="h-5 w-5" />
+          </Link>
+
+          {(!online || queued > 0) && (
+            <Pill tone="warn">
+              <CloudOff className="w-3.5 h-3.5" />
+              {!online ? "Offline" : `${queued} to send`}
+            </Pill>
+          )}
+
           <div className="relative shrink-0">
             <button
               onClick={() => setMenuOpen((open) => !open)}
-              className="flex items-center gap-1 rounded-xl border px-3 py-2 text-sm font-semibold"
+              className="grid h-11 w-11 place-items-center rounded-xl border"
               style={{ borderColor: "var(--s-border)", color: "var(--s-ink)" }}
               aria-expanded={menuOpen}
               aria-haspopup="menu"
+              aria-label="More"
             >
-              Menu
-              <ChevronDown className="w-4 h-4 opacity-70" />
+              <MoreHorizontal className="w-5 h-5" />
             </button>
             {menuOpen && (
               <>
@@ -369,51 +567,85 @@ export default function Register({
                 />
                 <div
                   role="menu"
-                  className="absolute right-0 top-full z-50 mt-1 w-44 rounded-xl border p-1 shadow-lg"
+                  className="absolute right-0 top-full z-50 mt-1 w-56 rounded-2xl border p-1 shadow-xl"
                   style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
                 >
-                  <button
-                    role="menuitem"
+                  <MenuItem
+                    icon={ArrowLeftRight}
+                    label="Cash in / out"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setMovingCash(true);
+                    }}
+                  />
+                  <MenuItem icon={LockKeyhole} label="Close shift" onClick={openClose} />
+                  {backOfficeHref && (
+                    <MenuItem
+                      icon={LayoutDashboard}
+                      label="Back office"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        router.push(backOfficeHref);
+                      }}
+                    />
+                  )}
+                  <div className="my-1 h-px" style={{ background: "var(--s-border)" }} />
+                  <MenuItem
+                    icon={LogOut}
+                    label="Sign out"
                     onClick={() => {
                       setMenuOpen(false);
                       void handleSignOut();
                     }}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium"
-                    style={{ color: "var(--s-ink)" }}
-                  >
-                    <LogOut className="w-4 h-4" />
-                    Sign out
-                  </button>
+                  />
                 </div>
               </>
             )}
           </div>
         </div>
 
-        <div
-          className="mx-2 mb-2 grid grid-cols-3 gap-1 rounded-xl p-1"
+        <nav
+          className="md:hidden mx-2 mb-2 grid grid-cols-3 gap-1 rounded-2xl p-1"
           style={{ background: "var(--s-panel-alt)" }}
+          aria-label="Till sections"
         >
-          <TabButton active={view === "register"} onClick={() => setView("register")}>
-            <Store className="w-4 h-4" /> Register
-          </TabButton>
-          <TabButton active={view === "tickets"} onClick={() => setView("tickets")}>
-            <Receipt className="w-4 h-4" /> Tickets
-            {tickets.length > 0 && <Badge>{tickets.length}</Badge>}
-          </TabButton>
-          <TabButton active={view === "shift"} onClick={() => setView("shift")}>
-            <Wallet className="w-4 h-4" /> Shift
-          </TabButton>
-        </div>
+          <Tabs view={view} setView={setView} ticketCount={tickets.length} />
+        </nav>
 
-        {(!online || queued > 0) && (
+        {locked && (
           <div
-            className="flex items-center gap-2 px-3 py-1.5 text-xs"
-            style={{ background: "var(--s-hover)", color: "var(--s-warn)" }}
+            role="alert"
+            className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5 lg:px-4"
+            style={{ background: "color-mix(in srgb, var(--s-warn) 16%, var(--s-panel))" }}
           >
-            <CloudOff className="w-3.5 h-3.5 shrink-0" />
-            {!online && <span>No network — sales are being saved on this device.</span>}
-            {queued > 0 && (
+            <CircleAlert className="w-4 h-4 shrink-0" style={{ color: "var(--s-warn)" }} />
+            <p className="min-w-0 flex-1 text-sm">
+              <span className="font-bold" style={{ color: "var(--s-warn)" }}>
+                The shift from {session.businessDay} is still open.
+              </span>{" "}
+              <span style={{ color: "var(--s-ink-muted)" }}>
+                {staleTickets > 0
+                  ? `Settle or void its ${staleTickets} unpaid ticket${staleTickets === 1 ? "" : "s"}, then close it. New sales start after that.`
+                  : "Close it to start today's sales."}
+              </span>
+            </p>
+            <Button size="sm" onClick={openClose}>
+              Close it now
+            </Button>
+          </div>
+        )}
+
+        {banner && (
+          <div
+            role="status"
+            className="px-3 py-2 text-sm font-medium"
+            style={{
+              background: `color-mix(in srgb, ${banner.tone === "good" ? "var(--s-good)" : "var(--s-bad)"} 14%, var(--s-panel))`,
+              color: banner.tone === "good" ? "var(--s-good)" : "var(--s-bad)",
+            }}
+          >
+            {banner.text}
+            {queued > 0 && banner.tone === "bad" && (
               <button
                 onClick={async () => {
                   const result = await syncPending();
@@ -422,85 +654,105 @@ export default function Register({
                     void loadSession();
                   }
                 }}
-                className="underline ml-auto"
+                className="ml-2 underline"
               >
-                {queued} waiting — send now
+                Send now
               </button>
             )}
           </div>
         )}
-
-        {banner && (
-          <div
-            role="status"
-            className="px-3 py-2 text-sm"
-            style={{
-              background: "var(--s-hover)",
-              color: banner.tone === "good" ? "var(--s-good)" : "var(--s-bad)",
-            }}
-          >
-            {banner.text}
-          </div>
-        )}
       </header>
 
-      {view === "register" && (
-        <div className="flex-1 min-h-0 lg:grid lg:grid-cols-[1fr_22rem]">
-          <MenuGrid
-            categories={menu.categories}
-            items={menu.items}
-            quantities={quantities}
-            tickets={tickets}
-            onAdd={(item) => dispatch({ type: "add", item })}
-            onOpenTicket={(ticket) => setSettling(ticket)}
-          />
-          <CartPanel
-            cart={cart}
-            totals={totals}
-            dispatch={dispatch}
-            customerName={customerName}
-            customerPhone={customerPhone}
-            onCustomerName={setCustomerName}
-            onCustomerPhone={setCustomerPhone}
-            onClear={clearOrder}
-            onCharge={() => setPaying(true)}
-          />
-        </div>
-      )}
-
-      {view === "tickets" && (
-        <OpenTickets tickets={tickets} onTakePayment={(ticket) => setSettling(ticket)} />
-      )}
-
-      {view === "shift" && (
-        <ShiftPanel
-          session={session}
-          gate="active"
-          defaultOpeningFloat={defaultOpeningFloat}
-          onChanged={() => {
-            void loadSession();
-            void loadTickets();
-          }}
-          onSignOut={handleSignOut}
+      <div
+        className={`flex-1 min-h-0 lg:grid lg:gap-3 ${
+          view === "register"
+            ? "lg:grid-cols-[5.5rem_minmax(0,1fr)_22.5rem]"
+            : "lg:grid-cols-[5.5rem_minmax(0,1fr)]"
+        }`}
+      >
+        <PosRail
+          view={view}
+          ticketCount={tickets.length}
+          setView={setView}
+          backOfficeHref={backOfficeHref}
+          onSignOut={() => void handleSignOut()}
         />
-      )}
+
+        {view === "register" && (
+          <>
+            <main className="min-h-0 overflow-hidden lg:rounded-[1.5rem] lg:bg-[var(--s-panel)] lg:shadow-[var(--s-shadow)]">
+              <MenuGrid
+                categories={menu.categories}
+                items={menu.items}
+                quantities={quantities}
+                tickets={tickets}
+                onAdd={addItem}
+                onOpenTicket={(ticket) => setSettling(ticket)}
+                locked={locked}
+              />
+            </main>
+            <CartPanel
+              cart={cart}
+              totals={totals}
+              dispatch={dispatch}
+              focusedMenuItemId={focusedMenuItemId}
+              onFocus={setFocusedMenuItemId}
+              onEditQty={editQty}
+              fulfillment={fulfillment}
+              onFulfillment={setFulfillment}
+              customerName={customerName}
+              customerPhone={customerPhone}
+              customerAddress={customerAddress}
+              onCustomerName={setCustomerName}
+              onCustomerPhone={setCustomerPhone}
+              onCustomerAddress={setCustomerAddress}
+              onClear={clearOrder}
+              onCharge={() => setPaying(true)}
+              locked={locked}
+              tables={tables}
+              tableId={tableId}
+              onTable={setTableId}
+            />
+          </>
+        )}
+
+        {view === "tickets" && (
+          <main className="min-h-0 overflow-hidden lg:rounded-[1.5rem] lg:bg-[var(--s-panel)] lg:shadow-[var(--s-shadow)]">
+            <OpenTickets
+              tickets={tickets}
+              canVoid={canVoid}
+              onTakePayment={(ticket) => setSettling(ticket)}
+              onVoid={(ticket) => setVoiding(ticket)}
+            />
+          </main>
+        )}
+
+        {view === "shift" && (
+          <main className="min-h-0 overflow-hidden lg:rounded-[1.5rem] lg:bg-[var(--s-panel)] lg:shadow-[var(--s-shadow)]">
+            <ShiftPanel
+              session={session}
+              onCashMovement={() => setMovingCash(true)}
+              onCloseShift={openClose}
+            />
+          </main>
+        )}
+      </div>
 
       {/* Mobile: the order bar sits above the home indicator, always reachable.
           Tapping it opens the cart sheet to review before charging, rather than
           jumping straight to payment — a phone cashier gets to catch a mis-tap. */}
       {view === "register" && count > 0 && (
         <div
-          className="lg:hidden sticky bottom-0 border-t px-3 py-2"
+          className="lg:hidden sticky bottom-0 px-3 py-2"
           style={{
-            background: "var(--s-panel)",
-            borderColor: "var(--s-border)",
+            background: "color-mix(in srgb, var(--s-bg) 92%, transparent)",
             paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))",
           }}
         >
           <button
             onClick={() => setCartOpen(true)}
-            className="w-full rounded-xl px-4 py-3.5 font-bold text-white flex items-center justify-between"
-            style={{ background: "var(--s-brand)" }}
+            className="flex w-full min-h-14 items-center justify-between rounded-2xl px-4 py-3.5 font-bold text-white"
+            style={{ background: "var(--s-brand)", boxShadow: "0 8px 20px color-mix(in srgb, var(--s-brand) 35%, transparent)" }}
           >
             <span>
               View {count} item{count > 1 ? "s" : ""}
@@ -515,26 +767,64 @@ export default function Register({
           cart={cart}
           totals={totals}
           dispatch={dispatch}
+          focusedMenuItemId={focusedMenuItemId}
+          onFocus={setFocusedMenuItemId}
+          onEditQty={editQty}
+          fulfillment={fulfillment}
+          onFulfillment={setFulfillment}
           customerName={customerName}
           customerPhone={customerPhone}
+          customerAddress={customerAddress}
           onCustomerName={setCustomerName}
           onCustomerPhone={setCustomerPhone}
+          onCustomerAddress={setCustomerAddress}
           onClear={clearOrder}
+          tables={tables}
+          tableId={tableId}
+          onTable={setTableId}
           onClose={() => setCartOpen(false)}
           onCharge={() => {
             setCartOpen(false);
             setPaying(true);
           }}
+          locked={locked}
         />
       )}
 
-      {paying && (
+      {qtyTarget && (
+        <QuantityEntrySheet
+          productName={qtyTarget.name}
+          unitPrice={qtyTarget.unitPrice}
+          initialQty={qtyTarget.quantity}
+          onConfirm={(quantity) => {
+            dispatch({
+              type: "setQuantity",
+              menuItemId: qtyTarget.menuItemId,
+              quantity,
+            });
+            if (quantity === 0) {
+              const remaining = cart.lines.filter((line) => line.menuItemId !== qtyTarget.menuItemId);
+              setFocusedMenuItemId(remaining[remaining.length - 1]?.menuItemId ?? null);
+            }
+          }}
+          onClose={() => setQtyTarget(null)}
+        />
+      )}
+
+      {paying && !locked && (
         <PaymentSheet
           totals={totals}
+          fulfillment={fulfillment}
+          onFulfillment={setFulfillment}
           customerName={customerName}
           customerPhone={customerPhone}
+          customerAddress={customerAddress}
           onCustomerName={setCustomerName}
           onCustomerPhone={setCustomerPhone}
+          onCustomerAddress={setCustomerAddress}
+          tables={tables}
+          tableId={tableId}
+          onTable={setTableId}
           onClose={() => setPaying(false)}
           onConfirm={submitOrder}
         />
@@ -547,10 +837,47 @@ export default function Register({
           onSettled={(order) => {
             setSettling(null);
             setReceipt(order);
-            void loadTickets();
+            void refreshShift();
+          }}
+        />
+      )}
+
+      {voiding && (
+        <VoidSheet
+          ticket={voiding}
+          onClose={() => setVoiding(null)}
+          onVoided={() => {
+            setVoiding(null);
+            setBanner({ tone: "good", text: "Ticket voided." });
+            void refreshShift();
+          }}
+        />
+      )}
+
+      {movingCash && (
+        <CashMovementDialog
+          expenseCategories={expenseCategories}
+          canFileExpense={canFileExpense}
+          onClose={() => setMovingCash(false)}
+          onRecorded={() => {
+            setBanner({ tone: "good", text: "Cash movement recorded." });
             void loadSession();
           }}
-          onError={(text) => setBanner({ tone: "bad", text })}
+        />
+      )}
+
+      {closingId === session.id && (
+        <CloseShiftDialog
+          session={session}
+          tickets={tickets}
+          canVoid={canVoid}
+          onRefresh={refreshShift}
+          onClose={() => setClosingId(null)}
+          onFinished={() => {
+            setClosingId(null);
+            clearOrder();
+            void refreshShift();
+          }}
         />
       )}
 
@@ -566,6 +893,123 @@ export default function Register({
   );
 }
 
+function PosRail({
+  view,
+  ticketCount,
+  setView,
+  backOfficeHref,
+  onSignOut,
+}: {
+  view: View;
+  ticketCount: number;
+  setView: (view: View) => void;
+  backOfficeHref?: string;
+  onSignOut: () => void;
+}) {
+  const entries = [
+    { id: "register" as const, label: "Order", icon: Store },
+    { id: "tickets" as const, label: "Tickets", icon: ReceiptText, count: ticketCount },
+    { id: "shift" as const, label: "Shift", icon: Wallet },
+  ];
+  return (
+    <aside className="hidden lg:flex min-h-0 flex-col items-center rounded-[1.5rem] bg-[var(--s-panel)] px-2 py-4 shadow-[var(--s-shadow)]">
+      <span
+        className="mb-4 grid h-11 w-11 place-items-center rounded-full"
+        style={{ background: "color-mix(in srgb, var(--s-brand) 10%, white)" }}
+        aria-hidden
+      >
+        <UserRound className="h-5 w-5" style={{ color: "var(--s-brand)" }} />
+      </span>
+      <nav className="w-full space-y-2" aria-label="Till sections">
+        {entries.map((entry) => {
+          const Icon = entry.icon;
+          const active = view === entry.id;
+          return (
+            <button
+              key={entry.id}
+              type="button"
+              onClick={() => setView(entry.id)}
+              className="relative flex w-full flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-[10px] font-bold"
+              style={{
+                background: active ? "var(--s-brand)" : "var(--s-panel-alt)",
+                color: active ? "#fff" : "var(--s-ink-muted)",
+              }}
+            >
+              <Icon className="h-4 w-4" />
+              {entry.label}
+              {!!entry.count && (
+                <span
+                  className="absolute right-1.5 top-1.5 grid min-w-4 place-items-center rounded-full px-1 text-[9px]"
+                  style={{
+                    background: active ? "#fff" : "var(--s-brand)",
+                    color: active ? "var(--s-brand)" : "#fff",
+                  }}
+                >
+                  {entry.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </nav>
+      <div className="mt-auto w-full space-y-2">
+        <Link
+          href="/pos/kitchen"
+          className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[10px] font-bold"
+          style={{ background: "var(--s-panel-alt)", color: "var(--s-ink-muted)" }}
+        >
+          <ChefHat className="h-4 w-4" />
+          Kitchen
+        </Link>
+        {backOfficeHref && (
+          <a
+            href={backOfficeHref}
+            className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[10px] font-bold"
+            style={{ background: "var(--s-panel-alt)", color: "var(--s-ink-muted)" }}
+          >
+            <LayoutDashboard className="h-4 w-4" />
+            Office
+          </a>
+        )}
+        <button
+          type="button"
+          onClick={onSignOut}
+          className="flex w-full flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-[10px] font-bold"
+          style={{ color: "var(--s-ink-faint)" }}
+        >
+          <LogOut className="h-4 w-4" />
+          Sign out
+        </button>
+      </div>
+    </aside>
+  );
+}
+
+function Tabs({
+  view,
+  setView,
+  ticketCount,
+}: {
+  view: View;
+  setView: (view: View) => void;
+  ticketCount: number;
+}) {
+  return (
+    <>
+      <TabButton active={view === "register"} onClick={() => setView("register")}>
+        <Store className="w-4 h-4" /> Register
+      </TabButton>
+      <TabButton active={view === "tickets"} onClick={() => setView("tickets")}>
+        <Receipt className="w-4 h-4" /> Tickets
+        {ticketCount > 0 && <Badge>{ticketCount}</Badge>}
+      </TabButton>
+      <TabButton active={view === "shift"} onClick={() => setView("shift")}>
+        <Wallet className="w-4 h-4" /> Shift
+      </TabButton>
+    </>
+  );
+}
+
 function TabButton({
   active,
   onClick,
@@ -578,11 +1022,12 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className="flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[13px] sm:text-sm font-semibold whitespace-nowrap"
+      aria-current={active ? "page" : undefined}
+      className="flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-[13px] sm:text-sm font-semibold whitespace-nowrap"
       style={{
         background: active ? "var(--s-panel)" : "transparent",
         color: active ? "var(--s-brand)" : "var(--s-ink-muted)",
-        boxShadow: active ? "0 1px 2px rgba(0,0,0,0.12)" : undefined,
+        boxShadow: active ? "0 1px 2px rgba(0,0,0,0.18)" : undefined,
       }}
     >
       {children}
@@ -598,5 +1043,39 @@ function Badge({ children }: { children: React.ReactNode }) {
     >
       {children}
     </span>
+  );
+}
+
+function Pill({ tone, children }: { tone: "warn"; children: React.ReactNode }) {
+  const color = tone === "warn" ? "var(--s-warn)" : "var(--s-ink-muted)";
+  return (
+    <span
+      className="hidden sm:inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold"
+      style={{ color, background: `color-mix(in srgb, ${color} 14%, transparent)` }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function MenuItem({
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  icon: typeof Store;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      role="menuitem"
+      onClick={onClick}
+      className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium"
+      style={{ color: "var(--s-ink)" }}
+    >
+      <Icon className="w-4 h-4" style={{ color: "var(--s-ink-muted)" }} />
+      {label}
+    </button>
   );
 }

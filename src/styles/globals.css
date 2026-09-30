@@ -103,37 +103,46 @@ h1, h2, h3, h4, h5, h6 {
    data-surface="admin" or "pos" on the route group's wrapper, with
    data-theme="light" | "dark" chosen from Settings.
 
-   Defaults: the till is dark (less glare across a long shift, easier on the
-   eyes at a counter, kinder to an OLED phone battery) and the admin is light
-   (reports are read, not glanced at). Both are switchable in Settings, which is
-   why every colour below is a token rather than a literal.
+   Both the till and the back office default to the light paper canvas. Dark
+   remains available in Settings. Every colour below is a token rather than a
+   literal so that switch still works.
    =========================================================================== */
 
 [data-surface] {
-  --s-radius: 0.625rem;
+  --s-radius: 1.25rem;
   --s-brand: var(--color-primary-red-ui);
   --s-brand-strong: var(--color-primary-red);
   --s-accent: var(--color-accent-orange);
   --s-good: #059669;
   --s-bad: #DC2626;
   --s-warn: #B45309;
+  --s-shadow: 0 10px 30px rgba(26, 29, 31, 0.06);
 
   background: var(--s-bg);
   color: var(--s-ink);
-  font-family: var(--font-body);
+  font-family: var(--font-pos), "Plus Jakarta Sans", sans-serif;
 }
 
-/* Light surface — the default for /admin */
+[data-surface] h1,
+[data-surface] h2,
+[data-surface] h3,
+[data-surface] h4,
+[data-surface] h5,
+[data-surface] h6 {
+  font-family: inherit;
+}
+
+/* Light surface — the default for the till and the back office */
 [data-surface][data-theme="light"] {
-  --s-bg: #F7F6F4;
+  --s-bg: #F4F6F8;
   --s-panel: #FFFFFF;
-  --s-panel-alt: #FBFAF9;
-  --s-ink: #1A1614;
-  --s-ink-muted: #6B635E;
-  --s-ink-faint: #9A918B;
-  --s-border: #E4E0DB;
-  --s-border-strong: #CFC9C2;
-  --s-hover: #F2EFEC;
+  --s-panel-alt: #F7F8FA;
+  --s-ink: #1A1D1F;
+  --s-ink-muted: #6B7280;
+  --s-ink-faint: #9CA3AF;
+  --s-border: #E8EAED;
+  --s-border-strong: #D5D8DE;
+  --s-hover: #F3F4F6;
 }
 
 /* Dark surface — the default for /pos */
@@ -179,8 +188,15 @@ body:has([data-surface][data-theme="dark"]) {
 }
 
 body:has([data-surface][data-theme="light"]) {
-  background: #f7f6f4;
+  background: #F4F6F8;
   color-scheme: light;
+}
+
+/* Soft card used by the till and the back office. */
+.s-card {
+  background: var(--s-panel);
+  border-radius: var(--s-radius);
+  box-shadow: var(--s-shadow), inset 0 0 0 1px var(--s-border);
 }
 
 /* Money must line up column to column. Tabular figures, always. */
@@ -197,11 +213,45 @@ body:has([data-surface][data-theme="light"]) {
   min-height: 2.75rem;
 }
 
+/* Public site — a slow Ken Burns drift on hero/backdrop images, and warm
+   section grounds. Kept out of @theme so they are plain, predictable CSS. */
+@keyframes anisKenBurns {
+  0% { transform: scale(1); }
+  100% { transform: scale(1.08); }
+}
+.animate-ken-burns {
+  animation: anisKenBurns 22s ease-in-out infinite alternate;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-ken-burns { animation: none; }
+}
+
+/* Warm off-white grounds that alternate down the page for editorial rhythm. */
+.bg-warm { background: #FBF8F5; }
+.bg-warm-alt { background: #F6F1EC; }
+
 /* Brand ring on fields. outline-none is used widely; the shadow still shows. */
 [data-surface] input:focus,
 [data-surface] select:focus,
 [data-surface] textarea:focus {
   box-shadow: 0 0 0 2px var(--s-brand);
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes sheet-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-surface] * {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
 }
 
 /* Horizontal chip rows should not show a scrollbar on a phone. */
@@ -290,24 +340,44 @@ body:has([data-surface][data-theme="light"]) {
     margin: 0;
   }
 
+  /* The receipt lives inside a fixed, centered, scrollable modal. Without these
+     resets it prints wherever that modal put it — pushed down the page, with the
+     overflow clipped so a fragment bleeds to the top. Flattening every ancestor
+     to static/visible/no-clip lets the receipt escape the modal and pin to the
+     page's top-left, which is what a thermal roll expects. */
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
   body * {
-    visibility: hidden;
+    visibility: hidden !important;
+    position: static !important;
+    overflow: visible !important;
+    max-height: none !important;
+    transform: none !important;
   }
 
   [data-receipt],
   [data-receipt] *,
   [data-anis-receipt],
   [data-anis-receipt] * {
-    visibility: visible;
+    visibility: visible !important;
   }
 
   [data-receipt],
   [data-anis-receipt] {
-    position: absolute;
-    left: 0;
-    top: 0;
-    box-shadow: none;
-    border: none;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
   }
 
   [data-receipt] {
@@ -319,8 +389,8 @@ body:has([data-surface][data-theme="light"]) {
      wrap every line in the wrong place. */
   [data-anis-receipt] {
     width: 72mm;
-    border-radius: 0;
-    padding: 0;
-    margin: 0;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
   }
 }

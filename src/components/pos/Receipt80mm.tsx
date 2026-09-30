@@ -48,6 +48,8 @@ export interface ReceiptData {
   address: string;
   phone: string;
   footer: string;
+  /** Brand logo shown at the top of the slip; falls back to the text name. */
+  logoUrl?: string;
   /** Public URL a customer can open to verify this sale (printed under the QR). */
   verifyUrl?: string;
   /** The verify URL as a scannable QR, pre-rendered to a data: URL by the caller. */
@@ -83,7 +85,19 @@ export default function Receipt80mm({
       className={preview ? "anis-receipt anis-receipt--preview" : "anis-receipt"}
     >
       <div className="r-center">
-        <div className="r-title">{data.header}</div>
+        {data.logoUrl ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element -- printed
+                directly; next/image's loader would break the thermal print. */}
+            <img
+              src={data.logoUrl}
+              alt=""
+              style={{ width: "38mm", height: "auto", margin: "0 auto 1mm", display: "block" }}
+            />
+          </>
+        ) : (
+          <div className="r-title">{data.header}</div>
+        )}
         <div className="r-small">{data.address}</div>
         <div className="r-small">{data.phone}</div>
       </div>

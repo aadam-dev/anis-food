@@ -8,6 +8,7 @@ import { Phone, MapPin, Clock, MessageCircle } from "lucide-react";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
+import PageHeader from "@/components/public/PageHeader";
 import { BUSINESS_INFO } from "@/lib/constants";
 import { getMapEmbedUrl } from "@/lib/map";
 import { getWhatsAppContactUrl } from "@/lib/utils";
@@ -47,18 +48,16 @@ export default function ContactPage() {
   };
 
   return (
-    <div className="py-12 bg-[#F9FAFB] min-h-screen">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4 display-font">
-            Get in Touch
-          </h1>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Have a question or want to place an order? We&apos;d love to hear from you!
-          </p>
-        </div>
-
+    <>
+      <PageHeader
+        eyebrow="Contact"
+        title="Get in"
+        highlight="touch"
+        subtitle="Have a question or want to place an order? We'd love to hear from you."
+        image="/images/gallery/entrance-night.webp"
+      />
+      <div className="bg-warm py-16 min-h-screen">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Contact Form */}
           <Card className="p-6 md:p-8">
@@ -242,8 +241,9 @@ export default function ContactPage() {
             title="Anis Food and Drink Location"
           />
         </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
