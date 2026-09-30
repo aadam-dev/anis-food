@@ -1,18 +1,27 @@
 # Menu image sources
 
-The original Anis photographs in this directory remain the first choice for
-the dishes they depict. These Pexels photographs are locally stored,
-category-level fallbacks for dishes which do not yet have an Anis photograph.
-Pexels marks each as free to use.
+Anis plate photographs in this directory are the first choice for the dishes
+they depict. Category fallbacks use those same plates where possible. A few
+Pexels photographs remain as last-resort fills for categories that still lack
+an Anis shot; they are stored locally, never hotlinked.
 
-| Local file | Source |
+| Local file | Role |
 | --- | --- |
-| `rice-jollof.webp` | https://www.pexels.com/photo/jollof-rice-and-chicken-meal-in-abuja-cafe-setting-37538487/ |
-| `noodles-bowl.webp` | https://www.pexels.com/photo/bowl-of-noodles-27126848/ |
-| `sandwich-chicken.webp` | https://www.pexels.com/photo/delicious-chicken-sandwich-with-fries-33014388/ |
-| `local-stew.webp` | https://www.pexels.com/photo/authentic-african-stew-with-spinach-and-meat-37648017/ |
-| `drink-hibiscus.webp` | https://www.pexels.com/photo/refreshing-iced-hibiscus-tea-with-lime-37680620/ |
+| `assorted-fried-rice.jpg` | Anis — assorted fried rice |
+| `assorted-jollof-fried-chicken.jpg` | Anis — assorted jollof |
+| `assorted-noodles.jpg` | Anis — Indomie / noodles |
+| `fries.jpg` | Anis — loaded / French fries |
+| `grilled-chicken.jpg` | Anis — chicken only / grilled |
+| `jollof-chicken-serving.jpg` | Anis — rice dishes |
+| `jollof-fish.jpg` | Anis — fish / fillet / snapper |
+| `jollof-fried-chicken.jpg` | Anis — jollof or fried rice with chicken |
+| `jollof-grilled-meat.jpg` | Anis — goat / wings / meat |
+| `servings.jpg` | Anis — generic serving |
+| `drink-on-menu.webp` | Anis — sobolo / drinks |
+| `sandwich-chicken.webp` | Category fill — sandwiches |
+| `local-stew.webp` | Category fill — local stews |
+| `drink-hibiscus.webp` | Category fill — bottled drinks |
+| `noodles-bowl.webp` | Legacy category fill |
+| `rice-jollof.webp` | Legacy category fill |
 
-Images are downloaded rather than hotlinked, resized to 900×675, and encoded
-as WebP. A fallback is labelled only as its category, never as proof that the
-photograph is the exact menu item.
+`menuImage()` matches by dish name first, then category, then `servings.jpg`.

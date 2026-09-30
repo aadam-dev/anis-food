@@ -47,6 +47,7 @@ import ReceiptModal from "./ReceiptModal";
 import QuantityEntrySheet from "./QuantityEntrySheet";
 import CashMovementDialog from "./CashMovementDialog";
 import CloseShiftDialog from "./CloseShiftDialog";
+import type { FulfillmentType } from "./CustomerFields";
 import Button from "./ui/Button";
 import type {
   CartLine,
@@ -124,6 +125,8 @@ export default function Register({
   const [menuOpen, setMenuOpen] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [customerAddress, setCustomerAddress] = useState("");
+  const [fulfillment, setFulfillment] = useState<FulfillmentType>("TAKEAWAY");
   const [settling, setSettling] = useState<OrderView | null>(null);
   const [voiding, setVoiding] = useState<OrderView | null>(null);
   // Bound to the session id so a freshly opened shift never inherits a leftover
@@ -216,6 +219,15 @@ export default function Register({
         }
         if (typeof parsed.customerName === "string") setCustomerName(parsed.customerName);
         if (typeof parsed.customerPhone === "string") setCustomerPhone(parsed.customerPhone);
+        if (typeof parsed.customerAddress === "string") setCustomerAddress(parsed.customerAddress);
+        if (
+          parsed.fulfillment === "DINE_IN" ||
+          parsed.fulfillment === "TAKEAWAY" ||
+          parsed.fulfillment === "DELIVERY"
+        ) {
+          setFulfillment(parsed.fulfillment);
+        }
+        if (typeof parsed.tableId === "string") setTableId(parsed.tableId);
       }
     } catch {
       /* Corrupt entry: start with an empty cart rather than failing to load. */
@@ -241,12 +253,19 @@ export default function Register({
     try {
       localStorage.setItem(
         cartKey.current,
-        JSON.stringify({ ...cart, customerName, customerPhone }),
+        JSON.stringify({
+          ...cart,
+          customerName,
+          customerPhone,
+          customerAddress,
+          fulfillment,
+          tableId,
+        }),
       );
     } catch {
       /* Storage full or blocked. Not worth interrupting service over. */
     }
-  }, [cart, customerName, customerPhone]);
+  }, [cart, customerName, customerPhone, customerAddress, fulfillment, tableId]);
 
   useEffect(() => {
     const update = () => setOnline(navigator.onLine);
@@ -336,9 +355,18 @@ export default function Register({
       splitPayments?: { method: string; amount: number; ref?: string }[];
       customerName?: string;
       customerPhone?: string;
+      customerAddress?: string;
     },
   ) {
     const clientRef = crypto.randomUUID();
+    const deliveryType =
+      fulfillment === "DINE_IN" && tableId
+        ? "DINE_IN"
+        : fulfillment === "DELIVERY"
+          ? "DELIVERY"
+          : fulfillment === "DINE_IN"
+            ? "DINE_IN"
+            : "TAKEAWAY";
     const payload = {
       clientRef,
       lines: cart.lines.map((line) => ({
@@ -348,8 +376,13 @@ export default function Register({
       })),
       paymentMethod: method,
       discountAmount: cart.discount || undefined,
-      tableId: tableId || undefined,
       ...extras,
+      deliveryType,
+      tableId: fulfillment === "DINE_IN" ? tableId || undefined : undefined,
+      customerAddress:
+        fulfillment === "DELIVERY"
+          ? extras.customerAddress?.trim() || customerAddress.trim() || undefined
+          : undefined,
     };
 
     let response: Response;
@@ -414,6 +447,8 @@ export default function Register({
     dispatch({ type: "clear" });
     setCustomerName("");
     setCustomerPhone("");
+    setCustomerAddress("");
+    setFulfillment("TAKEAWAY");
     setTableId("");
     setFocusedMenuItemId(null);
     setQtyTarget(null);
@@ -663,10 +698,14 @@ export default function Register({
               focusedMenuItemId={focusedMenuItemId}
               onFocus={setFocusedMenuItemId}
               onEditQty={editQty}
+              fulfillment={fulfillment}
+              onFulfillment={setFulfillment}
               customerName={customerName}
               customerPhone={customerPhone}
+              customerAddress={customerAddress}
               onCustomerName={setCustomerName}
               onCustomerPhone={setCustomerPhone}
+              onCustomerAddress={setCustomerAddress}
               onClear={clearOrder}
               onCharge={() => setPaying(true)}
               locked={locked}
@@ -731,10 +770,14 @@ export default function Register({
           focusedMenuItemId={focusedMenuItemId}
           onFocus={setFocusedMenuItemId}
           onEditQty={editQty}
+          fulfillment={fulfillment}
+          onFulfillment={setFulfillment}
           customerName={customerName}
           customerPhone={customerPhone}
+          customerAddress={customerAddress}
           onCustomerName={setCustomerName}
           onCustomerPhone={setCustomerPhone}
+          onCustomerAddress={setCustomerAddress}
           onClear={clearOrder}
           tables={tables}
           tableId={tableId}
@@ -771,10 +814,17 @@ export default function Register({
       {paying && !locked && (
         <PaymentSheet
           totals={totals}
+          fulfillment={fulfillment}
+          onFulfillment={setFulfillment}
           customerName={customerName}
           customerPhone={customerPhone}
+          customerAddress={customerAddress}
           onCustomerName={setCustomerName}
           onCustomerPhone={setCustomerPhone}
+          onCustomerAddress={setCustomerAddress}
+          tables={tables}
+          tableId={tableId}
+          onTable={setTableId}
           onClose={() => setPaying(false)}
           onConfirm={submitOrder}
         />

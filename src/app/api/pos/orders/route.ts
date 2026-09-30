@@ -68,6 +68,7 @@ const createSchema = z.object({
   tableId: z.string().optional(),
   customerName: z.string().max(120).optional(),
   customerPhone: z.string().max(30).optional(),
+  customerAddress: z.string().max(200).optional(),
   notes: z.string().max(500).optional(),
 });
 
@@ -112,6 +113,7 @@ function serialiseOrder(
     tableLabel: order.tableLabel,
     customerName: order.customerName,
     customerPhone: order.customerPhone,
+    customerAddress: order.customerAddress,
     notes: order.notes,
     createdAt: order.createdAt.toISOString(),
     items: order.items.map((item) => ({
@@ -307,6 +309,7 @@ export async function POST(request: Request) {
           changeAmount: tendered === null ? null : changeDue(orderTotal, tendered),
           customerName: body.customerName,
           customerPhone: body.customerPhone,
+          customerAddress: body.customerAddress,
           staffId: auth.user.sub,
           notes: body.notes,
           items: {

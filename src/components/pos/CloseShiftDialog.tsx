@@ -83,10 +83,6 @@ export default function CloseShiftDialog({
         : Number(typedTotal) || 0;
   const difference = drawerDifference(session.expectedCash, counted);
   const momoValue = momoChecked && momo !== "" ? Number(momo) || 0 : null;
-  const momoDifference =
-    session.expectedMomo !== null && momoValue !== null
-      ? drawerDifference(session.expectedMomo, momoValue)
-      : null;
   const problem = closeProblem({
     unpaidCount: unpaid.length,
     expectedCash: session.expectedCash,
@@ -194,7 +190,7 @@ export default function CloseShiftDialog({
   return (
     <>
       <Sheet
-        eyebrow={session.isStale ? `Shift from ${session.businessDay}` : "Close the shift"}
+        eyebrow={session.isStale ? `Shift from ${session.businessDay}` : "End of day · Z-out"}
         title={step === "done" ? "Shift closed" : `${session.openedBy.name}'s shift`}
         subtitle={step === "done" ? undefined : `Opened ${openedAt}`}
         onClose={step === "done" ? onFinished : onClose}
@@ -238,8 +234,8 @@ export default function CloseShiftDialog({
         )}
 
         {step === "count" && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between gap-3">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="font-semibold">What is in the drawer?</p>
                 <p className="text-sm" style={{ color: "var(--s-ink-muted)" }}>
@@ -262,6 +258,7 @@ export default function CloseShiftDialog({
                     style={{
                       background: mode === value ? "var(--s-panel)" : "transparent",
                       color: mode === value ? "var(--s-ink)" : "var(--s-ink-muted)",
+                      boxShadow: mode === value ? "var(--s-shadow)" : undefined,
                     }}
                   >
                     {label}
@@ -287,7 +284,7 @@ export default function CloseShiftDialog({
             ) : (
               <>
                 <div
-                  className="money rounded-2xl border px-4 py-3 text-right text-4xl font-bold"
+                  className="money rounded-2xl border px-4 py-3 text-right text-3xl font-bold sm:text-4xl"
                   style={{ background: "var(--s-panel-alt)", borderColor: "var(--s-border)" }}
                 >
                   {formatGHS(Number(typedTotal) || 0)}
@@ -307,8 +304,8 @@ export default function CloseShiftDialog({
 
             {counted !== null && (
               <div
-                className="flex items-center justify-between rounded-2xl px-4 py-3 font-bold"
-                style={{ background: `color-mix(in srgb, ${differenceTone} 12%, transparent)`, color: differenceTone }}
+                className="sticky bottom-0 flex items-center justify-between rounded-2xl px-4 py-3 font-bold"
+                style={{ background: `color-mix(in srgb, ${differenceTone} 12%, var(--s-panel))`, color: differenceTone }}
               >
                 <span>{difference === 0 ? "Balanced" : "Difference"}</span>
                 <span className="money">{differenceLabel(difference)}</span>
@@ -344,7 +341,7 @@ export default function CloseShiftDialog({
             {momoChecked && (
               <>
                 <div
-                  className="money rounded-2xl border px-4 py-3 text-right text-4xl font-bold"
+                  className="money rounded-2xl border px-4 py-3 text-right text-3xl font-bold sm:text-4xl"
                   style={{ background: "var(--s-panel-alt)", borderColor: "var(--s-border)" }}
                 >
                   {formatGHS(Number(momo) || 0)}
@@ -356,17 +353,27 @@ export default function CloseShiftDialog({
         )}
 
         {step === "review" && (
-          <div className="space-y-4">
+          <div className="space-y-3">
             <div
-              className="rounded-2xl px-4 py-4 text-center"
+              className="rounded-[1.25rem] px-4 py-3 text-center"
               style={{ background: `color-mix(in srgb, ${differenceTone} 12%, transparent)` }}
             >
-              <p className="text-sm font-semibold" style={{ color: differenceTone }}>
-                Drawer
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em]" style={{ color: differenceTone }}>
+                Z-out · Drawer
               </p>
-              <p className="money mt-1 text-3xl font-bold" style={{ color: differenceTone }}>
+              <p className="money mt-1 text-3xl font-extrabold" style={{ color: differenceTone }}>
                 {differenceLabel(difference)}
               </p>
+            </div>
+
+            <div
+              className="grid grid-cols-2 gap-2 rounded-[1.25rem] border p-3 sm:grid-cols-4"
+              style={{ borderColor: "var(--s-border)", background: "var(--s-panel-alt)" }}
+            >
+              <ZStat label="Orders" value={String(session.takings.orderCount)} />
+              <ZStat label="Takings" value={formatGHS(session.takings.gross)} money />
+              <ZStat label="Expected cash" value={formatGHS(session.expectedCash)} money />
+              <ZStat label="Counted" value={counted === null ? "—" : formatGHS(counted)} money />
             </div>
 
             <Summary
@@ -375,33 +382,19 @@ export default function CloseShiftDialog({
                 ["Cash sales", formatGHS(session.takings.cash)],
                 ...(session.cashIn > 0 ? ([["Cash put in", `+${formatGHS(session.cashIn)}`]] as const) : []),
                 ...(session.cashOut > 0 ? ([["Cash taken out", `−${formatGHS(session.cashOut)}`]] as const) : []),
+                ...Object.entries(session.takings.byMethod).map(
+                  ([method, amount]) => [PAYMENT_LABELS[method] ?? method, formatGHS(amount)] as const,
+                ),
               ]}
-              total={["Should be in the drawer", formatGHS(session.expectedCash)]}
-              extra={["Counted", counted === null ? "—" : formatGHS(counted)]}
-            />
-
-            <Summary
-              rows={Object.entries(session.takings.byMethod).map(
-                ([method, amount]) => [PAYMENT_LABELS[method] ?? method, formatGHS(amount)] as const,
-              )}
               total={[
                 `Takings · ${session.takings.orderCount} order${session.takings.orderCount === 1 ? "" : "s"}`,
                 formatGHS(session.takings.gross),
               ]}
+              extra={momoValue !== null ? ["MoMo now", formatGHS(momoValue)] : undefined}
             />
 
-            {momoValue !== null && (
-              <Summary
-                rows={[
-                  ["MoMo should be", session.expectedMomo === null ? "Not recorded" : formatGHS(session.expectedMomo)],
-                  ["MoMo balance now", formatGHS(momoValue)],
-                ]}
-                total={["MoMo", momoDifference === null ? "Not comparable" : differenceLabel(momoDifference)]}
-              />
-            )}
-
             <div>
-              <label className="mb-1.5 block text-sm font-medium">
+              <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--s-ink-faint)" }}>
                 Note{" "}
                 <span style={{ color: difference ? "var(--s-warn)" : "var(--s-ink-faint)" }}>
                   {difference ? "(required — the drawer does not balance)" : "(optional)"}
@@ -410,10 +403,10 @@ export default function CloseShiftDialog({
               <textarea
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
-                rows={3}
+                rows={2}
                 maxLength={500}
                 placeholder={difference ? "e.g. Paid the gas man GH₵20 and forgot to record it" : "Anything the manager should know"}
-                className="w-full rounded-2xl border px-3 py-3 text-sm outline-none"
+                className="w-full rounded-2xl border px-3.5 py-3 text-sm outline-none"
                 style={{
                   background: "var(--s-panel-alt)",
                   borderColor: difference && note.trim().length < VARIANCE_NOTE_MIN ? "var(--s-warn)" : "var(--s-border)",
@@ -537,6 +530,17 @@ function Callout({
           {children}
         </p>
       </div>
+    </div>
+  );
+}
+
+function ZStat({ label, value, money }: { label: string; value: string; money?: boolean }) {
+  return (
+    <div className="rounded-xl px-3 py-2" style={{ background: "var(--s-panel)" }}>
+      <p className="text-[10px] font-bold uppercase tracking-[0.08em]" style={{ color: "var(--s-ink-faint)" }}>
+        {label}
+      </p>
+      <p className={`mt-0.5 text-sm font-extrabold ${money ? "money" : ""}`}>{value}</p>
     </div>
   );
 }

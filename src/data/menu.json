@@ -1,11 +1,35 @@
 {
   "categories": [
-    { "id": "rice", "name": "Rice Dishes", "description": "Authentic Ghanaian rice dishes in Accra — jollof rice, fried rice, beef, fish fillet, snapper, peppered rice, vegetable rice, gizzard sauce and more. Order for delivery or dine-in." },
-    { "id": "noodles", "name": "Noodles", "description": "Indomie noodles and more. Quick, filling noodle dishes at Anis Food and Drink." },
-    { "id": "sandwiches", "name": "Sandwiches & Snacks", "description": "Sandwiches, salads, spring rolls and samosas. Tuna, chicken, club sandwich, Anis Special Salad in Botwe, Accra." },
-    { "id": "sides", "name": "Sides", "description": "Sides and extras — chicken only, jollof or fried rice only, yam chips, wings, turkey, goat, loaded fries, kelewele, extra banku and omo tuo." },
-    { "id": "local", "name": "Local (Weekends Only)", "description": "Traditional Ghanaian local dishes — banku and okro stew, omo tuo and groundnut soup. Available weekends only at Anis Food and Drink." },
-    { "id": "drinks", "name": "Drinks", "description": "Refreshing beverages — bottled water, malt, Fanta, Coca-Cola, sobolo (hibiscus). Drinks to pair with your meal in Accra." }
+    {
+      "id": "rice",
+      "name": "Rice Dishes",
+      "description": "Authentic Ghanaian rice dishes in Accra \u2014 jollof rice, fried rice, beef, fish fillet, snapper, peppered rice, vegetable rice, gizzard sauce and more. Order for delivery or dine-in."
+    },
+    {
+      "id": "noodles",
+      "name": "Noodles",
+      "description": "Indomie noodles and more. Quick, filling noodle dishes at Anis Food and Drink."
+    },
+    {
+      "id": "sandwiches",
+      "name": "Sandwiches & Snacks",
+      "description": "Sandwiches, salads, spring rolls and samosas. Tuna, chicken, club sandwich, Anis Special Salad in Botwe, Accra."
+    },
+    {
+      "id": "sides",
+      "name": "Sides",
+      "description": "Sides and extras \u2014 chicken only, jollof or fried rice only, yam chips, wings, turkey, goat, loaded fries, kelewele, extra banku and omo tuo."
+    },
+    {
+      "id": "local",
+      "name": "Local (Weekends Only)",
+      "description": "Traditional Ghanaian local dishes \u2014 banku and okro stew, omo tuo and groundnut soup. Available weekends only at Anis Food and Drink."
+    },
+    {
+      "id": "drinks",
+      "name": "Drinks",
+      "description": "Refreshing beverages \u2014 bottled water, malt, Fanta, Coca-Cola, sobolo (hibiscus). Drinks to pair with your meal in Accra."
+    }
   ],
   "items": [
     {
@@ -14,7 +38,8 @@
       "description": "Small portion of special fried rice with grilled chicken",
       "price": 50,
       "category": "rice",
-      "available": true
+      "available": true,
+      "image": "/images/menu/jollof-fried-chicken.jpg"
     },
     {
       "id": "fried-rice-grilled-chicken-large",
@@ -32,7 +57,8 @@
       "description": "Small portion of authentic jollof rice with grilled chicken",
       "price": 50,
       "category": "rice",
-      "available": true
+      "available": true,
+      "image": "/images/menu/jollof-fried-chicken.jpg"
     },
     {
       "id": "jollof-grilled-chicken-large",
@@ -51,7 +77,10 @@
       "price": 130,
       "category": "rice",
       "available": true,
-      "tags": ["spicy"]
+      "tags": [
+        "spicy"
+      ],
+      "image": "/images/menu/jollof-grilled-meat.jpg"
     },
     {
       "id": "peppered-rice-sausage-egg",
@@ -60,7 +89,10 @@
       "price": 70,
       "category": "rice",
       "available": true,
-      "tags": ["spicy"]
+      "tags": [
+        "spicy"
+      ],
+      "image": "/images/menu/jollof-chicken-serving.jpg"
     },
     {
       "id": "peppered-rice-sausage-egg-turkey",
@@ -69,7 +101,10 @@
       "price": 140,
       "category": "rice",
       "available": true,
-      "tags": ["spicy"]
+      "tags": [
+        "spicy"
+      ],
+      "image": "/images/menu/jollof-chicken-serving.jpg"
     },
     {
       "id": "jollof-fried-rice-chicken-sauce",
@@ -77,7 +112,8 @@
       "description": "Choice of jollof or fried rice with chicken sauce",
       "price": 100,
       "category": "rice",
-      "available": true
+      "available": true,
+      "image": "/images/menu/jollof-fried-chicken.jpg"
     },
     {
       "id": "beef-fried-rice",
@@ -85,7 +121,8 @@
       "description": "Special fried rice with beef",
       "price": 120,
       "category": "rice",
-      "available": true
+      "available": true,
+      "image": "/images/menu/jollof-chicken-serving.jpg"
     },
     {
       "id": "beef-jollof-rice",
@@ -93,7 +130,8 @@
       "description": "Jollof rice with beef",
       "price": 120,
       "category": "rice",
-      "available": true
+      "available": true,
+      "image": "/images/menu/jollof-chicken-serving.jpg"
     },
     {
       "id": "jollof-turkey-wings",
@@ -101,7 +139,8 @@
       "description": "Jollof rice with turkey wings",
       "price": 90,
       "category": "rice",
-      "available": true
+      "available": true,
+      "image": "/images/menu/jollof-grilled-meat.jpg"
     },
     {
       "id": "garden-egg-stew-yam",
@@ -109,7 +148,8 @@
       "description": "Garden egg stew served with yam",
       "price": 70,
       "category": "rice",
-      "available": true
+      "available": true,
+      "image": "/images/menu/local-stew.webp"
     },
     {
       "id": "jollof-fish-fillet",
@@ -126,7 +166,8 @@
       "description": "Garden egg stew served with rice",
       "price": 70,
       "category": "rice",
-      "available": true
+      "available": true,
+      "image": "/images/menu/local-stew.webp"
     },
     {
       "id": "fried-rice-fish-fillet",
@@ -134,7 +175,8 @@
       "description": "Special fried rice with fish fillet",
       "price": 120,
       "category": "rice",
-      "available": true
+      "available": true,
+      "image": "/images/menu/jollof-fish.jpg"
     },
     {
       "id": "fries-loaded",
@@ -164,7 +206,9 @@
       "category": "rice",
       "popular": true,
       "available": true,
-      "tags": ["spicy"],
+      "tags": [
+        "spicy"
+      ],
       "image": "/images/menu/assorted-jollof-fried-chicken.jpg"
     },
     {
@@ -183,7 +227,9 @@
       "price": 70,
       "category": "noodles",
       "available": true,
-      "tags": ["spicy"],
+      "tags": [
+        "spicy"
+      ],
       "image": "/images/menu/assorted-noodles.jpg"
     },
     {
@@ -202,7 +248,10 @@
       "price": 40,
       "category": "sides",
       "available": true,
-      "tags": ["spicy"]
+      "tags": [
+        "spicy"
+      ],
+      "image": "/images/menu/jollof-chicken-serving.jpg"
     },
     {
       "id": "fried-rice-only",
@@ -210,7 +259,8 @@
       "description": "Fried rice only",
       "price": 40,
       "category": "sides",
-      "available": true
+      "available": true,
+      "image": "/images/menu/jollof-chicken-serving.jpg"
     },
     {
       "id": "yam-chips-only",
@@ -242,7 +292,8 @@
       "description": "Goat meat only",
       "price": 70,
       "category": "sides",
-      "available": true
+      "available": true,
+      "image": "/images/menu/jollof-grilled-meat.jpg"
     },
     {
       "id": "extra-banku",
@@ -250,7 +301,8 @@
       "description": "Extra portion of banku",
       "price": 20,
       "category": "sides",
-      "available": true
+      "available": true,
+      "image": "/images/menu/local-stew.webp"
     },
     {
       "id": "extra-omo-tuo",
@@ -258,23 +310,26 @@
       "description": "Extra portion of omo tuo (rice balls)",
       "price": 20,
       "category": "sides",
-      "available": true
+      "available": true,
+      "image": "/images/menu/local-stew.webp"
     },
     {
       "id": "banku-okro-stew",
       "name": "Banku and Okro Stew",
-      "description": "Banku with okro stew — available weekends only",
+      "description": "Banku with okro stew \u2014 available weekends only",
       "price": 70,
       "category": "local",
-      "available": true
+      "available": true,
+      "image": "/images/menu/local-stew.webp"
     },
     {
       "id": "omo-tuo-groundnut-soup",
       "name": "Omo Tuo and Groundnut Soup",
-      "description": "Omo tuo (rice balls) with groundnut soup — available weekends only",
+      "description": "Omo tuo (rice balls) with groundnut soup \u2014 available weekends only",
       "price": 60,
       "category": "local",
-      "available": true
+      "available": true,
+      "image": "/images/menu/local-stew.webp"
     },
     {
       "id": "bottled-water",
@@ -282,7 +337,8 @@
       "description": "Pure drinking water",
       "price": 5,
       "category": "drinks",
-      "available": true
+      "available": true,
+      "image": "/images/menu/drink-hibiscus.webp"
     },
     {
       "id": "malt",
@@ -290,7 +346,8 @@
       "description": "Malta drink",
       "price": 8,
       "category": "drinks",
-      "available": true
+      "available": true,
+      "image": "/images/menu/drink-hibiscus.webp"
     },
     {
       "id": "fanta",
@@ -298,7 +355,8 @@
       "description": "Orange soft drink",
       "price": 8,
       "category": "drinks",
-      "available": true
+      "available": true,
+      "image": "/images/menu/drink-hibiscus.webp"
     },
     {
       "id": "coke",
@@ -306,7 +364,8 @@
       "description": "Classic cola",
       "price": 8,
       "category": "drinks",
-      "available": true
+      "available": true,
+      "image": "/images/menu/drink-hibiscus.webp"
     },
     {
       "id": "sobolo",
@@ -324,7 +383,8 @@
       "description": "Jollof rice with snapper fish",
       "price": 80,
       "category": "rice",
-      "available": true
+      "available": true,
+      "image": "/images/menu/jollof-fish.jpg"
     },
     {
       "id": "fried-rice-snapper",
@@ -332,16 +392,19 @@
       "description": "Fried rice with snapper fish",
       "price": 80,
       "category": "rice",
-      "available": true
+      "available": true,
+      "image": "/images/menu/jollof-fish.jpg"
     },
     {
       "id": "anis-vegetarian-rice",
       "name": "Anis Vegetarian Rice",
-      "description": "Vegetarian rice — no meat",
+      "description": "Vegetarian rice \u2014 no meat",
       "price": 70,
       "category": "rice",
       "available": true,
-      "tags": ["vegetarian"]
+      "tags": [
+        "vegetarian"
+      ]
     },
     {
       "id": "yam-fries-coated-chicken",
@@ -349,7 +412,8 @@
       "description": "French fries with coated chicken",
       "price": 80,
       "category": "sides",
-      "available": true
+      "available": true,
+      "image": "/images/menu/fries.jpg"
     },
     {
       "id": "plain-rice-turkey-stew",
@@ -357,7 +421,8 @@
       "description": "Plain rice with turkey stew",
       "price": 100,
       "category": "rice",
-      "available": true
+      "available": true,
+      "image": "/images/menu/jollof-chicken-serving.jpg"
     },
     {
       "id": "jollof-fried-rice-turkey",
@@ -365,15 +430,17 @@
       "description": "Choice of jollof or fried rice with turkey",
       "price": 90,
       "category": "rice",
-      "available": true
+      "available": true,
+      "image": "/images/menu/jollof-chicken-serving.jpg"
     },
     {
       "id": "beef-chicken-fish-sauce-only",
       "name": "Beef, Chicken or Fish Sauce Only",
-      "description": "Sauce only — beef, chicken or fish",
+      "description": "Sauce only \u2014 beef, chicken or fish",
       "price": 70,
       "category": "sides",
-      "available": true
+      "available": true,
+      "image": "/images/menu/jollof-fish.jpg"
     },
     {
       "id": "wings-loaded",
@@ -381,7 +448,8 @@
       "description": "Loaded chicken wings",
       "price": 80,
       "category": "sides",
-      "available": true
+      "available": true,
+      "image": "/images/menu/jollof-grilled-meat.jpg"
     },
     {
       "id": "yam-and-wings",
@@ -405,7 +473,8 @@
       "description": "Tuna sandwich",
       "price": 65,
       "category": "sandwiches",
-      "available": true
+      "available": true,
+      "image": "/images/menu/sandwich-chicken.webp"
     },
     {
       "id": "chicken-sandwich",
@@ -413,7 +482,8 @@
       "description": "Chicken sandwich",
       "price": 65,
       "category": "sandwiches",
-      "available": true
+      "available": true,
+      "image": "/images/menu/sandwich-chicken.webp"
     },
     {
       "id": "club-sandwich",
@@ -421,7 +491,8 @@
       "description": "Club sandwich",
       "price": 80,
       "category": "sandwiches",
-      "available": true
+      "available": true,
+      "image": "/images/menu/sandwich-chicken.webp"
     },
     {
       "id": "spring-rolls",
@@ -429,7 +500,8 @@
       "description": "Crispy spring rolls (6 pieces)",
       "price": 45,
       "category": "sandwiches",
-      "available": true
+      "available": true,
+      "image": "/images/menu/sandwich-chicken.webp"
     },
     {
       "id": "samosa",
@@ -438,7 +510,10 @@
       "price": 45,
       "category": "sandwiches",
       "available": true,
-      "tags": ["spicy"]
+      "tags": [
+        "spicy"
+      ],
+      "image": "/images/menu/sandwich-chicken.webp"
     },
     {
       "id": "tuna-salad",
@@ -446,7 +521,8 @@
       "description": "Tuna salad",
       "price": 60,
       "category": "sandwiches",
-      "available": true
+      "available": true,
+      "image": "/images/menu/sandwich-chicken.webp"
     },
     {
       "id": "anis-special-salad",
@@ -454,7 +530,8 @@
       "description": "Our special salad",
       "price": 80,
       "category": "sandwiches",
-      "available": true
+      "available": true,
+      "image": "/images/menu/sandwich-chicken.webp"
     },
     {
       "id": "jollof-rice-fish-sauce",
@@ -462,7 +539,8 @@
       "description": "Jollof rice with fish sauce",
       "price": 100,
       "category": "rice",
-      "available": true
+      "available": true,
+      "image": "/images/menu/jollof-fish.jpg"
     },
     {
       "id": "fried-rice-beef-sauce",
@@ -470,7 +548,8 @@
       "description": "Fried rice with beef sauce",
       "price": 100,
       "category": "rice",
-      "available": true
+      "available": true,
+      "image": "/images/menu/jollof-chicken-serving.jpg"
     },
     {
       "id": "jollof-rice-beef-sauce",
@@ -478,7 +557,8 @@
       "description": "Jollof rice with beef sauce",
       "price": 100,
       "category": "rice",
-      "available": true
+      "available": true,
+      "image": "/images/menu/jollof-chicken-serving.jpg"
     },
     {
       "id": "fried-rice-chicken-sauce",
@@ -486,7 +566,8 @@
       "description": "Fried rice with chicken sauce",
       "price": 100,
       "category": "rice",
-      "available": true
+      "available": true,
+      "image": "/images/menu/jollof-fried-chicken.jpg"
     },
     {
       "id": "jollof-chicken-sauce",
@@ -494,7 +575,8 @@
       "description": "Jollof rice with chicken sauce",
       "price": 100,
       "category": "rice",
-      "available": true
+      "available": true,
+      "image": "/images/menu/jollof-fried-chicken.jpg"
     },
     {
       "id": "vegetable-rice-sauce",
@@ -502,7 +584,8 @@
       "description": "Vegetable rice with choice of beef, fish or chicken sauce",
       "price": 90,
       "category": "rice",
-      "available": true
+      "available": true,
+      "image": "/images/menu/jollof-chicken-serving.jpg"
     },
     {
       "id": "gizzard-sauce-rice-yam",
@@ -510,7 +593,8 @@
       "description": "Gizzard sauce with choice of fried rice, jollof or yam",
       "price": 80,
       "category": "rice",
-      "available": true
+      "available": true,
+      "image": "/images/menu/jollof-chicken-serving.jpg"
     }
   ]
 }

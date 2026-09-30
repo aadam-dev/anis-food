@@ -6,6 +6,7 @@ import { formatGHS } from "@/lib/money";
 import Numpad, { CASH_SHORTCUTS } from "./Numpad";
 import Sheet, { SheetError } from "./ui/Sheet";
 import Button from "./ui/Button";
+import { FieldInput, FieldLabel, FieldSelect } from "./ui/Field";
 import { posRequest, usePosAction } from "./usePosAction";
 
 const CASH_OUT_REASONS = [
@@ -86,7 +87,7 @@ export default function CashMovementDialog({
       }
     >
       <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-1 rounded-2xl p-1" style={{ background: "var(--s-panel-alt)" }}>
+        <div className="grid grid-cols-2 gap-1 rounded-2xl p-1" style={{ background: "var(--s-panel-alt)", boxShadow: "inset 0 0 0 1px var(--s-border)" }}>
           {(
             [
               ["OUT", "Took out", ArrowUpRight],
@@ -106,7 +107,7 @@ export default function CashMovementDialog({
               style={{
                 background: direction === value ? "var(--s-panel)" : "transparent",
                 color: direction === value ? "var(--s-ink)" : "var(--s-ink-muted)",
-                boxShadow: direction === value ? "0 1px 2px rgba(0,0,0,0.2)" : undefined,
+                boxShadow: direction === value ? "var(--s-shadow)" : undefined,
               }}
             >
               <Icon className="w-4 h-4" /> {label}
@@ -115,7 +116,7 @@ export default function CashMovementDialog({
         </div>
 
         <div
-          className="money rounded-2xl border px-4 py-3 text-right text-4xl font-bold"
+          className="money rounded-2xl border px-4 py-3 text-right text-3xl font-bold sm:text-4xl"
           style={{
             ...fieldStyle,
             color: value > 0 ? (direction === "OUT" ? "var(--s-bad)" : "var(--s-good)") : "var(--s-ink-faint)",
@@ -128,7 +129,7 @@ export default function CashMovementDialog({
         <Numpad value={amount} onChange={setAmount} maxDigits={7} allowDecimal shortcuts={CASH_SHORTCUTS} />
 
         <div>
-          <p className="mb-2 text-sm font-medium">What was it for?</p>
+          <FieldLabel>What was it for?</FieldLabel>
           <div className="flex flex-wrap gap-2">
             {chips.map((chip) => (
               <button
@@ -150,14 +151,13 @@ export default function CashMovementDialog({
               </button>
             ))}
           </div>
-          <input
+          <FieldInput
             type="text"
             value={reason}
             onChange={(event) => setReason(event.target.value)}
             maxLength={200}
             placeholder="Or type the reason"
-            className="mt-2 w-full rounded-2xl border px-3 py-3 text-sm outline-none"
-            style={fieldStyle}
+            className="mt-2"
           />
         </div>
 
@@ -174,19 +174,21 @@ export default function CashMovementDialog({
               Also file it in the expense book
             </label>
             {fileAsExpense && (
-              <select
-                value={categoryId}
-                onChange={(event) => setCategoryId(event.target.value)}
-                aria-label="Expense category"
-                className="mt-3 w-full rounded-xl border px-3 py-3 text-sm outline-none"
-                style={fieldStyle}
-              >
-                {expenseCategories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
+              <div className="mt-3">
+                <FieldLabel htmlFor="expense-category">Expense category</FieldLabel>
+                <FieldSelect
+                  id="expense-category"
+                  value={categoryId}
+                  onChange={(event) => setCategoryId(event.target.value)}
+                  aria-label="Expense category"
+                >
+                  {expenseCategories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </FieldSelect>
+              </div>
             )}
           </div>
         )}

@@ -49,7 +49,7 @@ export async function GET() {
         name: item.name,
         price: toMoney(item.price),
         categoryId: item.categoryId,
-        imageUrl: menuImage(item.imageUrl, item.categoryId),
+        imageUrl: menuImage(item.imageUrl, item.categoryId, item.name),
         isPopular: item.isPopular,
       })),
       fetchedAt: new Date().toISOString(),

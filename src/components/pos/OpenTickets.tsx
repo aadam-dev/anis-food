@@ -104,8 +104,8 @@ export default function OpenTickets({
       {tickets.length > 0 && (
         <div className="relative mb-3">
           <Search
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4"
-            style={{ color: "var(--s-ink-faint)" }}
+            className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2"
+            style={{ color: "var(--s-ink-muted)" }}
           />
           <input
             type="search"
@@ -113,18 +113,19 @@ export default function OpenTickets({
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search name, phone, number or dish"
             aria-label="Search tickets"
-            className="w-full rounded-2xl border pl-9 pr-10 py-3 text-sm outline-none"
+            className="w-full min-h-12 rounded-[1.25rem] border pl-12 pr-12 text-sm font-medium outline-none"
             style={{
-              background: "var(--s-panel-alt)",
+              background: "var(--s-panel)",
               borderColor: "var(--s-border)",
               color: "var(--s-ink)",
+              boxShadow: "var(--s-shadow)",
             }}
           />
           {query && (
             <button
               type="button"
               onClick={() => setQuery("")}
-              className="absolute right-1 top-1/2 -translate-y-1/2 h-9 w-9 grid place-items-center rounded-lg"
+              className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 grid place-items-center rounded-xl"
               style={{ color: "var(--s-ink-muted)" }}
               aria-label="Clear search"
             >

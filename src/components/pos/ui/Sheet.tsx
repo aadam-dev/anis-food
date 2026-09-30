@@ -116,7 +116,8 @@ export default function Sheet({
       style={{ background: "transparent" }}
     >
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-[2px] animate-[fade-in_120ms_ease-out]"
+        className="absolute inset-0 backdrop-blur-[2px] animate-[fade-in_120ms_ease-out]"
+        style={{ background: "color-mix(in srgb, #1A1D1F 28%, transparent)" }}
         onClick={() => dismissible && onClose()}
         aria-hidden
       />
@@ -127,8 +128,8 @@ export default function Sheet({
         aria-labelledby={titleId}
         className={`relative flex w-full flex-col border shadow-2xl ${SIZES[size]} ${
           fullOnMobile
-            ? "h-dvh sm:h-auto sm:max-h-[90dvh] rounded-none sm:rounded-3xl"
-            : "max-h-[92dvh] rounded-t-3xl sm:rounded-3xl"
+            ? "h-[100dvh] max-h-[100dvh] sm:h-auto sm:max-h-[min(90dvh,52rem)] rounded-none sm:rounded-3xl"
+            : "max-h-[min(92dvh,52rem)] rounded-t-3xl sm:rounded-3xl"
         } animate-[sheet-in_160ms_ease-out]`}
         style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
       >

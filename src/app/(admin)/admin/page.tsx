@@ -111,7 +111,7 @@ export default async function AdminOverviewPage() {
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-3">
                           <Image
-                            src={menuImage(first?.menuItem?.imageUrl, first?.menuItem?.categoryId)}
+                            src={menuImage(first?.menuItem?.imageUrl, first?.menuItem?.categoryId, first?.name)}
                             alt=""
                             width={48}
                             height={40}

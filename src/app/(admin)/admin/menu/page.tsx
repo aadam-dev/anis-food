@@ -35,7 +35,7 @@ export default async function AdminMenuPage() {
     costPrice: showCosts && item.costPrice !== null ? toMoney(item.costPrice) : null,
     categoryId: item.categoryId,
     categoryName: item.category.name,
-    imageUrl: menuImage(item.imageUrl, item.categoryId),
+    imageUrl: menuImage(item.imageUrl, item.categoryId, item.name),
     isPopular: item.isPopular,
     isAvailable: item.isAvailable,
   }));

@@ -5,7 +5,7 @@ import { formatGHS, type OrderTotals } from "@/lib/money";
 import type { CartAction, CartState } from "./cartReducer";
 import type { CartLine } from "./types";
 import CartLines from "./CartLines";
-import CustomerFields from "./CustomerFields";
+import CustomerFields, { type FulfillmentType } from "./CustomerFields";
 import Button from "./ui/Button";
 
 /**
@@ -25,10 +25,14 @@ export default function MobileCartSheet({
   focusedMenuItemId,
   onFocus,
   onEditQty,
+  fulfillment,
+  onFulfillment,
   customerName,
   customerPhone,
+  customerAddress,
   onCustomerName,
   onCustomerPhone,
+  onCustomerAddress,
   onClear,
   onClose,
   onCharge,
@@ -44,10 +48,14 @@ export default function MobileCartSheet({
   focusedMenuItemId?: string | null;
   onFocus?: (menuItemId: string) => void;
   onEditQty?: (line: CartLine) => void;
+  fulfillment: FulfillmentType;
+  onFulfillment: (value: FulfillmentType) => void;
   customerName: string;
   customerPhone: string;
+  customerAddress: string;
   onCustomerName: (value: string) => void;
   onCustomerPhone: (value: string) => void;
+  onCustomerAddress: (value: string) => void;
   onClear: () => void;
   onClose: () => void;
   onCharge: () => void;
@@ -59,16 +67,15 @@ export default function MobileCartSheet({
 
   return (
     <div className="lg:hidden fixed inset-0 z-40 flex flex-col justify-end">
-      {/* Tap the dimmed menu behind to go back and keep adding. */}
       <button
         aria-label="Close order"
         onClick={onClose}
         className="absolute inset-0"
-        style={{ background: "rgba(0,0,0,0.5)" }}
+        style={{ background: "rgba(26, 29, 31, 0.28)" }}
       />
 
       <section
-        className="relative flex h-dvh max-h-dvh flex-col sm:h-auto sm:max-h-[90dvh] sm:rounded-t-[1.75rem]"
+        className="relative flex h-[min(92dvh,100%)] max-h-[92dvh] flex-col rounded-t-[1.75rem] sm:h-auto sm:max-h-[90dvh]"
         style={{
           background: "var(--s-panel)",
           boxShadow: "0 -12px 40px rgba(26, 29, 31, 0.12)",
@@ -104,33 +111,19 @@ export default function MobileCartSheet({
           </div>
         </div>
 
-        <div className="px-4 py-3 border-b" style={{ borderColor: "var(--s-border)" }}>
-          {tables.length > 0 && (
-          <label className="mb-3 block">
-            <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide" style={{ color: "var(--s-ink-faint)" }}>
-              Table
-            </span>
-            <select
-              value={tableId}
-              onChange={(event) => onTable?.(event.target.value)}
-              className="w-full rounded-2xl px-3 py-2.5 text-sm font-semibold outline-none min-h-12"
-              style={{ background: "var(--s-panel-alt)", color: "var(--s-ink)" }}
-            >
-              <option value="">Takeaway / no table</option>
-              {tables.map((table) => (
-                <option key={table.id} value={table.id} disabled={table.occupied && table.id !== tableId}>
-                  {table.area} · {table.label}
-                  {table.occupied ? " (in use)" : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        <CustomerFields
+        <div className="max-h-[40%] overflow-y-auto border-b px-4 py-3" style={{ borderColor: "var(--s-border)" }}>
+          <CustomerFields
+            fulfillment={fulfillment}
+            onFulfillment={onFulfillment}
             name={customerName}
             phone={customerPhone}
+            address={customerAddress}
             onName={onCustomerName}
             onPhone={onCustomerPhone}
+            onAddress={onCustomerAddress}
+            tables={tables}
+            tableId={tableId}
+            onTable={onTable}
           />
         </div>
 

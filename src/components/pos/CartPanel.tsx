@@ -5,7 +5,7 @@ import { formatGHS, type OrderTotals } from "@/lib/money";
 import type { CartAction, CartState } from "./cartReducer";
 import type { CartLine } from "./types";
 import CartLines from "./CartLines";
-import CustomerFields from "./CustomerFields";
+import CustomerFields, { type FulfillmentType } from "./CustomerFields";
 import Button from "./ui/Button";
 
 export default function CartPanel({
@@ -15,10 +15,14 @@ export default function CartPanel({
   focusedMenuItemId,
   onFocus,
   onEditQty,
+  fulfillment,
+  onFulfillment,
   customerName,
   customerPhone,
+  customerAddress,
   onCustomerName,
   onCustomerPhone,
+  onCustomerAddress,
   onClear,
   onCharge,
   locked = false,
@@ -33,10 +37,14 @@ export default function CartPanel({
   focusedMenuItemId?: string | null;
   onFocus?: (menuItemId: string) => void;
   onEditQty?: (line: CartLine) => void;
+  fulfillment: FulfillmentType;
+  onFulfillment: (value: FulfillmentType) => void;
   customerName: string;
   customerPhone: string;
+  customerAddress: string;
   onCustomerName: (value: string) => void;
   onCustomerPhone: (value: string) => void;
+  onCustomerAddress: (value: string) => void;
   onClear: () => void;
   onCharge: () => void;
   tables?: { id: string; label: string; area: string; occupied: boolean }[];
@@ -69,15 +77,19 @@ export default function CartPanel({
       </div>
 
       <div className="border-b px-4 py-3" style={{ borderColor: "var(--s-border)" }}>
-        <TablePicker tables={tables} tableId={tableId} onTable={onTable} />
-        <div className="mt-3">
         <CustomerFields
+          fulfillment={fulfillment}
+          onFulfillment={onFulfillment}
           name={customerName}
           phone={customerPhone}
+          address={customerAddress}
           onName={onCustomerName}
           onPhone={onCustomerPhone}
+          onAddress={onCustomerAddress}
+          tables={tables}
+          tableId={tableId}
+          onTable={onTable}
         />
-        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -117,7 +129,7 @@ export default function CartPanel({
                 key={label}
                 className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-bold"
                 style={{
-                  background: index === 1 ? "color-mix(in srgb, var(--s-brand) 10%, white)" : "var(--s-panel-alt)",
+                  background: index === 1 ? "color-mix(in srgb, var(--s-brand) 10%, var(--s-panel))" : "var(--s-panel-alt)",
                   color: index === 1 ? "var(--s-brand)" : "var(--s-ink-muted)",
                   boxShadow: "inset 0 0 0 1px var(--s-border)",
                 }}
@@ -133,38 +145,5 @@ export default function CartPanel({
         </div>
       )}
     </aside>
-  );
-}
-
-function TablePicker({
-  tables,
-  tableId,
-  onTable,
-}: {
-  tables: { id: string; label: string; area: string; occupied: boolean }[];
-  tableId: string;
-  onTable?: (id: string) => void;
-}) {
-  if (tables.length === 0) return null;
-  return (
-    <label className="block">
-      <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide" style={{ color: "var(--s-ink-faint)" }}>
-        Table
-      </span>
-      <select
-        value={tableId}
-        onChange={(event) => onTable?.(event.target.value)}
-        className="w-full rounded-2xl px-3 py-2.5 text-sm font-semibold outline-none min-h-12"
-        style={{ background: "var(--s-panel-alt)", color: "var(--s-ink)" }}
-      >
-        <option value="">Takeaway / no table</option>
-        {tables.map((table) => (
-          <option key={table.id} value={table.id} disabled={table.occupied && table.id !== tableId}>
-            {table.area} · {table.label}
-            {table.occupied ? " (in use)" : ""}
-          </option>
-        ))}
-      </select>
-    </label>
   );
 }

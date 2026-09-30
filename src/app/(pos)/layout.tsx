@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
 import { canAccess } from "@/lib/permissions";
-import { getSettings, asTheme } from "@/lib/settings";
 
 export const metadata: Metadata = {
   title: "Till — Anis",
@@ -27,11 +26,8 @@ export default async function PosLayout({ children }: { children: React.ReactNod
   if (!user) redirect("/login");
   if (!canAccess(user.role, "pos")) redirect("/admin");
 
-  const settings = await getSettings();
-  const theme = asTheme(settings.pos_theme, "light");
-
   return (
-    <div data-surface="pos" data-theme={theme} className="min-h-dvh">
+    <div data-surface="pos" data-theme="light" className="min-h-dvh">
       {children}
     </div>
   );
