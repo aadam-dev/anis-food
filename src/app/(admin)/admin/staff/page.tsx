@@ -48,7 +48,10 @@ export default async function StaffPage() {
 
   return (
     <>
-      <PageHeader title="Staff" description="Who can sign in, and what they can do." />
+      <PageHeader
+        title="Staff"
+        description="Names, pay, and the 4-digit PIN each person uses at the till. Open a record to update it."
+      />
       <StaffClient staff={staff} assignableRoles={assignableRoles} />
     </>
   );

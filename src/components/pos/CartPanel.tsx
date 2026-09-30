@@ -23,6 +23,7 @@ export default function CartPanel({
   onCustomerPhone,
   onCustomerAddress,
   onClear,
+  onHold,
   onCharge,
   selectedIds = [],
   onToggleLine,
@@ -49,6 +50,7 @@ export default function CartPanel({
   onCustomerPhone: (value: string) => void;
   onCustomerAddress: (value: string) => void;
   onClear: () => void;
+  onHold?: () => void;
   onCharge: () => void;
   selectedIds?: string[];
   onToggleLine?: (menuItemId: string) => void;
@@ -130,6 +132,11 @@ export default function CartPanel({
           {selectedTotal !== null && onChargeSelected && (
             <Button size="lg" className="mb-2 w-full" onClick={onChargeSelected} disabled={locked}>
               {locked ? "Close the old shift first" : `Charge selected ${formatGHS(selectedTotal)}`}
+            </Button>
+          )}
+          {onHold && (
+            <Button size="lg" tone="secondary" className="mb-2 w-full" onClick={onHold} disabled={locked}>
+              Hold this order
             </Button>
           )}
           <Button

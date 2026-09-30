@@ -5,13 +5,24 @@ import { Minus, Plus } from "lucide-react";
 import { formatGHS, roundMoney } from "@/lib/money";
 import { callNumber } from "@/lib/session-utils";
 import { PAYMENT_LABELS } from "@/components/admin/labels";
-import type { OrderView } from "./types";
+import type { CartLine, OrderView } from "./types";
 import Button from "./ui/Button";
 import { FieldInput } from "./ui/Field";
 import { posRequest, usePosAction } from "./usePosAction";
 import { useNow, waitingMinutes, waitLabel } from "./OpenTickets";
 
-type DeskTab = "unpaid" | "shift";
+type DeskTab = "unpaid" | "held" | "shift";
+
+export interface HeldDraft {
+  id: string;
+  label: string;
+  lines: CartLine[];
+  discount: number;
+  itemCount: number;
+  staffName: string;
+  createdAt: string;
+  customerName: string | null;
+}
 
 /**
  * The cashier's order desk for this shift.
@@ -20,6 +31,8 @@ type DeskTab = "unpaid" | "shift";
 export default function OrderDesk({
   tickets,
   shiftOrders,
+  drafts,
+  seesAll,
   canVoidPaid,
   onTakePayment,
   onVoid,
@@ -27,9 +40,12 @@ export default function OrderDesk({
   onInvoice,
   onCorrect,
   onChanged,
+  onResume,
 }: {
   tickets: OrderView[];
   shiftOrders: OrderView[];
+  drafts: HeldDraft[];
+  seesAll: boolean;
   canVoidPaid: boolean;
   onTakePayment: (order: OrderView) => void;
   onVoid: (order: OrderView) => void;
@@ -37,12 +53,13 @@ export default function OrderDesk({
   onInvoice: (order: OrderView) => void;
   onCorrect: (order: OrderView) => void;
   onChanged: () => void;
+  onResume: (id: string) => void;
 }) {
   const [tab, setTab] = useState<DeskTab>("unpaid");
   const [query, setQuery] = useState("");
   const now = useNow();
-  const list = tab === "unpaid" ? tickets : shiftOrders;
   const visible = useMemo(() => {
+    const list = tab === "unpaid" ? tickets : tab === "shift" ? shiftOrders : [];
     const needle = query.trim().toLowerCase();
     if (!needle) return list;
     return list.filter((order) => {
@@ -58,7 +75,7 @@ export default function OrderDesk({
         .toLowerCase();
       return haystack.includes(needle);
     });
-  }, [list, query]);
+  }, [tab, tickets, shiftOrders, query]);
 
   const owed = roundMoney(tickets.reduce((sum, ticket) => sum + ticket.total, 0));
 
@@ -68,17 +85,19 @@ export default function OrderDesk({
         <div>
           <h1 className="text-xl font-bold">Orders</h1>
           <p className="text-sm" style={{ color: "var(--s-ink-muted)" }}>
+            {seesAll ? "Every ticket on this shift." : "Your tickets only."}
             {tickets.length === 0
-              ? "Nothing waiting to be paid."
-              : `${tickets.length} unpaid · ${formatGHS(owed)} to collect`}
+              ? " Nothing waiting to be paid."
+              : ` ${tickets.length} unpaid · ${formatGHS(owed)} to collect`}
           </p>
         </div>
       </div>
 
-      <div className="mb-3 grid grid-cols-2 gap-1 rounded-2xl p-1" style={{ background: "var(--s-panel-alt)" }}>
+      <div className="mb-3 grid grid-cols-3 gap-1 rounded-2xl p-1" style={{ background: "var(--s-panel-alt)" }}>
         {(
           [
             ["unpaid", "Unpaid"],
+            ["held", drafts.length > 0 ? `Held ${drafts.length}` : "Held"],
             ["shift", "This shift"],
           ] as const
         ).map(([id, label]) => (
@@ -107,9 +126,40 @@ export default function OrderDesk({
         className="mb-3"
       />
 
-      {visible.length === 0 ? (
+      {tab === "held" ? (
+        drafts.length === 0 ? (
+          <p className="py-12 text-center text-sm" style={{ color: "var(--s-ink-muted)" }}>
+            Hold an order from the bill when a customer steps away. It stays here until you bring it back.
+          </p>
+        ) : (
+          <div className="grid gap-3">
+            {drafts.map((draft) => (
+              <article
+                key={draft.id}
+                className="rounded-2xl border p-4"
+                style={{ borderColor: "var(--s-border)", background: "var(--s-panel)" }}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-bold">{draft.label}</p>
+                    <p className="text-sm" style={{ color: "var(--s-ink-muted)" }}>
+                      {draft.itemCount} item{draft.itemCount === 1 ? "" : "s"}
+                      {seesAll ? ` · ${draft.staffName}` : ""}
+                    </p>
+                  </div>
+                  <Button onClick={() => onResume(draft.id)}>Resume</Button>
+                </div>
+              </article>
+            ))}
+          </div>
+        )
+      ) : visible.length === 0 ? (
         <p className="py-12 text-center text-sm" style={{ color: "var(--s-ink-muted)" }}>
-          {tab === "unpaid" ? "Anything sent with Pay later shows up here." : "No sales on this shift yet."}
+          {tab === "unpaid"
+            ? "Anything sent with Pay later shows up here."
+            : seesAll
+              ? "No sales on this shift yet."
+              : "You have not rung a sale on this shift yet."}
         </p>
       ) : (
         <div className="grid gap-3">

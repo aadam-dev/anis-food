@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db";
 import { requireResource } from "@/lib/api-auth";
 import { ok, handlePrismaError } from "@/lib/api-utils";
 import { staffAvatarTint, staffInitials } from "@/lib/staff-avatar";
+import { canAccess } from "@/lib/permissions";
+import { UserRole } from "@/generated/prisma";
 
 /**
  * Active cashiers who can be switched to on the open till. Avatars are
@@ -13,11 +15,12 @@ export async function GET() {
   if (auth instanceof NextResponse) return auth;
 
   try {
-    const cashiers = await prisma.user.findMany({
-      where: { role: "CASHIER", isActive: true, pinHash: { not: null } },
+    const people = await prisma.user.findMany({
+      where: { isActive: true, pinHash: { not: null } },
       orderBy: { name: "asc" },
-      select: { id: true, name: true },
+      select: { id: true, name: true, role: true },
     });
+    const cashiers = people.filter((person) => canAccess(person.role as UserRole, "pos"));
 
     return ok({
       currentUserId: auth.user.sub,

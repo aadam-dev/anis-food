@@ -150,7 +150,7 @@ export default function LoginForm() {
           )}
         </div>
         <p className="mt-1.5 text-xs" style={{ color: "var(--s-ink-faint)" }}>
-          Cashiers use their 4-digit till PIN. Managers use their password.
+          Everyone signs in with their 4-digit PIN.
         </p>
       </div>
 

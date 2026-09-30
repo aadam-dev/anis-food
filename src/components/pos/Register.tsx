@@ -43,7 +43,7 @@ import MobileCartSheet from "./MobileCartSheet";
 import PaymentSheet from "./PaymentSheet";
 import ShiftPanel, { OpenShiftCard } from "./ShiftPanel";
 import { SettleSheet, VoidSheet } from "./OpenTickets";
-import OrderDesk from "./OrderDesk";
+import OrderDesk, { type HeldDraft } from "./OrderDesk";
 import PaymentCorrectionSheet from "./PaymentCorrectionSheet";
 import ReceiptModal from "./ReceiptModal";
 import QuantityEntrySheet from "./QuantityEntrySheet";
@@ -119,6 +119,7 @@ export default function Register({
   const [view, setView] = useState<View>(initialSession?.isStale ? "tickets" : "register");
   const [tickets, setTickets] = useState<OrderView[]>(initialTickets);
   const [shiftOrders, setShiftOrders] = useState<OrderView[]>([]);
+  const [drafts, setDrafts] = useState<HeldDraft[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [chargeIds, setChargeIds] = useState<string[] | null>(null);
   const [correcting, setCorrecting] = useState<OrderView | null>(null);
@@ -229,9 +230,10 @@ export default function Register({
 
   const loadTickets = useCallback(async () => {
     try {
-      const [openRes, shiftRes] = await Promise.all([
+      const [openRes, shiftRes, draftRes] = await Promise.all([
         fetch("/api/pos/orders"),
         fetch("/api/pos/orders?scope=shift"),
+        fetch("/api/pos/drafts"),
       ]);
       if (openRes.ok) {
         const data = await openRes.json();
@@ -240,6 +242,10 @@ export default function Register({
       if (shiftRes.ok) {
         const data = await shiftRes.json();
         setShiftOrders(data.orders);
+      }
+      if (draftRes.ok) {
+        const data = await draftRes.json();
+        setDrafts(data.drafts ?? []);
       }
     } catch {
       /* Offline: the rail keeps whatever it last had. */
@@ -502,6 +508,75 @@ export default function Register({
     void loadTickets();
   }, [loadTickets]);
 
+  const seesAll = activeUser.role !== "CASHIER";
+  const openCount = tickets.length + drafts.length;
+
+  async function holdOrder() {
+    if (cart.lines.length === 0 || locked) return;
+    try {
+      const response = await fetch("/api/pos/drafts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lines: cart.lines,
+          discount: cart.discount,
+          label: customerName.trim() || undefined,
+          customerName: customerName.trim() || undefined,
+          customerPhone: customerPhone.trim() || undefined,
+          customerAddress: customerAddress.trim() || undefined,
+          fulfillment,
+          tableId: tableId || undefined,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setBanner({ tone: "bad", text: data.error ?? "Could not hold that order." });
+        return;
+      }
+      clearOrder();
+      setCartOpen(false);
+      setBanner({ tone: "good", text: "Order held. Open Orders and choose Held to bring it back." });
+      void loadTickets();
+    } catch {
+      setBanner({ tone: "bad", text: "No connection. The order is still on the bill." });
+    }
+  }
+
+  async function resumeDraft(id: string) {
+    if (cart.lines.length > 0) {
+      setBanner({ tone: "bad", text: "Hold the open order first, then bring the other one back." });
+      setView("register");
+      return;
+    }
+    try {
+      const response = await fetch(`/api/pos/drafts/${id}`, { method: "POST" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.draft) {
+        setBanner({ tone: "bad", text: data.error ?? "That held order is no longer there." });
+        void loadTickets();
+        return;
+      }
+      const draft = data.draft;
+      dispatch({
+        type: "replace",
+        lines: Array.isArray(draft.lines) ? draft.lines : [],
+        discount: draft.discount ?? 0,
+      });
+      setCustomerName(draft.customerName ?? "");
+      setCustomerPhone(draft.customerPhone ?? "");
+      setCustomerAddress(draft.customerAddress ?? "");
+      if (draft.fulfillment === "DINE_IN" || draft.fulfillment === "TAKEAWAY" || draft.fulfillment === "DELIVERY") {
+        setFulfillment(draft.fulfillment);
+      }
+      setTableId(draft.tableId ?? "");
+      setView("register");
+      setBanner({ tone: "good", text: `${draft.label} is back on the bill.` });
+      void loadTickets();
+    } catch {
+      setBanner({ tone: "bad", text: "No connection. Try again." });
+    }
+  }
+
   function clearOrder() {
     dispatch({ type: "clear" });
     setSelectedIds([]);
@@ -607,7 +682,7 @@ export default function Register({
             style={{ background: "var(--s-panel-alt)" }}
             aria-label="Till sections"
           >
-            <Tabs view={view} setView={setView} ticketCount={tickets.length} />
+            <Tabs view={view} setView={setView} ticketCount={openCount} />
           </nav>
 
           <FullscreenButton />
@@ -690,7 +765,7 @@ export default function Register({
           style={{ background: "var(--s-panel-alt)" }}
           aria-label="Till sections"
         >
-          <Tabs view={view} setView={setView} ticketCount={tickets.length} />
+          <Tabs view={view} setView={setView} ticketCount={openCount} />
         </nav>
 
         {locked && (
@@ -753,7 +828,7 @@ export default function Register({
       >
         <PosRail
           view={view}
-          ticketCount={tickets.length}
+          ticketCount={openCount}
           setView={setView}
           backOfficeHref={backOfficeHref}
           onSignOut={() => void handleSignOut()}
@@ -788,6 +863,7 @@ export default function Register({
               onCustomerPhone={setCustomerPhone}
               onCustomerAddress={setCustomerAddress}
               onClear={clearOrder}
+              onHold={holdOrder}
               onCharge={() => {
                 setChargeIds(null);
                 setPaying(true);
@@ -816,7 +892,10 @@ export default function Register({
             <OrderDesk
               tickets={tickets}
               shiftOrders={shiftOrders}
+              drafts={drafts}
+              seesAll={seesAll}
               canVoidPaid={canVoid}
+              onResume={resumeDraft}
               onTakePayment={(ticket) => setSettling(ticket)}
               onVoid={(ticket) => setVoiding(ticket)}
               onReprint={(order) => {
@@ -886,6 +965,9 @@ export default function Register({
           onCustomerPhone={setCustomerPhone}
           onCustomerAddress={setCustomerAddress}
           onClear={clearOrder}
+          onHold={() => {
+            void holdOrder();
+          }}
           tables={tables}
           tableId={tableId}
           onTable={setTableId}
