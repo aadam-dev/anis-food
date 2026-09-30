@@ -10,7 +10,9 @@ import { forwardRef, type InputHTMLAttributes, type SelectHTMLAttributes, type T
  */
 
 const fieldSurface: React.CSSProperties = {
-  background: "var(--s-panel-alt)",
+  // Longhand, not the `background` shorthand. The shorthand resets
+  // background-repeat to `repeat`, which tiles a select's chevron across the field.
+  backgroundColor: "var(--s-panel-alt)",
   borderColor: "var(--s-border)",
   color: "var(--s-ink)",
   boxShadow: "inset 0 1px 0 color-mix(in srgb, #fff 55%, transparent)",
@@ -68,10 +70,13 @@ export const FieldSelect = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HT
     return (
       <select
         ref={ref}
-        className={`w-full min-h-12 appearance-none rounded-2xl border bg-[length:1rem] bg-[right_0.9rem_center] bg-no-repeat px-3.5 py-3 pr-10 text-sm font-semibold outline-none transition-[box-shadow,border-color] ${focusRing} ${className}`}
+        className={`w-full min-h-12 appearance-none rounded-2xl border px-3.5 py-3 pr-10 text-sm font-semibold outline-none transition-[box-shadow,border-color] ${focusRing} ${className}`}
         style={{
           ...fieldSurface,
           backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
+          backgroundRepeat: "no-repeat",
+          backgroundPosition: "right 0.9rem center",
+          backgroundSize: "1rem",
           ...style,
         }}
         {...props}
