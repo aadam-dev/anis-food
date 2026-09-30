@@ -1,8 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Clock, ReceiptText, Table2, TrendingUp, CalendarDays, CalendarRange } from "lucide-react";
+import { Clock, ReceiptText, Table2, TrendingUp, CalendarDays, CalendarRange, Wallet } from "lucide-react";
 import { getDashboard } from "@/lib/reports";
-import { formatGHS } from "@/lib/money";
+import { formatGHS, roundMoney, toMoney } from "@/lib/money";
 import { callNumber } from "@/lib/session-utils";
 import { PageHeader, Panel, Chip, Stat } from "@/components/admin/ui";
 import { ORDER_SOURCE_LABELS, ORDER_STATUS_LABELS, PAYMENT_LABELS } from "@/components/admin/labels";
@@ -10,7 +10,6 @@ import InstallPrompt from "@/components/pwa/InstallPrompt";
 import TrendBars from "@/components/admin/TrendBars";
 import { prisma } from "@/lib/db";
 import { menuImage } from "@/lib/menu-image";
-import { toMoney } from "@/lib/money";
 
 export const metadata = { title: "Overview" };
 export const dynamic = "force-dynamic";
@@ -44,6 +43,7 @@ export default async function AdminOverviewPage() {
 
   const availableTables = Math.max(0, tableTotal - occupied);
   const depositTotal = data.depositsToday.momo + data.depositsToday.bank;
+  const leftAfterCosts = roundMoney(data.today.revenue - data.expensesToday);
   const weekdayName = new Date().toLocaleDateString("en-GB", {
     weekday: "long",
     timeZone: "Africa/Accra",
@@ -60,8 +60,8 @@ export default async function AdminOverviewPage() {
   return (
     <>
       <PageHeader
-        title="Today's data"
-        description="Paid takings, the floor, and what still needs attention."
+        title="Today's books"
+        description="What came in, what it cost, and what is only a transfer. Deposits into MoMo or the bank are not expenses."
       />
 
       <div className="mb-4 max-w-xl">
@@ -75,13 +75,20 @@ export default async function AdminOverviewPage() {
       )}
 
       {/* Row A — revenue strip */}
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <Stat
           label="Revenue today"
           value={formatGHS(data.today.revenue)}
           detail={todayDetail}
           tint="good"
           icon={<TrendingUp className="h-5 w-5" />}
+        />
+        <Stat
+          label="Left after costs"
+          value={formatGHS(leftAfterCosts)}
+          detail={`Expenses ${formatGHS(data.expensesToday)}. Deposits are not subtracted.`}
+          tint={leftAfterCosts >= 0 ? "brand" : "warn"}
+          icon={<Wallet className="h-5 w-5" />}
         />
         <Stat
           label="This week"
