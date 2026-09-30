@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
 import { canAccess } from "@/lib/permissions";
+import { tillBooksReady } from "@/lib/till-books";
+import TillRecovery from "@/components/pos/TillRecovery";
 
 export const metadata: Metadata = {
   title: "Till — Anis",
@@ -26,9 +28,11 @@ export default async function PosLayout({ children }: { children: React.ReactNod
   if (!user) redirect("/login");
   if (!canAccess(user.role, "pos")) redirect("/admin");
 
+  const books = await tillBooksReady();
+
   return (
     <div data-surface="pos" data-theme="light" className="h-dvh max-h-dvh overflow-hidden">
-      {children}
+      {books.ok ? children : <TillRecovery message={books.error} />}
     </div>
   );
 }

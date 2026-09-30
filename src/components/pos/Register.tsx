@@ -45,11 +45,10 @@ import { SettleSheet, VoidSheet } from "./OpenTickets";
 import OrderDesk from "./OrderDesk";
 import PaymentCorrectionSheet from "./PaymentCorrectionSheet";
 import ReceiptModal from "./ReceiptModal";
-import { buildInvoiceHtml } from "@/lib/invoice-html";
-import { printHtmlDocument } from "@/lib/print-document";
 import QuantityEntrySheet from "./QuantityEntrySheet";
 import CashMovementDialog from "./CashMovementDialog";
 import CloseShiftDialog from "./CloseShiftDialog";
+import XReportSheet from "./XReportSheet";
 import type { FulfillmentType } from "./CustomerFields";
 import Button from "./ui/Button";
 import type {
@@ -125,6 +124,8 @@ export default function Register({
   // side rail. Desktop shows CartPanel inline and never opens this.
   const [cartOpen, setCartOpen] = useState(false);
   const [receipt, setReceipt] = useState<OrderView | null>(null);
+  const [slipKind, setSlipKind] = useState<"receipt" | "invoice">("receipt");
+  const [xReportOpen, setXReportOpen] = useState(false);
   const [online, setOnline] = useState(true);
   // Reads straight from the queue store, so no effect has to set it.
   const queued = useSyncExternalStore(subscribeQueue, getQueueCount, getServerQueueCount);
@@ -466,6 +467,7 @@ export default function Register({
     }
     setChargeIds(null);
     setPaying(false);
+    setSlipKind("receipt");
     setReceipt(data.order);
     void loadSession();
     void loadTickets();
@@ -784,33 +786,14 @@ export default function Register({
               canVoidPaid={canVoid}
               onTakePayment={(ticket) => setSettling(ticket)}
               onVoid={(ticket) => setVoiding(ticket)}
-              onReprint={(order) => setReceipt(order)}
-              onInvoice={(order) =>
-                printHtmlDocument(
-                  buildInvoiceHtml({
-                    orderNumber: order.orderNumber,
-                    createdAt: order.createdAt,
-                    businessName: business.header,
-                    businessAddress: business.address,
-                    businessPhone: business.phone,
-                    customerName: order.customerName,
-                    customerPhone: order.customerPhone,
-                    customerAddress: order.customerAddress,
-                    deliveryType: order.deliveryType,
-                    tableLabel: order.tableLabel,
-                    lines: order.items,
-                    subtotal: order.subtotal,
-                    discountAmount: order.discountAmount,
-                    taxAmount: order.taxAmount,
-                    taxLines: order.tax?.lines,
-                    taxInclusive: order.tax?.inclusive,
-                    total: order.total,
-                    paymentMethod: order.paymentMethod,
-                    paymentStatus: order.paymentStatus,
-                    splitPayments: order.splitPayments,
-                  }),
-                )
-              }
+              onReprint={(order) => {
+                setSlipKind("receipt");
+                setReceipt(order);
+              }}
+              onInvoice={(order) => {
+                setSlipKind("invoice");
+                setReceipt(order);
+              }}
               onCorrect={(order) => setCorrecting(order)}
               onChanged={() => void loadTickets()}
             />
@@ -822,6 +805,7 @@ export default function Register({
             <ShiftPanel
               session={session}
               onCashMovement={() => setMovingCash(true)}
+              onXReport={() => setXReportOpen(true)}
               onCloseShift={openClose}
             />
           </main>
@@ -942,6 +926,7 @@ export default function Register({
           onClose={() => setSettling(null)}
           onSettled={(order) => {
             setSettling(null);
+            setSlipKind("receipt");
             setReceipt(order);
             void refreshShift();
           }}
@@ -1008,11 +993,16 @@ export default function Register({
         />
       )}
 
+      {xReportOpen && (
+        <XReportSheet businessName={business.header} onClose={() => setXReportOpen(false)} />
+      )}
+
       {receipt && (
         <ReceiptModal
           order={receipt}
           business={business}
           soldBy={user.name}
+          kind={slipKind}
           onClose={() => setReceipt(null)}
         />
       )}

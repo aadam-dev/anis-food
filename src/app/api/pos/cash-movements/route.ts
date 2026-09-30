@@ -121,6 +121,8 @@ export async function POST(request: Request) {
         movement: {
           id: result.movement.id,
           direction: result.movement.direction,
+          kind: result.movement.kind,
+          destination: result.movement.destination,
           amount: toMoney(result.movement.amount),
           reason: result.movement.reason,
           by: result.movement.createdBy.name,
@@ -155,6 +157,8 @@ export async function GET() {
       movements: movements.map((movement) => ({
         id: movement.id,
         direction: movement.direction,
+        kind: movement.kind,
+        destination: movement.destination,
         amount: toMoney(movement.amount),
         reason: movement.reason,
         by: movement.createdBy.name,

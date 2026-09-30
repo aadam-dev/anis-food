@@ -393,4 +393,9 @@ body:has([data-surface][data-theme="light"]) {
     padding: 0 !important;
     margin: 0 !important;
   }
+
+  [data-admin-chrome],
+  [data-report-chrome] {
+    display: none !important;
+  }
 }

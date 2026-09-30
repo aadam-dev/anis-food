@@ -126,8 +126,8 @@ function StaffRow({
               value={member.role}
               disabled={busy || member.isSelf}
               onChange={(event) => patch({ role: event.target.value })}
-              className="rounded-lg border px-2 py-1.5 text-xs min-h-9"
-              style={{ background: "var(--s-panel-alt)", borderColor: "var(--s-border)", color: "var(--s-ink)" }}
+              className={`${inputClass} max-w-40 text-sm`}
+              style={inputStyle}
               aria-label={`Role for ${member.name}`}
             >
               {/* Keep the current role selectable even if this admin cannot assign

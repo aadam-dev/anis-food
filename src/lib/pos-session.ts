@@ -131,6 +131,8 @@ export async function summariseSession(sessionId: string) {
     movements: session.cashMovements.map((movement) => ({
       id: movement.id,
       direction: movement.direction,
+      kind: movement.kind,
+      destination: movement.destination,
       amount: toMoney(movement.amount),
       reason: movement.reason,
       by: movement.createdBy.name,

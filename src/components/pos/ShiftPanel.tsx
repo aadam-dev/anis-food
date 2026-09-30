@@ -248,10 +248,12 @@ function SegmentTab({
 export default function ShiftPanel({
   session,
   onCashMovement,
+  onXReport,
   onCloseShift,
 }: {
   session: SessionView;
   onCashMovement: () => void;
+  onXReport: () => void;
   onCloseShift: () => void;
 }) {
   const time = (iso: string) =>
@@ -276,6 +278,9 @@ export default function ShiftPanel({
         <div className="flex gap-2">
           <Button tone="secondary" onClick={onCashMovement}>
             Move money
+          </Button>
+          <Button tone="secondary" onClick={onXReport}>
+            X report
           </Button>
           <Button onClick={onCloseShift}>Close shift</Button>
         </div>

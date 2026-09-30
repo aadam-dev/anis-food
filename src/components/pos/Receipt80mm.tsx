@@ -52,6 +52,8 @@ export interface ReceiptData {
   address: string;
   phone: string;
   footer: string;
+  /** "Invoice" on a customer slip. A plain receipt leaves this off. */
+  documentTitle?: string;
   /** Brand logo shown at the top of the slip; falls back to the text name. */
   logoUrl?: string;
   /** Public URL a customer can open to verify this sale (printed under the QR). */
@@ -110,6 +112,7 @@ export default function Receipt80mm({
         )}
         <div className="r-small">{data.address}</div>
         <div className="r-small">{data.phone}</div>
+        {data.documentTitle && <div className="r-title">{data.documentTitle}</div>}
       </div>
 
       <div className="r-rule" />

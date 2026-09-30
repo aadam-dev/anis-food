@@ -7,6 +7,7 @@ import type { OrderView } from "./types";
 import Sheet, { SheetError } from "./ui/Sheet";
 import Button from "./ui/Button";
 import { FieldInput, FieldSelect } from "./ui/Field";
+import MethodMark from "./MethodMark";
 import { posRequest, usePosAction } from "./usePosAction";
 
 const METHODS = ["CASH", "MOMO", "CARD", "BANK_TRANSFER", "BOLT_FOOD", "SPLIT"] as const;
@@ -93,12 +94,14 @@ export default function PaymentCorrectionSheet({
               key={value}
               type="button"
               onClick={() => setMethod(value)}
-              className="min-h-12 rounded-2xl text-sm font-bold"
+              className="flex min-h-16 flex-col items-center justify-center gap-1 rounded-2xl text-xs font-bold"
               style={{
                 background: method === value ? "var(--s-brand)" : "var(--s-panel-alt)",
                 color: method === value ? "#fff" : "var(--s-ink)",
+                boxShadow: method === value ? undefined : "inset 0 0 0 1px var(--s-border)",
               }}
             >
+              <MethodMark method={value} />
               {LABELS[value]}
             </button>
           ))}

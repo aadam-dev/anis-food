@@ -64,6 +64,9 @@ export default function SettingsClient({ settings }: { settings: Record<SettingK
       </Panel>
 
       <Panel title="Receipt" className="p-5 space-y-3">
+        <p className="text-sm" style={{ color: "var(--s-ink-muted)" }}>
+          Customer receipts and invoices print on 80mm till paper, the same slip the cashier hands over.
+        </p>
         <Field label="Header">
           <input value={values.receipt_header} onChange={(e) => set("receipt_header", e.target.value)} className={inputClass} style={inputStyle} />
         </Field>
@@ -209,14 +212,14 @@ function Segmented({
         </p>
       </div>
       <div
-        className="inline-flex rounded-lg border p-0.5 shrink-0"
+        className="inline-flex rounded-2xl border p-1 shrink-0"
         style={{ borderColor: "var(--s-border)", background: "var(--s-panel-alt)" }}
       >
         {options.map((option) => (
           <button
             key={option.value}
             onClick={() => onChange(option.value)}
-            className="rounded-md px-3 py-1.5 text-sm font-semibold whitespace-nowrap"
+            className="rounded-xl px-3 py-1.5 text-sm font-semibold whitespace-nowrap"
             style={{
               background: value === option.value ? "var(--s-brand)" : "transparent",
               color: value === option.value ? "#fff" : "var(--s-ink-muted)",

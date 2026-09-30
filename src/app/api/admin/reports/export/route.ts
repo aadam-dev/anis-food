@@ -3,6 +3,7 @@ import ExcelJS from "exceljs";
 import { requireResource } from "@/lib/api-auth";
 import { getMonthlyReport, getVatReturn } from "@/lib/reports";
 import { getSessionsForMonth } from "@/lib/report-sessions";
+import { getSettings } from "@/lib/settings";
 import { PAYMENT_LABELS } from "@/components/admin/labels";
 
 /**
@@ -25,18 +26,20 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Bad month" }, { status: 400 });
   }
 
-  const [report, sessions, vat] = await Promise.all([
+  const [report, sessions, vat, settings] = await Promise.all([
     getMonthlyReport(month),
     getSessionsForMonth(month),
     getVatReturn(month),
+    getSettings(),
   ]);
+  const title = `${settings.business_name} — ${month}`;
 
   if (format === "csv") {
     const rows: string[] = [];
     const line = (...cells: (string | number)[]) =>
       rows.push(cells.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","));
 
-    line(`Anis — ${month}`);
+    line(title);
     line("");
     line("PROFIT & LOSS");
     line("Revenue", report.revenue);
@@ -45,6 +48,13 @@ export async function GET(request: Request) {
     line("Expenses", report.expenses);
     line("Payroll", report.payroll);
     line("Net profit", report.netProfit);
+    line("");
+    line("MEMO — not in the profit figure");
+    line("Voids", report.voids.count, report.voids.amount);
+    line("Refunds", report.refunds.count, report.refunds.amount);
+    line("Deposited to MoMo", report.deposits.momo);
+    line("Deposited to bank", report.deposits.bank);
+    line("Bolt awaiting payout", report.boltAwaiting.count, report.boltAwaiting.amount);
     line("");
     line("DAILY SALES");
     line("Day", "Orders", "Revenue");
@@ -85,7 +95,7 @@ export async function GET(request: Request) {
 
   const pl = workbook.addWorksheet("P&L");
   pl.columns = [{ width: 24 }, { width: 16 }];
-  pl.addRow([`Anis — ${month}`]);
+  pl.addRow([title]);
   pl.getRow(1).font = { bold: true, size: 14 };
   pl.addRow([]);
   const plRows: [string, number][] = [
@@ -100,6 +110,18 @@ export async function GET(request: Request) {
     const row = pl.addRow([label, value]);
     row.getCell(2).numFmt = money;
     if (label === "Net profit" || label === "Gross profit") row.font = { bold: true };
+  }
+  pl.addRow([]);
+  pl.addRow(["Memo — not in the profit figure"]).font = { bold: true };
+  for (const [label, value] of [
+    ["Voids", report.voids.amount],
+    ["Refunds", report.refunds.amount],
+    ["Deposited to MoMo", report.deposits.momo],
+    ["Deposited to bank", report.deposits.bank],
+    ["Bolt awaiting payout", report.boltAwaiting.amount],
+  ] as [string, number][]) {
+    const row = pl.addRow([label, value]);
+    row.getCell(2).numFmt = money;
   }
 
   const sales = workbook.addWorksheet("Daily sales");

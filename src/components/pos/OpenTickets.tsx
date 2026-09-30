@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Ban, Banknote, CreditCard, Search, Smartphone, Split, X } from "lucide-react";
+import { Ban, Search, X } from "lucide-react";
 import { formatGHS, roundMoney } from "@/lib/money";
 import { callNumber } from "@/lib/session-utils";
 import { VOID_REASON_LABELS } from "@/components/admin/labels";
 import type { OrderView, PaymentChoice } from "./types";
 import Sheet, { SheetError } from "./ui/Sheet";
 import Button from "./ui/Button";
+import MethodMark from "./MethodMark";
 import { posRequest, usePosAction } from "./usePosAction";
 
 /** Wall clock for "how long has this ticket been waiting", refreshed twice a minute. */
@@ -40,11 +41,11 @@ export function waitTone(minutes: number) {
 
 type SettleMethod = Exclude<PaymentChoice, "UNPAID" | "BOLT_FOOD" | "BANK_TRANSFER">;
 
-const SETTLE_METHODS: { value: SettleMethod; label: string; icon: typeof Banknote }[] = [
-  { value: "CASH", label: "Cash", icon: Banknote },
-  { value: "MOMO", label: "MoMo", icon: Smartphone },
-  { value: "CARD", label: "Card", icon: CreditCard },
-  { value: "SPLIT", label: "Split", icon: Split },
+const SETTLE_METHODS: { value: SettleMethod; label: string }[] = [
+  { value: "CASH", label: "Cash" },
+  { value: "MOMO", label: "MoMo" },
+  { value: "CARD", label: "Card" },
+  { value: "SPLIT", label: "Split" },
 ];
 
 /**
@@ -300,7 +301,6 @@ export function SettleSheet({
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-2">
           {SETTLE_METHODS.map((entry) => {
-            const Icon = entry.icon;
             const selected = method === entry.value;
             return (
               <button
@@ -316,7 +316,7 @@ export function SettleSheet({
                   border: selected ? "1px solid transparent" : "1px solid var(--s-border)",
                 }}
               >
-                <Icon className="w-4 h-4" /> {entry.label}
+                <MethodMark method={entry.value} /> {entry.label}
               </button>
             );
           })}

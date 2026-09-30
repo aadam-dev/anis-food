@@ -1,15 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Banknote,
-  Smartphone,
-  CreditCard,
-  Building2,
-  Split,
-  Clock,
-  Bike,
-} from "lucide-react";
 import { formatGHS, roundMoney, changeDue, type OrderTotals } from "@/lib/money";
 import type { PaymentChoice } from "./types";
 import { OrderContextBar, type FulfillmentType } from "./CustomerFields";
@@ -17,6 +8,7 @@ import Numpad, { CASH_SHORTCUTS } from "./Numpad";
 import Sheet, { SheetError } from "./ui/Sheet";
 import Button from "./ui/Button";
 import { FieldInput, FieldLabel, FieldSelect } from "./ui/Field";
+import MethodMark from "./MethodMark";
 
 /**
  * Taking the money.
@@ -25,14 +17,14 @@ import { FieldInput, FieldLabel, FieldSelect } from "./ui/Field";
  * one-handed, sometimes by someone also holding a takeaway bag.
  */
 
-const METHODS: { value: PaymentChoice; label: string; icon: typeof Banknote }[] = [
-  { value: "CASH", label: "Cash", icon: Banknote },
-  { value: "MOMO", label: "MoMo", icon: Smartphone },
-  { value: "CARD", label: "Card", icon: CreditCard },
-  { value: "BANK_TRANSFER", label: "Transfer", icon: Building2 },
-  { value: "BOLT_FOOD", label: "Bolt", icon: Bike },
-  { value: "SPLIT", label: "Split", icon: Split },
-  { value: "UNPAID", label: "Pay later", icon: Clock },
+const METHODS: { value: PaymentChoice; label: string }[] = [
+  { value: "CASH", label: "Cash" },
+  { value: "MOMO", label: "MoMo" },
+  { value: "CARD", label: "Card" },
+  { value: "BANK_TRANSFER", label: "Transfer" },
+  { value: "BOLT_FOOD", label: "Bolt" },
+  { value: "SPLIT", label: "Split" },
+  { value: "UNPAID", label: "Pay later" },
 ];
 
 const SPLIT_METHODS = ["CASH", "MOMO", "CARD", "BANK_TRANSFER"] as const;
@@ -340,7 +332,6 @@ function MethodTile({
   selected: boolean;
   onSelect: () => void;
 }) {
-  const Icon = entry.icon;
   return (
     <button
       type="button"
@@ -352,7 +343,7 @@ function MethodTile({
         boxShadow: selected ? undefined : "inset 0 0 0 1px var(--s-border)",
       }}
     >
-      <Icon className="w-5 h-5" />
+      <MethodMark method={entry.value} />
       {entry.label}
     </button>
   );

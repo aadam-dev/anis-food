@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, Search } from "lucide-react";
 import { formatGHS } from "@/lib/money";
 import { callNumber } from "@/lib/session-utils";
-import { Panel, EmptyState, Chip, AdminButton } from "@/components/admin/ui";
+import { Panel, EmptyState, Chip, AdminButton, inputClass, inputStyle } from "@/components/admin/ui";
 import {
   PAYMENT_LABELS,
   ORDER_SOURCE_LABELS,
@@ -13,8 +13,6 @@ import {
 } from "@/components/admin/labels";
 import ReceiptModal from "@/components/pos/ReceiptModal";
 import PaymentCorrectionSheet from "@/components/pos/PaymentCorrectionSheet";
-import { buildInvoiceHtml } from "@/lib/invoice-html";
-import { printHtmlDocument } from "@/lib/print-document";
 import type { OrderView } from "@/components/pos/types";
 
 export interface AdminOrder {
@@ -98,6 +96,7 @@ export default function OrdersClient({
   const [open, setOpen] = useState<string | null>(null);
   const [voiding, setVoiding] = useState<AdminOrder | null>(null);
   const [reprinting, setReprinting] = useState<AdminOrder | null>(null);
+  const [slipKind, setSlipKind] = useState<"receipt" | "invoice">("receipt");
   const [correcting, setCorrecting] = useState<AdminOrder | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<OrderFilter>("all");
@@ -135,8 +134,8 @@ export default function OrdersClient({
             type="date"
             value={day}
             onChange={(event) => router.push(`/admin/orders?day=${event.target.value}`)}
-            className="rounded-lg border px-3 py-2 text-sm min-h-11"
-            style={{ background: "var(--s-panel-alt)", borderColor: "var(--s-border)", color: "var(--s-ink)" }}
+            className={`${inputClass} w-auto`}
+            style={inputStyle}
             aria-label="Day"
           />
           <Chip>{active.length} orders</Chip>
@@ -154,8 +153,8 @@ export default function OrdersClient({
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Name, phone, or order number"
             aria-label="Search orders"
-            className="w-full rounded-xl border pl-9 pr-3 py-2.5 text-sm min-h-11 outline-none"
-            style={{ background: "var(--s-panel)", borderColor: "var(--s-border)", color: "var(--s-ink)" }}
+            className={`${inputClass} pl-10`}
+            style={inputStyle}
           />
         </div>
 
@@ -266,34 +265,19 @@ export default function OrdersClient({
                             : ""}
                         </span>
                         <div className="flex flex-wrap justify-end gap-2">
-                          <AdminButton onClick={() => setReprinting(order)}>Reprint</AdminButton>
                           <AdminButton
-                            onClick={() =>
-                              printHtmlDocument(
-                                buildInvoiceHtml({
-                                  orderNumber: order.orderNumber,
-                                  createdAt: order.createdAt,
-                                  businessName: business.header,
-                                  businessAddress: business.address,
-                                  businessPhone: business.phone,
-                                  customerName: order.customerName,
-                                  customerPhone: order.customerPhone,
-                                  customerAddress: order.customerAddress,
-                                  deliveryType: order.deliveryType,
-                                  tableLabel: order.tableLabel,
-                                  lines: order.items,
-                                  subtotal: order.subtotal,
-                                  discountAmount: order.discountAmount,
-                                  taxAmount: order.taxAmount,
-                                  taxLines: order.tax?.lines,
-                                  taxInclusive: order.tax?.inclusive,
-                                  total: order.total,
-                                  paymentMethod: order.paymentMethod,
-                                  paymentStatus: order.paymentStatus,
-                                  splitPayments: order.splitPayments,
-                                }),
-                              )
-                            }
+                            onClick={() => {
+                              setSlipKind("receipt");
+                              setReprinting(order);
+                            }}
+                          >
+                            Reprint
+                          </AdminButton>
+                          <AdminButton
+                            onClick={() => {
+                              setSlipKind("invoice");
+                              setReprinting(order);
+                            }}
                           >
                             Invoice
                           </AdminButton>
@@ -321,6 +305,7 @@ export default function OrdersClient({
           order={asOrderView(reprinting)}
           business={business}
           soldBy={reprinting.staff ?? "Anis"}
+          kind={slipKind}
           onClose={() => setReprinting(null)}
         />
       )}
@@ -404,8 +389,8 @@ function VoidDialog({
         <select
           value={reason}
           onChange={(event) => setReason(event.target.value)}
-          className="w-full rounded-lg border px-3 py-2.5 min-h-11"
-          style={{ background: "var(--s-panel-alt)", borderColor: "var(--s-border)", color: "var(--s-ink)" }}
+          className={inputClass}
+          style={inputStyle}
         >
           {VOID_REASONS.map(([value, label]) => (
             <option key={value} value={value}>
@@ -419,8 +404,8 @@ function VoidDialog({
           value={note}
           onChange={(event) => setNote(event.target.value)}
           placeholder="Note (optional)"
-          className="mt-2 w-full rounded-lg border px-3 py-2.5 min-h-11"
-          style={{ background: "var(--s-panel-alt)", borderColor: "var(--s-border)", color: "var(--s-ink)" }}
+          className={`${inputClass} mt-2`}
+          style={inputStyle}
         />
 
         {error && (

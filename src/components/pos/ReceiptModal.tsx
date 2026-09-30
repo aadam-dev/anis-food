@@ -5,8 +5,6 @@ import { FileText, X, Printer } from "lucide-react";
 import QRCode from "qrcode";
 import Receipt80mm, { type ReceiptData } from "./Receipt80mm";
 import { printReceiptNow } from "@/lib/receipt-print";
-import { buildInvoiceHtml } from "@/lib/invoice-html";
-import { printHtmlDocument } from "@/lib/print-document";
 import type { OrderView } from "./types";
 
 export default function ReceiptModal({
@@ -14,14 +12,28 @@ export default function ReceiptModal({
   business,
   soldBy,
   onClose,
+  kind = "receipt",
 }: {
   order: OrderView;
   business: { header: string; address: string; phone: string; footer: string; taxLabel: string };
   soldBy: string;
   onClose: () => void;
+  /** Both are 80mm slips. Invoice adds the document title; the lines are the same. */
+  kind?: "receipt" | "invoice";
 }) {
   const printed = useRef(false);
+  const printAfterKind = useRef(false);
   const [qrDataUrl, setQrDataUrl] = useState<string | undefined>();
+  const [slipKind, setSlipKind] = useState(kind);
+
+  function chooseSlip(next: "receipt" | "invoice") {
+    if (next === slipKind) {
+      printReceiptNow();
+      return;
+    }
+    printAfterKind.current = true;
+    setSlipKind(next);
+  }
 
   // The public page a customer reaches by scanning the slip. clientRef is an
   // unguessable UUID already on the order, so it doubles as the receipt token.
@@ -82,6 +94,7 @@ export default function ReceiptModal({
     address: business.address,
     phone: business.phone,
     footer: business.footer,
+    documentTitle: slipKind === "invoice" ? "INVOICE" : undefined,
     logoUrl: "/images/logo.png",
     verifyUrl,
     qrDataUrl,
@@ -106,6 +119,12 @@ export default function ReceiptModal({
     return () => clearTimeout(timer);
   }, [qrDataUrl]);
 
+  useEffect(() => {
+    if (!printAfterKind.current) return;
+    printAfterKind.current = false;
+    printReceiptNow();
+  }, [slipKind]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70" onClick={onClose} aria-hidden />
@@ -117,42 +136,17 @@ export default function ReceiptModal({
           className="sticky top-0 flex items-center justify-between px-4 py-3 border-b"
           style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
         >
-          <h2 className="font-semibold">Receipt</h2>
+          <h2 className="font-semibold">{slipKind === "invoice" ? "Invoice" : "Receipt"}</h2>
           <div className="flex items-center gap-1">
             <button
-              onClick={() => printReceiptNow()}
+              onClick={() => chooseSlip("receipt")}
               className="h-11 px-3 flex items-center gap-1.5 rounded-lg text-sm font-semibold"
               style={{ background: "var(--s-panel-alt)" }}
             >
               <Printer className="w-4 h-4" /> Slip
             </button>
             <button
-              onClick={() =>
-                printHtmlDocument(
-                  buildInvoiceHtml({
-                    orderNumber: order.orderNumber,
-                    createdAt: order.createdAt,
-                    businessName: business.header,
-                    businessAddress: business.address,
-                    businessPhone: business.phone,
-                    customerName: order.customerName,
-                    customerPhone: order.customerPhone,
-                    customerAddress: order.customerAddress,
-                    deliveryType: order.deliveryType,
-                    tableLabel: order.tableLabel,
-                    lines: order.items,
-                    subtotal: order.subtotal,
-                    discountAmount: order.discountAmount,
-                    taxAmount: order.taxAmount,
-                    taxLines: order.tax?.lines,
-                    taxInclusive: order.tax?.inclusive,
-                    total: order.total,
-                    paymentMethod: order.paymentMethod,
-                    paymentStatus: order.paymentStatus,
-                    splitPayments: order.splitPayments,
-                  }),
-                )
-              }
+              onClick={() => chooseSlip("invoice")}
               className="h-11 px-3 flex items-center gap-1.5 rounded-lg text-sm font-semibold"
               style={{ background: "var(--s-panel-alt)" }}
             >

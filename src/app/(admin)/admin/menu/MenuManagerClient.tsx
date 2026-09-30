@@ -489,7 +489,7 @@ function MenuRow({
                 onChange={(event) => setPriceText(event.target.value)}
                 onBlur={commitPrice}
                 onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
-                className="money w-24 rounded-lg border px-2.5 py-2 text-right outline-none focus:ring-2"
+                className="money w-28 rounded-2xl border px-3 py-2 text-right outline-none min-h-12 focus:ring-2"
                 style={inputStyle}
                 aria-label={`Price of ${item.name}`}
               />
@@ -513,7 +513,7 @@ function MenuRow({
                   onChange={(event) => setCostText(event.target.value)}
                   onBlur={commitCost}
                   onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
-                  className="money w-24 rounded-lg border px-2.5 py-2 text-right outline-none focus:ring-2"
+                  className="money w-28 rounded-2xl border px-3 py-2 text-right outline-none min-h-12 focus:ring-2"
                   style={inputStyle}
                   aria-label={`Cost price of ${item.name}`}
                 />

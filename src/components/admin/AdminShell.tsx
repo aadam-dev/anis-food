@@ -204,6 +204,7 @@ export default function AdminShell({ user, children }: AdminShellProps) {
     <div className="flex min-h-dvh">
       {/* Desktop sidebar */}
       <aside
+        data-admin-chrome
         className="hidden lg:flex w-64 shrink-0 flex-col border-r"
         style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
       >
@@ -244,6 +245,7 @@ export default function AdminShell({ user, children }: AdminShellProps) {
 
       <div className="flex-1 min-w-0 flex flex-col">
         <header
+          data-admin-chrome
           className="hidden lg:flex h-20 items-center gap-4 border-b px-7"
           style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
         >
@@ -252,7 +254,7 @@ export default function AdminShell({ user, children }: AdminShellProps) {
             <input
               type="search"
               placeholder="Search menu, orders and more"
-              className="min-h-11 w-full rounded-xl border pl-9 pr-3 text-sm outline-none"
+              className="min-h-12 w-full rounded-2xl border pl-9 pr-3 text-sm outline-none"
               style={{ borderColor: "var(--s-border)", background: "var(--s-panel-alt)" }}
               aria-label="Search back office"
             />
@@ -289,6 +291,7 @@ export default function AdminShell({ user, children }: AdminShellProps) {
 
         {/* Mobile top bar */}
         <header
+          data-admin-chrome
           className="lg:hidden sticky top-0 z-40 flex items-center gap-2 border-b px-2 py-2"
           style={{
             background: "var(--s-panel)",

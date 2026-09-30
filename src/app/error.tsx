@@ -17,16 +17,25 @@ export default function Error({
   }, [error]);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-[#F9FAFB]">
-      <div className="max-w-md w-full text-center">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Something went wrong</h1>
-        <p className="text-gray-600 mb-6">
+    <div
+      data-surface="pos"
+      data-theme="light"
+      className="flex min-h-screen flex-col items-center justify-center px-4 text-center"
+    >
+      <div className="w-full max-w-md">
+        <h1 className="mb-2 text-2xl font-extrabold tracking-tight">Something went wrong</h1>
+        <p className="mb-6 text-sm" style={{ color: "var(--s-ink-muted)" }}>
           We couldn’t load this page. Please try again.
         </p>
-        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+        <div className="flex flex-col justify-center gap-3 sm:flex-row">
           <Button type="button" variant="primary" onClick={reset}>
             Try again
           </Button>
+          <Link href="/admin">
+            <Button type="button" variant="outline">
+              Back office
+            </Button>
+          </Link>
           <Link href="/">
             <Button type="button" variant="outline">
               Back to home

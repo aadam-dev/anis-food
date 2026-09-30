@@ -27,6 +27,8 @@ export interface CartLine {
 export interface CashMovementView {
   id: string;
   direction: "IN" | "OUT";
+  kind: "IN" | "SPEND" | "DEPOSIT";
+  destination: "MOMO" | "BANK" | null;
   amount: number;
   reason: string;
   by: string;

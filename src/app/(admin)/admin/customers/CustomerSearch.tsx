@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
+import { inputClass, inputStyle } from "@/components/admin/ui";
 
 export default function CustomerSearch({ initial }: { initial: string }) {
   const router = useRouter();
@@ -25,8 +26,8 @@ export default function CustomerSearch({ initial }: { initial: string }) {
         value={value}
         onChange={(event) => setValue(event.target.value)}
         placeholder="Search by name or phone"
-        className="w-full rounded-lg border pl-9 pr-3 py-2.5 min-h-11 outline-none focus:ring-2"
-        style={{ background: "var(--s-panel-alt)", borderColor: "var(--s-border)", color: "var(--s-ink)" }}
+        className={`${inputClass} pl-10`}
+        style={inputStyle}
       />
     </form>
   );

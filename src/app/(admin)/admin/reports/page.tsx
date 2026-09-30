@@ -1,5 +1,6 @@
 import { getMonthlyReport, getReportableMonths, getVatReturn, type VatReturn } from "@/lib/reports";
 import { getSessionsForMonth } from "@/lib/report-sessions";
+import { getSettings } from "@/lib/settings";
 import { formatGHS } from "@/lib/money";
 import { PageHeader, Panel } from "@/components/admin/ui";
 import { PAYMENT_LABELS } from "@/components/admin/labels";
@@ -23,10 +24,11 @@ export default async function ReportsPage({
       ? params.tab
       : "pl";
 
-  const [report, sessions, vat] = await Promise.all([
+  const [report, sessions, vat, settings] = await Promise.all([
     getMonthlyReport(month),
     tab === "sessions" ? getSessionsForMonth(month) : Promise.resolve([]),
     tab === "vat" ? getVatReturn(month) : Promise.resolve(null),
+    getSettings(),
   ]);
 
   const monthLabel = new Date(`${month}-01T12:00:00Z`).toLocaleDateString("en-GB", {
@@ -39,7 +41,7 @@ export default async function ReportsPage({
     <>
       <PageHeader
         title="Reports"
-        description={monthLabel}
+        description={`${settings.business_name} · ${monthLabel}`}
         actions={
           <a
             href={`/api/admin/reports/export?month=${month}&format=xlsx`}
@@ -51,7 +53,13 @@ export default async function ReportsPage({
         }
       />
 
-      <ReportControls months={months} month={month} tab={tab} />
+      <p className="mb-4 hidden text-sm print:block" style={{ color: "var(--s-ink-muted)" }}>
+        {settings.business_name} · {monthLabel}
+      </p>
+
+      <div data-report-chrome>
+        <ReportControls months={months} month={month} tab={tab} />
+      </div>
 
       {tab === "pl" && <ProfitAndLoss report={report} />}
       {tab === "sales" && <DailySales report={report} />}
@@ -122,6 +130,7 @@ function ProfitAndLoss({ report }: { report: Awaited<ReturnType<typeof getMonthl
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
+      <div className="space-y-4">
       <Panel title="Profit & loss" className="p-5">
         <dl className="space-y-2.5">
           {lines.map((line) => (
@@ -159,8 +168,20 @@ function ProfitAndLoss({ report }: { report: Awaited<ReturnType<typeof getMonthl
             : ""}
           Cost of items covers {report.cogsCoverage}% of sales — the rest have no cost
           price set yet, so the real cost is at least this, not exactly it.
+          Voids and refunds are left out of revenue already, so they are not deducted again.
         </p>
       </Panel>
+
+      <Panel title="Outside the profit figure" explainer="Transfers and money that is not sales" className="p-5">
+        <dl className="space-y-2.5 text-sm">
+          <MemoLine label="Voids" detail={`${report.voids.count} cancelled before the money was kept`} amount={report.voids.amount} />
+          <MemoLine label="Refunds" detail={`${report.refunds.count} paid sales given back`} amount={report.refunds.amount} />
+          <MemoLine label="Deposited to MoMo" detail="Cash moved into MoMo. Not an expense." amount={report.deposits.momo} />
+          <MemoLine label="Deposited to bank" detail="Cash moved to the bank. Not an expense." amount={report.deposits.bank} />
+          <MemoLine label="Bolt awaiting payout" detail={`${report.boltAwaiting.count} sent on Bolt this month, still unpaid`} amount={report.boltAwaiting.amount} />
+        </dl>
+      </Panel>
+      </div>
 
       <div className="space-y-4">
         <Panel title="How they paid" className="p-5">
@@ -329,6 +350,18 @@ function Sessions({ sessions }: { sessions: Awaited<ReturnType<typeof getSession
         </div>
       )}
     </Panel>
+  );
+}
+
+function MemoLine({ label, detail, amount }: { label: string; detail: string; amount: number }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <dt>
+        <span className="font-medium">{label}</span>
+        <span className="mt-0.5 block text-xs" style={{ color: "var(--s-ink-faint)" }}>{detail}</span>
+      </dt>
+      <dd className="money font-medium">{formatGHS(amount)}</dd>
+    </div>
   );
 }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { inputClass, inputStyle } from "@/components/admin/ui";
 
 const TABS: { id: string; label: string }[] = [
   { id: "pl", label: "Profit & loss" },
@@ -49,8 +50,8 @@ export default function ReportControls({
       <select
         value={month}
         onChange={(event) => go({ month: event.target.value })}
-        className="rounded-lg border px-3 py-2 text-sm min-h-11"
-        style={{ background: "var(--s-panel-alt)", borderColor: "var(--s-border)", color: "var(--s-ink)" }}
+        className={`${inputClass} max-w-xs`}
+        style={inputStyle}
         aria-label="Month"
       >
         {months.map((m) => (

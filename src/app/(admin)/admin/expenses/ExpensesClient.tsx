@@ -53,8 +53,8 @@ export default function ExpensesClient({
           type="month"
           value={month}
           onChange={(event) => router.push(`/admin/expenses?month=${event.target.value}`)}
-          className="rounded-lg border px-3 py-2 text-sm min-h-11"
-          style={{ background: "var(--s-panel-alt)", borderColor: "var(--s-border)", color: "var(--s-ink)" }}
+          className={`${inputClass} max-w-xs`}
+          style={inputStyle}
           aria-label="Month"
         />
         <Chip tone="bad">{formatGHS(total)} this month</Chip>

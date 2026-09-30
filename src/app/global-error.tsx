@@ -13,9 +13,9 @@ export default function GlobalError({
 }) {
   return (
     <html lang="en">
-      <body style={{ margin: 0, fontFamily: "system-ui, sans-serif", background: "#F9FAFB", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+      <body style={{ margin: 0, fontFamily: '"Plus Jakarta Sans", sans-serif', background: "#F4F6F8", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
         <div style={{ maxWidth: "28rem", textAlign: "center" }}>
-          <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#111", marginBottom: "0.5rem" }}>
+          <h1 style={{ fontSize: "1.5rem", fontWeight: 800, color: "#111", marginBottom: "0.5rem" }}>
             Something went wrong
           </h1>
           <p style={{ color: "#4B5563", marginBottom: "1.5rem" }}>
@@ -26,22 +26,39 @@ export default function GlobalError({
               Ref: {error.digest}
             </p>
           )}
-          <button
-            type="button"
-            onClick={reset}
-            style={{
-              padding: "0.5rem 1rem",
-              fontSize: "0.875rem",
-              fontWeight: 600,
-              color: "#fff",
-              background: "#DC2626",
-              border: "none",
-              borderRadius: "0.5rem",
-              cursor: "pointer",
-            }}
-          >
-            Try again
-          </button>
+          <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={reset}
+              style={{
+                padding: "0.75rem 1rem",
+                fontSize: "0.875rem",
+                fontWeight: 700,
+                color: "#fff",
+                background: "#DC2626",
+                border: "none",
+                borderRadius: "1rem",
+                cursor: "pointer",
+              }}
+            >
+              Try again
+            </button>
+            <a
+              href="/admin"
+              style={{
+                padding: "0.75rem 1rem",
+                fontSize: "0.875rem",
+                fontWeight: 700,
+                color: "#111",
+                background: "#fff",
+                border: "1px solid #e5e7eb",
+                borderRadius: "1rem",
+                textDecoration: "none",
+              }}
+            >
+              Back office
+            </a>
+          </div>
         </div>
       </body>
     </html>

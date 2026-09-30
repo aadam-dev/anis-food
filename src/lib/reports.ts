@@ -2,11 +2,15 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import { toMoney, roundMoney } from "@/lib/money";
 import { businessDay, businessDayRange } from "@/lib/session-utils";
+import { currentSession } from "@/lib/pos-session";
+import { tillBooksReady } from "@/lib/till-books";
+import { isBoltAwaiting, isRefund, isVoid, type MoneyCount } from "@/lib/x-report";
 import {
   PaymentMethod,
   PaymentStatus,
   OrderStatus,
   PayrollStatus,
+  CashMovementKind,
 } from "@/generated/prisma";
 
 /**
@@ -51,6 +55,7 @@ function splitByMethod(
 // ---------------------------------------------------------------------------
 
 export interface DashboardData {
+  booksReady: boolean;
   today: { revenue: number; orders: number; averageTicket: number };
   /** Same weekday last week — restaurants are weekly-cyclical, so this is the
    *  honest comparison, not yesterday. */
@@ -58,7 +63,17 @@ export interface DashboardData {
   revenueDelta: number | null;
   paymentMix: { method: string; amount: number }[];
   openTickets: { count: number; value: number; oldestMinutes: number | null };
-  openShift: { openedBy: string; expectedCash: number; since: string } | null;
+  boltAwaiting: MoneyCount;
+  voids: MoneyCount;
+  refunds: MoneyCount;
+  expensesToday: number;
+  depositsToday: { momo: number; bank: number };
+  openShift: {
+    openedBy: string;
+    expectedCash: number;
+    expectedMomo: number | null;
+    since: string;
+  } | null;
   last14Days: { day: string; revenue: number }[];
   topItems: { name: string; quantity: number; revenue: number }[];
 }
@@ -74,7 +89,9 @@ export async function getDashboard(now = new Date()): Promise<DashboardData> {
   const fortnightAgo = new Date(now);
   fortnightAgo.setDate(fortnightAgo.getDate() - 13);
 
-  const [todayOrders, lastWeekOrders, openTickets, openShift, trendOrders, todayItems] =
+  const books = await tillBooksReady();
+
+  const [todayOrders, lastWeekOrders, openTickets, trendOrders, todayItems, boltOrders, adjustments, todayExpenses, todayDeposits, shift] =
     await Promise.all([
       prisma.order.findMany({
         where: { ...REVENUE_WHERE, createdAt: { gte: today.start, lt: today.end } },
@@ -85,13 +102,13 @@ export async function getDashboard(now = new Date()): Promise<DashboardData> {
         select: { total: true },
       }),
       prisma.order.findMany({
-        where: { paymentStatus: PaymentStatus.PENDING, status: { not: OrderStatus.CANCELLED } },
+        where: {
+          paymentStatus: PaymentStatus.PENDING,
+          status: { not: OrderStatus.CANCELLED },
+          paymentMethod: { not: PaymentMethod.BOLT_FOOD },
+          isDemo: false,
+        },
         select: { total: true, createdAt: true },
-      }),
-      prisma.posSession.findFirst({
-        where: { status: "OPEN" },
-        orderBy: { openedAt: "desc" },
-        include: { openedBy: { select: { name: true } } },
       }),
       prisma.order.findMany({
         where: { ...REVENUE_WHERE, createdAt: { gte: businessDayRange(businessDay(fortnightAgo)).start } },
@@ -103,6 +120,34 @@ export async function getDashboard(now = new Date()): Promise<DashboardData> {
         },
         select: { name: true, quantity: true, lineTotal: true },
       }),
+      prisma.order.findMany({
+        where: {
+          isDemo: false,
+          paymentMethod: PaymentMethod.BOLT_FOOD,
+          paymentStatus: PaymentStatus.PENDING,
+          status: { not: OrderStatus.CANCELLED },
+        },
+        select: { total: true, paymentMethod: true, paymentStatus: true, status: true },
+      }),
+      prisma.order.findMany({
+        where: {
+          isDemo: false,
+          updatedAt: { gte: today.start, lt: today.end },
+          OR: [{ status: OrderStatus.CANCELLED }, { paymentStatus: PaymentStatus.REFUNDED }],
+        },
+        select: { total: true, paymentMethod: true, paymentStatus: true, status: true },
+      }),
+      prisma.expense.findMany({
+        where: { incurredOn: { gte: today.start, lt: today.end } },
+        select: { amount: true },
+      }),
+      books.ok
+        ? prisma.cashMovement.findMany({
+            where: { kind: CashMovementKind.DEPOSIT, createdAt: { gte: today.start, lt: today.end } },
+            select: { amount: true, destination: true },
+          })
+        : Promise.resolve([]),
+      books.ok ? currentSession() : Promise.resolve(null),
     ]);
 
   const todayRevenue = roundMoney(
@@ -169,15 +214,40 @@ export async function getDashboard(now = new Date()): Promise<DashboardData> {
         ? Math.floor((now.getTime() - oldestTicket.getTime()) / 60000)
         : null,
     },
-    openShift: openShift
+    boltAwaiting: countOrders(boltOrders.filter(isBoltAwaiting)),
+    voids: countOrders(adjustments.filter(isVoid)),
+    refunds: countOrders(adjustments.filter(isRefund)),
+    expensesToday: roundMoney(todayExpenses.reduce((sum, expense) => sum + toMoney(expense.amount), 0)),
+    depositsToday: {
+      momo: roundMoney(
+        todayDeposits
+          .filter((row) => row.destination === "MOMO")
+          .reduce((sum, row) => sum + toMoney(row.amount), 0),
+      ),
+      bank: roundMoney(
+        todayDeposits
+          .filter((row) => row.destination === "BANK")
+          .reduce((sum, row) => sum + toMoney(row.amount), 0),
+      ),
+    },
+    openShift: shift
       ? {
-          openedBy: openShift.openedBy.name,
-          expectedCash: 0, // filled by the caller if needed; kept light here
-          since: openShift.openedAt.toISOString(),
+          openedBy: shift.openedBy.name,
+          expectedCash: shift.expectedCash,
+          expectedMomo: shift.expectedMomo,
+          since: shift.openedAt,
         }
       : null,
     last14Days,
     topItems,
+    booksReady: books.ok,
+  };
+}
+
+function countOrders(orders: { total: unknown }[]): MoneyCount {
+  return {
+    count: orders.length,
+    amount: roundMoney(orders.reduce((sum, order) => sum + toMoney(order.total), 0)),
   };
 }
 
@@ -200,6 +270,10 @@ export interface MonthlyReport {
   paymentBreakdown: { method: string; amount: number }[];
   topItems: { name: string; quantity: number; revenue: number }[];
   expensesByCategory: { category: string; amount: number }[];
+  voids: MoneyCount;
+  refunds: MoneyCount;
+  deposits: { momo: number; bank: number };
+  boltAwaiting: MoneyCount;
 }
 
 function monthRange(month: string): { start: Date; end: Date } {
@@ -213,8 +287,9 @@ function monthRange(month: string): { start: Date; end: Date } {
 
 export async function getMonthlyReport(month: string): Promise<MonthlyReport> {
   const { start, end } = monthRange(month);
+  const books = await tillBooksReady();
 
-  const [orders, items, expenses, payroll] = await Promise.all([
+  const [orders, items, expenses, payroll, adjustments, boltOrders, depositRows] = await Promise.all([
     prisma.order.findMany({
       where: { ...REVENUE_WHERE, createdAt: { gte: start, lt: end } },
       select: { paymentMethod: true, total: true, splitPayments: true, createdAt: true },
@@ -231,6 +306,30 @@ export async function getMonthlyReport(month: string): Promise<MonthlyReport> {
       where: { status: PayrollStatus.PAID, periodStart: { gte: start, lt: end } },
       select: { netAmount: true },
     }),
+    prisma.order.findMany({
+      where: {
+        isDemo: false,
+        updatedAt: { gte: start, lt: end },
+        OR: [{ status: OrderStatus.CANCELLED }, { paymentStatus: PaymentStatus.REFUNDED }],
+      },
+      select: { total: true, paymentMethod: true, paymentStatus: true, status: true },
+    }),
+    prisma.order.findMany({
+      where: {
+        isDemo: false,
+        paymentMethod: PaymentMethod.BOLT_FOOD,
+        paymentStatus: PaymentStatus.PENDING,
+        status: { not: OrderStatus.CANCELLED },
+        createdAt: { gte: start, lt: end },
+      },
+      select: { total: true, paymentMethod: true, paymentStatus: true, status: true },
+    }),
+    books.ok
+      ? prisma.cashMovement.findMany({
+          where: { kind: CashMovementKind.DEPOSIT, createdAt: { gte: start, lt: end } },
+          select: { amount: true, destination: true },
+        })
+      : Promise.resolve([]),
   ]);
 
   const revenue = roundMoney(orders.reduce((sum, o) => sum + toMoney(o.total), 0));
@@ -305,6 +404,17 @@ export async function getMonthlyReport(month: string): Promise<MonthlyReport> {
     expensesByCategory: [...expenseTotals.entries()]
       .map(([category, amount]) => ({ category, amount }))
       .sort((a, b) => b.amount - a.amount),
+    voids: countOrders(adjustments.filter(isVoid)),
+    refunds: countOrders(adjustments.filter(isRefund)),
+    deposits: {
+      momo: roundMoney(
+        depositRows.filter((row) => row.destination === "MOMO").reduce((sum, row) => sum + toMoney(row.amount), 0),
+      ),
+      bank: roundMoney(
+        depositRows.filter((row) => row.destination === "BANK").reduce((sum, row) => sum + toMoney(row.amount), 0),
+      ),
+    },
+    boltAwaiting: countOrders(boltOrders.filter(isBoltAwaiting)),
   };
 }
 
