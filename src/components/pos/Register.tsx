@@ -535,7 +535,7 @@ export default function Register({
       }
       clearOrder();
       setCartOpen(false);
-      setBanner({ tone: "good", text: "Order held. Open Orders and choose Held to bring it back." });
+      setBanner({ tone: "good", text: "Order held. Open Tickets, then Held, to bring it back." });
       void loadTickets();
     } catch {
       setBanner({ tone: "bad", text: "No connection. The order is still on the bill." });
