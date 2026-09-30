@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Loader2 } from "lucide-react";
-import PasswordInput from "@/components/ui/PasswordInput";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 
 interface LoginResponse {
   redirectTo?: string;
@@ -24,9 +23,13 @@ export default function LoginForm() {
   const searchParams = useSearchParams();
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const typedAddress = name.includes("@");
+  // Digits only, four or fewer: a cashier PIN. Anything else is a password.
+  // The field stays mounted either way — swapping the input on the first
+  // letter drops focus and the rest of the password never arrives.
   const pinMode = /^\d{0,4}$/.test(password) && password.length <= 4;
 
   async function handleSubmit(event: React.FormEvent) {
@@ -107,37 +110,49 @@ export default function LoginForm() {
         </div>
       </div>
 
-      {pinMode ? (
-        <div>
-          <label htmlFor="password" className="block text-sm font-medium mb-1.5">
-            PIN or password
-          </label>
+      <div>
+        <label htmlFor="password" className="block text-sm font-medium mb-1.5">
+          PIN or password
+        </label>
+        <div className="relative">
           <input
             id="password"
-            type="password"
-            inputMode="numeric"
+            type={pinMode || !showPassword ? "password" : "text"}
+            inputMode={pinMode ? "numeric" : "text"}
             autoComplete="current-password"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             required
             maxLength={32}
-            placeholder="••••"
+            placeholder={pinMode ? "••••" : ""}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            className="w-full min-h-12 rounded-2xl border px-3.5 outline-none tracking-[0.35em] text-center text-lg"
+            className={
+              pinMode
+                ? "w-full min-h-12 rounded-2xl border px-3.5 outline-none tracking-[0.35em] text-center text-lg"
+                : "w-full min-h-12 rounded-2xl border px-3.5 py-3 pr-12 outline-none"
+            }
             style={fieldStyle}
           />
-          <p className="mt-1.5 text-xs" style={{ color: "var(--s-ink-faint)" }}>
-            Cashiers use their 4-digit till PIN. Managers use their password.
-          </p>
+          {!pinMode && (
+            <button
+              type="button"
+              onClick={() => setShowPassword((shown) => !shown)}
+              className="absolute right-1 top-1/2 -translate-y-1/2 h-11 w-11 grid place-items-center rounded-md"
+              style={{ color: "var(--s-ink-muted)" }}
+              aria-label={showPassword ? "Hide pin or password" : "Show pin or password"}
+              aria-pressed={showPassword}
+              tabIndex={-1}
+            >
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          )}
         </div>
-      ) : (
-        <PasswordInput
-          id="password"
-          label="PIN or password"
-          value={password}
-          onChange={setPassword}
-          autoComplete="current-password"
-        />
-      )}
+        <p className="mt-1.5 text-xs" style={{ color: "var(--s-ink-faint)" }}>
+          Cashiers use their 4-digit till PIN. Managers use their password.
+        </p>
+      </div>
 
       {error && (
         <p
