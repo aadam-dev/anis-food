@@ -7,6 +7,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, Poppins, Playfair_Display, Plus_Jakarta_Sans } from "next/font/google";
 import "@/styles/globals.css";
 import { ToastProvider } from "@/contexts/ToastContext";
+import { ensureMigrations } from "@/lib/ensure-migrations";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -117,11 +118,12 @@ export const metadata: Metadata = {
   alternates: { canonical: siteUrl },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  await ensureMigrations();
   return (
     <html lang="en">
       <body
