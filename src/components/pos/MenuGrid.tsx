@@ -235,7 +235,7 @@ export default function MenuGrid({
                   <DishThumb
                     name={item.name}
                     imageUrl={item.imageUrl}
-                    className="aspect-[4/3] w-full rounded-none"
+                    className="aspect-[4/3] w-full rounded-t-[1.35rem]"
                     letterClassName="text-3xl"
                   />
                   <span className="flex flex-1 flex-col gap-1 px-3 pb-3 pt-2.5">
