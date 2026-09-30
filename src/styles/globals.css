@@ -330,21 +330,35 @@ body:has([data-surface][data-theme="light"]) {
 .anis-receipt .r-total { font-size: 14px; font-weight: 700; margin: 1mm 0; }
 .anis-receipt .r-change { font-weight: 700; }
 
-/* Print: show only the receipt.
-   Two selectors because the public site's WhatsApp order receipt uses
-   [data-receipt] and the till uses [data-anis-receipt]. They must not hide
-   each other when both stylesheets are loaded. */
+/* The slip printReceiptNow parks on document.body. Kept in the layout tree
+   (not display:none) because Chrome drops display:none nodes before @media
+   print can show them, which printed a blank page. Collapsed off-screen until
+   the print stylesheet opens it. */
+[data-print-slip] {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 72mm;
+  height: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Print: one slip, no blank pages.
+   The till used to stay in the layout with visibility:hidden. Hidden nodes still
+   take height, so Safari paginated the menu into empty sheets after the slip.
+   The print host is a direct child of body; everything else is taken out of the
+   page. The public order receipt has no host, so it keeps the visibility path. */
 @media print {
   @page {
-    size: 80mm auto;
+    /* One roll-width sheet. A keyword height is invalid (`80mm auto` is dropped
+       by the browser), so the length is long enough for a normal slip and short
+       enough that an empty till cannot add a second page. */
+    size: 80mm 280mm;
     margin: 0;
   }
 
-  /* The receipt lives inside a fixed, centered, scrollable modal. Without these
-     resets it prints wherever that modal put it — pushed down the page, with the
-     overflow clipped so a fragment bleeds to the top. Flattening every ancestor
-     to static/visible/no-clip lets the receipt escape the modal and pin to the
-     page's top-left, which is what a thermal roll expects. */
   html,
   body {
     margin: 0 !important;
@@ -356,46 +370,52 @@ body:has([data-surface][data-theme="light"]) {
     overflow: visible !important;
   }
 
-  body * {
-    visibility: hidden !important;
-    position: static !important;
-    overflow: visible !important;
-    max-height: none !important;
-    transform: none !important;
+  body:has([data-print-slip]) > *:not([data-print-slip]) {
+    display: none !important;
   }
 
-  [data-receipt],
-  [data-receipt] *,
-  [data-anis-receipt],
-  [data-anis-receipt] * {
+  [data-print-slip] {
+    display: block !important;
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    width: 72mm !important;
+    height: auto !important;
+    overflow: visible !important;
+    opacity: 1 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  [data-print-slip] [data-anis-receipt] {
+    position: static !important;
+    width: 72mm !important;
+    margin: 0 !important;
+    padding: 2mm 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  body:not(:has([data-print-slip])) * {
+    visibility: hidden !important;
+  }
+
+  body:not(:has([data-print-slip])) [data-receipt],
+  body:not(:has([data-print-slip])) [data-receipt] * {
     visibility: visible !important;
   }
 
-  [data-receipt],
-  [data-anis-receipt] {
+  body:not(:has([data-print-slip])) [data-receipt] {
     position: absolute !important;
     left: 0 !important;
     top: 0 !important;
-    box-shadow: none !important;
-    border: none !important;
-  }
-
-  [data-receipt] {
     width: 100%;
     max-width: none;
-  }
-
-  /* The thermal receipt keeps its exact width; stretching it to the page would
-     wrap every line in the wrong place. */
-  [data-anis-receipt] {
-    width: 72mm;
-    border-radius: 0 !important;
-    padding: 0 !important;
-    margin: 0 !important;
-  }
-
-  [data-admin-chrome],
-  [data-report-chrome] {
-    display: none !important;
+    box-shadow: none !important;
+    border: none !important;
   }
 }
