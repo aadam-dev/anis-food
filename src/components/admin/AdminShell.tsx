@@ -23,6 +23,7 @@ import {
 import type { UserRole } from "@/generated/prisma";
 import { canAccess, type Resource } from "@/lib/permissions";
 import AnisLogo from "@/components/brand/AnisLogo";
+import FullscreenButton from "@/components/pwa/FullscreenButton";
 
 interface NavItem {
   href: string;
@@ -270,9 +271,12 @@ export default function AdminShell({ user, children }: AdminShellProps) {
               aria-label="Search back office"
             />
           </form>
-          <div className="ml-auto text-right">
-            <p className="text-sm font-bold">{user.name}</p>
-            <p className="text-[10px] capitalize" style={{ color: "var(--s-ink-faint)" }}>{roleLabel}</p>
+          <div className="ml-auto flex items-center gap-3">
+            <FullscreenButton />
+            <div className="text-right">
+              <p className="text-sm font-bold">{user.name}</p>
+              <p className="text-[10px] capitalize" style={{ color: "var(--s-ink-faint)" }}>{roleLabel}</p>
+            </div>
           </div>
         </header>
 
@@ -293,6 +297,9 @@ export default function AdminShell({ user, children }: AdminShellProps) {
             <MenuIcon className="w-5 h-5" />
           </button>
           <AnisLogo priority className="h-7 w-auto" />
+          <span className="ml-auto">
+            <FullscreenButton />
+          </span>
         </header>
 
         <main className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6 lg:px-8 lg:py-8">

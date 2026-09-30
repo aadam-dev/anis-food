@@ -26,6 +26,7 @@ import {
   Wallet,
 } from "lucide-react";
 import AnisLogo from "@/components/brand/AnisLogo";
+import FullscreenButton from "@/components/pwa/FullscreenButton";
 import { computeOrderTotals, formatGHS } from "@/lib/money";
 import {
   enqueue,
@@ -608,6 +609,8 @@ export default function Register({
           >
             <Tabs view={view} setView={setView} ticketCount={tickets.length} />
           </nav>
+
+          <FullscreenButton />
 
           <Link
             href="/pos/kitchen"

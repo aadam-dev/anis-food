@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import FullscreenButton from "@/components/pwa/FullscreenButton";
 import { ChevronLeft, RefreshCw, UtensilsCrossed } from "lucide-react";
 
 type Status = "QUEUED" | "COOKING" | "READY";
@@ -100,6 +101,7 @@ export default function KitchenBoard() {
         <span className="ml-auto text-sm" style={{ color: "var(--s-ink-muted)" }}>
           {orders.length} active
         </span>
+        <FullscreenButton />
         <button
           onClick={() => void load()}
           className="h-10 w-10 grid place-items-center rounded-lg"
