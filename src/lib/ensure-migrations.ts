@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { applyPendingMigrations } from "@/lib/apply-migrations";
 
 export type MigrationResult = { ok: true } | { ok: false; error: string };
 
@@ -7,10 +7,11 @@ let started: Promise<MigrationResult> | null = null;
 /**
  * Apply pending SQL migrations once per server process.
  *
- * Vercel's build does not have a separate migrate step. Doing it here uses the
- * same database the running app already talks to. A failure is logged and
- * returned — the public site still renders. The till is the one that refuses
- * to open until this succeeds, because it reads columns this update adds.
+ * This used to spawn `scripts/db-migrate.mjs`. On Vercel that child resolves
+ * `pg` from a traced slice of node_modules and dies on a missing `pg-int8`
+ * before any SQL runs — so `CashMovement.kind` never appears and the till
+ * stays on the recovery screen. Running in-process lets the server bundle
+ * follow `pg`'s real dependency tree, one statement at a time.
  *
  * A failed attempt is not cached, so Try again runs the migrator again.
  */
@@ -25,25 +26,16 @@ export function ensureMigrations(): Promise<MigrationResult> {
   return started;
 }
 
-function runMigrations(): Promise<MigrationResult> {
-  return new Promise((resolve) => {
-    const child = execFile(
-      process.execPath,
-      ["scripts/db-migrate.mjs", "up"],
-      { cwd: process.cwd(), timeout: 25_000, env: process.env },
-      (error) => {
-        if (error) {
-          console.error("Pending migrations were not applied.", error.message);
-          resolve({
-            ok: false,
-            error: "The till's books update did not apply. The register stays closed until it does.",
-          });
-          return;
-        }
-        resolve({ ok: true });
-      },
-    );
-    child.stdout?.on("data", (chunk) => console.log(String(chunk)));
-    child.stderr?.on("data", (chunk) => console.error(String(chunk)));
-  });
+async function runMigrations(): Promise<MigrationResult> {
+  try {
+    await applyPendingMigrations();
+    return { ok: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Pending migrations were not applied.", message);
+    return {
+      ok: false,
+      error: "The till's books update did not apply. The register stays closed until it does.",
+    };
+  }
 }
