@@ -47,6 +47,7 @@ model User {
   updatedAt             DateTime  @updatedAt
 
   staffProfile   StaffProfile?
+  heldCarts      HeldCart[]
   openedSessions PosSession[]    @relation("SessionOpenedBy")
   closedSessions PosSession[]    @relation("SessionClosedBy")
   cashMovements  CashMovement[]
@@ -78,6 +79,27 @@ model StaffProfile {
   notes        String?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
+}
+
+/// A cart a cashier parked so they can serve someone else and come back.
+/// It is not a sale: nothing is sent to the kitchen and nothing hits the books.
+model HeldCart {
+  id              String   @id @default(cuid())
+  staffId         String
+  staff           User     @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  /// What the cashier will recognise it by. Falls back to the customer name.
+  label           String?
+  lines           Json
+  discount        Decimal  @default(0) @db.Decimal(10, 2)
+  customerName    String?
+  customerPhone   String?
+  customerAddress String?
+  fulfillment     String   @default("TAKEAWAY")
+  tableId         String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([staffId, updatedAt])
 }
 
 // ---------------------------------------------------------------------------

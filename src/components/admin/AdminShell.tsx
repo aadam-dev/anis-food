@@ -23,6 +23,7 @@ import {
 import type { UserRole } from "@/generated/prisma";
 import { canAccess, type Resource } from "@/lib/permissions";
 import AnisLogo from "@/components/brand/AnisLogo";
+import FullscreenButton from "@/components/pwa/FullscreenButton";
 
 interface NavItem {
   href: string;
@@ -234,6 +235,19 @@ export default function AdminShell({ user, children }: AdminShellProps) {
               </button>
             </div>
             {tillLink}
+            <form action="/admin/search" className="px-3 pb-2">
+              <label className="sr-only" htmlFor="office-search-mobile">
+                Search back office
+              </label>
+              <input
+                id="office-search-mobile"
+                type="search"
+                name="q"
+                placeholder="Search orders, dishes, customers"
+                className="min-h-12 w-full rounded-2xl border px-3 text-sm outline-none"
+                style={{ borderColor: "var(--s-border)", background: "var(--s-panel-alt)" }}
+              />
+            </form>
             {nav}
             {sidebarFooter}
           </aside>
@@ -246,19 +260,23 @@ export default function AdminShell({ user, children }: AdminShellProps) {
           className="hidden shrink-0 lg:flex h-20 items-center gap-4 border-b px-7"
           style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
         >
-          <div className="relative max-w-md flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "var(--s-ink-faint)" }} />
+          <form action="/admin/search" className="relative max-w-md flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "var(--s-ink-faint)" }} />
             <input
               type="search"
-              placeholder="Search menu, orders and more"
+              name="q"
+              placeholder="Search orders, dishes, customers"
               className="min-h-12 w-full rounded-2xl border pl-9 pr-3 text-sm outline-none"
               style={{ borderColor: "var(--s-border)", background: "var(--s-panel-alt)" }}
               aria-label="Search back office"
             />
-          </div>
-          <div className="ml-auto text-right">
-            <p className="text-sm font-bold">{user.name}</p>
-            <p className="text-[10px] capitalize" style={{ color: "var(--s-ink-faint)" }}>{roleLabel}</p>
+          </form>
+          <div className="ml-auto flex items-center gap-3">
+            <FullscreenButton />
+            <div className="text-right">
+              <p className="text-sm font-bold">{user.name}</p>
+              <p className="text-[10px] capitalize" style={{ color: "var(--s-ink-faint)" }}>{roleLabel}</p>
+            </div>
           </div>
         </header>
 
@@ -279,6 +297,9 @@ export default function AdminShell({ user, children }: AdminShellProps) {
             <MenuIcon className="w-5 h-5" />
           </button>
           <AnisLogo priority className="h-7 w-auto" />
+          <span className="ml-auto">
+            <FullscreenButton />
+          </span>
         </header>
 
         <main className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6 lg:px-8 lg:py-8">

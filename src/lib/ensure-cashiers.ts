@@ -14,6 +14,39 @@ import { hashPassword, hashPin } from "@/lib/auth/password";
 
 const SEED_PASSWORD = process.env.SEED_PASSWORD || "anis1234";
 
+/**
+ * People who sign in with a PIN. Created when missing. A PIN already on the
+ * account is left alone, so a change made in Staff sticks across restarts.
+ * Names are not rewritten either — "Store Manager" is a placeholder Karim
+ * can rename.
+ */
+const PIN_ACCOUNTS: {
+  email: string;
+  name: string;
+  role: UserRole;
+  pin: string;
+  phone?: string;
+}[] = [
+  {
+    email: "karim@anis.com",
+    name: "Karim",
+    role: UserRole.OWNER,
+    pin: "4173",
+  },
+  {
+    email: "it@anis.com",
+    name: "IT Administrator",
+    role: UserRole.SUPER_ADMIN,
+    pin: "1642",
+  },
+  {
+    email: "manager@anis.com",
+    name: "Store Manager",
+    role: UserRole.MANAGER,
+    pin: "8265",
+  },
+];
+
 const CASHIERS: {
   email: string;
   name: string;
@@ -49,7 +82,62 @@ export function ensureCashiers(): Promise<void> {
   return started;
 }
 
+async function ensurePinAccount(account: (typeof PIN_ACCOUNTS)[number]): Promise<void> {
+  const email = account.email.toLowerCase();
+  const existing = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, pinHash: true, staffProfile: { select: { id: true } } },
+  });
+
+  if (!existing) {
+    const user = await prisma.user.create({
+      data: {
+        email,
+        name: account.name,
+        role: account.role,
+        passwordHash: await hashPassword(SEED_PASSWORD),
+        pinHash: await hashPin(account.pin),
+        passwordResetRequired: false,
+        isActive: true,
+      },
+    });
+    await prisma.staffProfile.create({
+      data: {
+        userId: user.id,
+        salaryType: SalaryType.MONTHLY,
+        phone: account.phone,
+        startedAt: new Date(),
+      },
+    });
+    console.log(`PIN account provisioned: ${email}`);
+    return;
+  }
+
+  if (!existing.pinHash) {
+    await prisma.user.update({
+      where: { email },
+      data: { pinHash: await hashPin(account.pin), isActive: true },
+    });
+    console.log(`PIN set: ${email}`);
+  }
+
+  if (!existing.staffProfile) {
+    await prisma.staffProfile.create({
+      data: {
+        userId: existing.id,
+        salaryType: SalaryType.MONTHLY,
+        phone: account.phone,
+        startedAt: new Date(),
+      },
+    });
+  }
+}
+
 async function provision(): Promise<void> {
+  for (const account of PIN_ACCOUNTS) {
+    await ensurePinAccount(account);
+  }
+
   for (const cashier of CASHIERS) {
     const email = cashier.email.toLowerCase();
     const existing = await prisma.user.findUnique({

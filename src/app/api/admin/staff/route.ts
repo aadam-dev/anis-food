@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/db";
 import { requireResource, logAudit, clientIp } from "@/lib/api-auth";
 import { ok, parseBody, handlePrismaError, badRequest } from "@/lib/api-utils";
-import { hashPassword } from "@/lib/auth/password";
+import { hashPassword, hashPin, isValidPin, isWeakPin } from "@/lib/auth/password";
 import { canAssignRole } from "@/lib/permissions";
 import { UserRole } from "@/generated/prisma";
 
@@ -12,6 +12,12 @@ const createSchema = z.object({
   name: z.string().min(1, "Enter a name").max(120),
   email: z.string().email("Enter a valid email").max(200),
   role: z.enum(["OWNER", "SUPER_ADMIN", "MANAGER", "ACCOUNTANT", "CASHIER"]),
+  phone: z.string().max(40).optional(),
+  pin: z
+    .string()
+    .refine(isValidPin, "A PIN must be exactly four digits")
+    .refine((value) => !isWeakPin(value), "Choose a PIN that is harder to guess"),
+  password: z.string().min(8, "A password needs at least 8 characters").max(200).optional(),
 });
 
 /** A readable one-time password, e.g. K7PQ-3MTX-9RAW. */
@@ -40,15 +46,22 @@ export async function POST(request: Request) {
   }
 
   try {
-    const password = initialPassword();
+    const password = body.password?.trim() || initialPassword();
+    const chosen = Boolean(body.password?.trim());
     const user = await prisma.user.create({
       data: {
-        name: body.name,
+        name: body.name.trim(),
         email: body.email.trim().toLowerCase(),
         role: body.role as UserRole,
         passwordHash: await hashPassword(password),
-        passwordResetRequired: true,
-        staffProfile: { create: {} },
+        pinHash: await hashPin(body.pin),
+        passwordResetRequired: !chosen,
+        staffProfile: {
+          create: {
+            phone: body.phone?.trim() || null,
+            startedAt: new Date(),
+          },
+        },
       },
     });
 
@@ -63,7 +76,14 @@ export async function POST(request: Request) {
 
     // The one-time password is returned exactly once, for the admin to hand over.
     // It is never stored in readable form.
-    return ok({ id: user.id, email: user.email, initialPassword: password }, { status: 201 });
+    return ok(
+      {
+        id: user.id,
+        email: user.email,
+        ...(chosen ? {} : { initialPassword: password }),
+      },
+      { status: 201 },
+    );
   } catch (error) {
     return handlePrismaError(error, "admin/staff POST");
   }

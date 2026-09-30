@@ -8,6 +8,9 @@ const withSerwist = withSerwistInit({
 });
 
 const nextConfig: NextConfig = {
+  // `pg` stays external so the till's in-process migrator uses the real package,
+  // including pg-int8, instead of a hand-listed slice that crashed the old child.
+  serverExternalPackages: ["pg"],
   outputFileTracingIncludes: {
     "*": [
       "./prisma/migrations/**/*",
@@ -17,6 +20,7 @@ const nextConfig: NextConfig = {
       "./node_modules/pg-pool/**/*",
       "./node_modules/pg-protocol/**/*",
       "./node_modules/pg-types/**/*",
+      "./node_modules/pg-int8/**/*",
       "./node_modules/pgpass/**/*",
       "./node_modules/postgres-array/**/*",
       "./node_modules/postgres-bytea/**/*",

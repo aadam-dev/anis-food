@@ -62,7 +62,7 @@ export default function CloseShiftDialog({
     : ["count", "momo", "review"];
 
   const [step, setStep] = useState<Step>(steps[0]);
-  const [mode, setMode] = useState<"notes" | "total">("notes");
+  const [mode, setMode] = useState<"notes" | "total">("total");
   const [counts, setCounts] = useState<DenominationCount>({});
   const [typedTotal, setTypedTotal] = useState("");
   const [momo, setMomo] = useState("");
@@ -252,8 +252,8 @@ export default function CloseShiftDialog({
               <div className="grid grid-cols-2 gap-1 rounded-xl p-1 text-xs" style={{ background: "var(--s-panel-alt)" }}>
                 {(
                   [
-                    ["notes", "By note"],
                     ["total", "Total"],
+                    ["notes", "By note"],
                   ] as const
                 ).map(([value, label]) => (
                   <button

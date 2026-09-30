@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Banknote, LogOut, Smartphone } from "lucide-react";
 import AnisLogo from "@/components/brand/AnisLogo";
+import FullscreenButton from "@/components/pwa/FullscreenButton";
 import { formatGHS } from "@/lib/money";
 import Numpad, { CASH_SHORTCUTS } from "./Numpad";
 import Button from "./ui/Button";
@@ -77,6 +78,7 @@ export function OpenShiftCard({
       >
         <AnisLogo className="h-8 w-auto" />
         <div className="flex items-center gap-1">
+          <FullscreenButton />
           {backOfficeHref && (
             <a
               href={backOfficeHref}

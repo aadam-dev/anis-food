@@ -1,38 +1,53 @@
 /**
- * Fire `window.print()`, but only once the receipt's images have actually
- * decoded.
+ * Fire `window.print()` for the thermal slip, and only that slip.
  *
- * The 80mm slip now carries a verification QR rendered as an inline `data:` URL.
- * A data URL needs no network and decodes in single-digit milliseconds, but an
- * `<img>` that has not decoded yet prints as a blank box — so we wait for every
- * image inside the receipt (logo + QR) to settle before printing.
+ * The receipt lives inside a tall, scrollable till. Printing the page as-is
+ * makes the browser paginate the hidden menu into blank sheets after the slip
+ * (Safari's "Page 1 of 3"). A copy is parked on `document.body` and the print
+ * stylesheet hides every other top-level node, so the roll is one short page.
  *
- * `waitMs` is a ceiling, not a delay: whichever of load / error / decode /
- * timeout lands first for the last straggler wins, and a receipt whose images
- * are already complete prints synchronously.
+ * Images are waited on first. The QR is an inline data URL and the logo is a
+ * file; either one that has not decoded yet prints as a blank box.
  */
 export function printReceiptNow(waitMs = 300): void {
   if (typeof window === "undefined") return;
 
   const root = document.querySelector<HTMLElement>("[data-anis-receipt]");
-  const images = Array.from(root?.querySelectorAll<HTMLImageElement>("img") ?? []);
-  const pending = images.filter((img) => !img.complete);
-
-  if (pending.length === 0) {
+  if (!root) {
     window.print();
     return;
   }
 
-  let done = false;
+  document.querySelector("[data-print-slip]")?.remove();
+
+  const host = document.createElement("div");
+  host.setAttribute("data-print-slip", "");
+  host.setAttribute("aria-hidden", "true");
+  const clone = root.cloneNode(true) as HTMLElement;
+  clone.classList.remove("anis-receipt--preview");
+  host.appendChild(clone);
+  document.body.appendChild(host);
+
+  const cleanup = () => {
+    host.remove();
+    window.removeEventListener("afterprint", cleanup);
+  };
+  window.addEventListener("afterprint", cleanup);
+
+  const images = Array.from(clone.querySelectorAll("img"));
+  const pending = images.filter((img) => !img.complete);
+  let printed = false;
   const finish = () => {
-    if (done) return;
-    done = true;
+    if (printed) return;
+    printed = true;
     window.print();
   };
 
-  // Print once the LAST image settles. Each image is counted at most once: a
-  // cached image can fire `load` and resolve `decode()` both, which would
-  // otherwise decrement twice and print while the other was still blank.
+  if (pending.length === 0) {
+    finish();
+    return;
+  }
+
   let remaining = pending.length;
   for (const img of pending) {
     let counted = false;

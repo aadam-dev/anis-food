@@ -34,6 +34,7 @@ export default function MobileCartSheet({
   onCustomerPhone,
   onCustomerAddress,
   onClear,
+  onHold,
   onClose,
   onCharge,
   selectedIds = [],
@@ -61,6 +62,7 @@ export default function MobileCartSheet({
   onCustomerPhone: (value: string) => void;
   onCustomerAddress: (value: string) => void;
   onClear: () => void;
+  onHold?: () => void;
   onClose: () => void;
   onCharge: () => void;
   selectedIds?: string[];
@@ -171,6 +173,11 @@ export default function MobileCartSheet({
             {selectedTotal !== null && onChargeSelected && (
               <Button size="lg" className="mb-2 w-full" onClick={onChargeSelected} disabled={locked}>
                 Charge selected {formatGHS(selectedTotal)}
+              </Button>
+            )}
+            {onHold && (
+              <Button size="lg" tone="secondary" className="mb-2 w-full" onClick={onHold} disabled={locked}>
+                Hold this order
               </Button>
             )}
             <Button

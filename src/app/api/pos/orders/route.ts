@@ -10,6 +10,7 @@ import { getSettings, getTaxConfig } from "@/lib/settings";
 import { taxBreakdown } from "@/lib/tax";
 import { serialiseOrder } from "@/lib/serialise-order";
 import { saleBooks, settlementAfterCorrection, splitAddsUp } from "@/lib/till-rules";
+import { tillStaffFilter } from "@/lib/till-visibility";
 import {
   PaymentMethod,
   PaymentStatus,
@@ -89,13 +90,14 @@ export async function GET(request: Request) {
 
   try {
     const scope = new URL(request.url).searchParams.get("scope");
+    const mine = tillStaffFilter(auth.user.role, auth.user.sub);
     if (scope === "shift") {
       const session = await prisma.posSession.findFirst({
         where: { status: SessionStatus.OPEN },
       });
       if (!session) return ok({ orders: [] });
       const orders = await prisma.order.findMany({
-        where: { sessionId: session.id },
+        where: { sessionId: session.id, ...mine },
         orderBy: { createdAt: "desc" },
         include: { items: true },
         take: 200,
@@ -108,6 +110,7 @@ export async function GET(request: Request) {
         paymentStatus: PaymentStatus.PENDING,
         status: { not: OrderStatus.CANCELLED },
         paymentMethod: { not: PaymentMethod.BOLT_FOOD },
+        ...mine,
       },
       orderBy: { createdAt: "asc" },
       include: { items: true },
