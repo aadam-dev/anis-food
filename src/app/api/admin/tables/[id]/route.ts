@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireResource, logAudit, clientIp } from "@/lib/api-auth";
-import { ok, parseBody, badRequest, conflict, handlePrismaError } from "@/lib/api-utils";
+import { ok, parseBody, conflict, handlePrismaError } from "@/lib/api-utils";
 import { PaymentStatus, OrderStatus } from "@/generated/prisma";
 
 const updateSchema = z

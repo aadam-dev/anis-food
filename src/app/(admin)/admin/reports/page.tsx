@@ -43,7 +43,7 @@ export default async function ReportsPage({
         actions={
           <a
             href={`/api/admin/reports/export?month=${month}&format=xlsx`}
-            className="inline-flex items-center rounded-lg border px-3.5 py-2 text-sm font-semibold min-h-11"
+            className="inline-flex items-center rounded-2xl px-4 py-2.5 text-sm font-bold min-h-12"
             style={{ background: "var(--s-panel-alt)", borderColor: "var(--s-border-strong)", color: "var(--s-ink)" }}
           >
             Export

@@ -4,8 +4,8 @@
  * whole menu lifted out of src/data/menu.json.
  *
  * Safe to re-run. Everything upserts, so a second run updates rather than
- * duplicating — and it will never overwrite a password that has already been
- * changed in production.
+ * duplicating. The four seed accounts are reset to the shared test password so
+ * sign-in keeps working; no other user's password is touched.
  *
  *   npm run db:seed
  */
@@ -62,7 +62,7 @@ const SETTINGS: Record<string, string> = {
   receipt_header: "Anis Food and Drink",
   receipt_footer: "Thank you. Please come again!",
   default_opening_float: "200",
-  pos_theme: "dark",
+  pos_theme: "light",
   admin_theme: "light",
 };
 
@@ -85,12 +85,17 @@ async function seedUsers() {
     const existing = await prisma.user.findUnique({ where: { email } });
 
     if (existing) {
-      // Never reset a live password. Keep role and name in step, nothing else.
       await prisma.user.update({
         where: { email },
-        data: { name: seed.name, role: seed.role },
+        data: {
+          name: seed.name,
+          role: seed.role,
+          passwordHash: await hashPassword(SEED_PASSWORD),
+          passwordResetRequired: false,
+        },
       });
-      console.log(`  = ${email} (${seed.role}) — already exists, password untouched`);
+      created.push({ email, role: seed.role, password: SEED_PASSWORD });
+      console.log(`  = ${email} (${seed.role}) — password set to the shared test password`);
       continue;
     }
 

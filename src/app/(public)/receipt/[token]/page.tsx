@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 import { CheckCircle2, ShieldQuestion } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { formatGHS, toMoney } from "@/lib/money";

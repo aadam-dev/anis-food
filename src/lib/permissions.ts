@@ -58,6 +58,14 @@ export function canAccess(role: UserRole | undefined | null, resource: Resource)
   return rolesForResource(resource).includes(role);
 }
 
+/**
+ * Voiding at the till takes a manager. A cashier who can void their own sale
+ * can also make cash disappear, so they settle and ask.
+ */
+export function canVoidAtTill(role: UserRole | undefined | null): boolean {
+  return canAccess(role, "orders") && canAccess(role, "pos");
+}
+
 export function canSeeCosts(role: UserRole | undefined | null): boolean {
   return !!role && COST_VISIBLE_ROLES.includes(role);
 }
@@ -94,6 +102,7 @@ export function landingPathFor(role: UserRole): string {
 const PATH_RESOURCES: ReadonlyArray<readonly [string, Resource]> = [
   ["/admin/orders", "orders"],
   ["/admin/menu", "menu"],
+  ["/admin/tables", "tables"],
   ["/admin/expenses", "expenses"],
   ["/admin/customers", "customers"],
   ["/admin/reports", "reports"],
@@ -104,6 +113,7 @@ const PATH_RESOURCES: ReadonlyArray<readonly [string, Resource]> = [
   ["/pos", "pos"],
   ["/api/admin/orders", "orders"],
   ["/api/admin/menu", "menu"],
+  ["/api/admin/tables", "tables"],
   ["/api/admin/expenses", "expenses"],
   ["/api/admin/customers", "customers"],
   ["/api/admin/reports", "reports"],

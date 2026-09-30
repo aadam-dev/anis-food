@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "node scripts/db-migrate.mjs up && next build --webpack",
   "crons": [
     { "path": "/api/cron/keepalive", "schedule": "0 6 * * *" }
   ]

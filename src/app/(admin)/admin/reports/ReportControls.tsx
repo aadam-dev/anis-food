@@ -28,14 +28,14 @@ export default function ReportControls({
   return (
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
       <div
-        className="inline-flex rounded-lg border p-0.5"
-        style={{ borderColor: "var(--s-border)", background: "var(--s-panel-alt)" }}
+        className="inline-flex rounded-2xl p-1"
+        style={{ background: "var(--s-panel)", boxShadow: "var(--s-shadow)" }}
       >
         {TABS.map((entry) => (
           <button
             key={entry.id}
             onClick={() => go({ tab: entry.id })}
-            className="rounded-md px-3 py-1.5 text-sm font-semibold"
+            className="rounded-xl px-3 py-2 text-sm font-bold"
             style={{
               background: tab === entry.id ? "var(--s-panel)" : "transparent",
               color: tab === entry.id ? "var(--s-brand)" : "var(--s-ink-muted)",

@@ -32,10 +32,6 @@ export default function Header() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
-
   return (
     <header
       className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
@@ -99,6 +95,7 @@ export default function Header() {
             <Link
               key={link.href}
               href={link.href}
+              onClick={() => setOpen(false)}
               className="py-2.5 text-lg font-medium text-neutral-black/80 hover:text-primary-red-ui transition-colors"
             >
               {link.label}
@@ -106,6 +103,7 @@ export default function Header() {
           ))}
           <Link
             href="/order"
+            onClick={() => setOpen(false)}
             className="mt-3 inline-flex items-center justify-center gap-2 rounded-full bg-primary-red px-5 py-3 font-semibold text-white"
           >
             <ShoppingCart className="h-4 w-4" /> Order Now
@@ -113,6 +111,7 @@ export default function Header() {
           {/* Staff, not customers — set apart at the bottom. */}
           <Link
             href="/login"
+            onClick={() => setOpen(false)}
             className="mt-2 inline-flex items-center gap-2 border-t border-black/5 pt-4 text-sm text-neutral-gray hover:text-primary-red-ui transition-colors"
           >
             <LogIn className="h-4 w-4" /> Staff sign in

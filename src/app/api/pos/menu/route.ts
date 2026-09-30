@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireResource } from "@/lib/api-auth";
 import { ok, handlePrismaError } from "@/lib/api-utils";
 import { toMoney } from "@/lib/money";
+import { menuImage } from "@/lib/menu-image";
 
 /**
  * The menu as the till needs it.
@@ -48,7 +49,7 @@ export async function GET() {
         name: item.name,
         price: toMoney(item.price),
         categoryId: item.categoryId,
-        imageUrl: item.imageUrl,
+        imageUrl: menuImage(item.imageUrl, item.categoryId),
         isPopular: item.isPopular,
       })),
       fetchedAt: new Date().toISOString(),

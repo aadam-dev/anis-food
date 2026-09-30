@@ -337,6 +337,7 @@ model Order {
   events OrderEvent[]
 
   @@index([createdAt, isDemo])
+  @@index([tableId])
   @@index([sessionId, isDemo])
   @@index([staffId, createdAt])
   @@index([status, createdAt])

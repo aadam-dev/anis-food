@@ -3,19 +3,26 @@
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { formatGHS } from "@/lib/money";
 import type { CartAction, CartState } from "./cartReducer";
+import type { CartLine } from "./types";
+import DishThumb from "./DishThumb";
 
 /**
- * The list of what is in the order, with the controls to change it: quantity up
- * and down, and remove. Shared by the desktop cart rail and the mobile cart
- * sheet so a cashier on a phone gets exactly the same controls as one on a
- * tablet — a mis-tapped dish is always recoverable, on any screen.
+ * The bill. Compact rows — a small photo, the name, the line total, and a
+ * stepper — so a phone and a tablet show the same order. Tapping the number
+ * opens the quantity pad (first digit replaces the current count).
  */
 export default function CartLines({
   cart,
   dispatch,
+  focusedMenuItemId,
+  onFocus,
+  onEditQty,
 }: {
   cart: CartState;
   dispatch: React.Dispatch<CartAction>;
+  focusedMenuItemId?: string | null;
+  onFocus?: (menuItemId: string) => void;
+  onEditQty?: (line: CartLine) => void;
 }) {
   if (cart.lines.length === 0) {
     return (
@@ -26,44 +33,84 @@ export default function CartLines({
   }
 
   return (
-    <ul className="divide-y" style={{ borderColor: "var(--s-border)" }}>
-      {cart.lines.map((line) => (
-        <li key={line.menuItemId} className="px-4 py-3">
-          <div className="flex items-start justify-between gap-2">
-            <span className="text-sm font-medium leading-snug">{line.name}</span>
-            <span className="money text-sm font-semibold whitespace-nowrap">
-              {formatGHS(line.unitPrice * line.quantity)}
-            </span>
-          </div>
-          <div className="mt-2 flex items-center gap-2">
+    <ul className="space-y-2 px-3 py-3">
+      {cart.lines.map((line) => {
+        const focused = line.menuItemId === focusedMenuItemId;
+        return (
+          <li
+            key={line.menuItemId}
+            className="rounded-2xl px-3 py-3"
+            style={{
+              background: focused
+                ? "color-mix(in srgb, var(--s-brand) 7%, var(--s-panel))"
+                : "var(--s-panel-alt)",
+            }}
+          >
             <button
-              onClick={() => dispatch({ type: "decrement", menuItemId: line.menuItemId })}
-              className="h-11 w-11 grid place-items-center rounded-lg border"
-              style={{ borderColor: "var(--s-border)" }}
-              aria-label={`One less ${line.name}`}
+              type="button"
+              onClick={() => onFocus?.(line.menuItemId)}
+              className="flex w-full items-start gap-3 text-left min-h-0"
             >
-              <Minus className="w-4 h-4" />
+              <DishThumb
+                name={line.name}
+                imageUrl={line.imageUrl}
+                className="h-12 w-12 shrink-0 overflow-hidden rounded-xl"
+                letterClassName="text-base"
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold leading-snug">{line.name}</span>
+                <span className="money mt-0.5 block text-xs" style={{ color: "var(--s-ink-muted)" }}>
+                  {formatGHS(line.unitPrice)} each
+                </span>
+              </span>
+              <span className="money text-sm font-bold whitespace-nowrap">
+                {formatGHS(line.unitPrice * line.quantity)}
+              </span>
             </button>
-            <span className="money w-8 text-center font-semibold">{line.quantity}</span>
-            <button
-              onClick={() => dispatch({ type: "increment", menuItemId: line.menuItemId })}
-              className="h-11 w-11 grid place-items-center rounded-lg border"
-              style={{ borderColor: "var(--s-border)" }}
-              aria-label={`One more ${line.name}`}
-            >
-              <Plus className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => dispatch({ type: "remove", menuItemId: line.menuItemId })}
-              className="ml-auto h-11 w-11 grid place-items-center rounded-lg"
-              style={{ color: "var(--s-ink-faint)" }}
-              aria-label={`Remove ${line.name}`}
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
-        </li>
-      ))}
+            <div className="mt-2.5 flex items-center gap-2 pl-15" style={{ paddingLeft: "3.75rem" }}>
+              <button
+                type="button"
+                onClick={() => dispatch({ type: "decrement", menuItemId: line.menuItemId })}
+                className="grid h-11 w-11 place-items-center rounded-xl"
+                style={{ background: "var(--s-panel)", boxShadow: "inset 0 0 0 1px var(--s-border)" }}
+                aria-label={`One less ${line.name}`}
+              >
+                <Minus className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onEditQty?.(line)}
+                className="money min-h-11 min-w-12 rounded-xl px-3 text-base font-extrabold"
+                style={{
+                  background: "color-mix(in srgb, var(--s-brand) 10%, var(--s-panel))",
+                  boxShadow: "inset 0 0 0 1.5px color-mix(in srgb, var(--s-brand) 45%, var(--s-border))",
+                }}
+                aria-label={`Type quantity for ${line.name}`}
+              >
+                {line.quantity}
+              </button>
+              <button
+                type="button"
+                onClick={() => dispatch({ type: "increment", menuItemId: line.menuItemId })}
+                className="grid h-11 w-11 place-items-center rounded-xl"
+                style={{ background: "var(--s-panel)", boxShadow: "inset 0 0 0 1px var(--s-border)" }}
+                aria-label={`One more ${line.name}`}
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => dispatch({ type: "remove", menuItemId: line.menuItemId })}
+                className="ml-auto grid h-11 w-11 place-items-center rounded-xl"
+                style={{ color: "var(--s-ink-faint)" }}
+                aria-label={`Remove ${line.name}`}
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          </li>
+        );
+      })}
     </ul>
   );
 }

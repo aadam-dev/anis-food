@@ -37,6 +37,7 @@ export default async function OrdersPage({
     total: toMoney(order.total),
     staff: order.staff?.name ?? null,
     customerName: order.customerName,
+    customerPhone: order.customerPhone,
     voidReason: order.voidReason,
     items: order.items.map((item) => ({
       id: item.id,

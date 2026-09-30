@@ -5,6 +5,7 @@ import { requireResource, logAudit, clientIp } from "@/lib/api-auth";
 import { ok, parseBody, badRequest, conflict, handlePrismaError } from "@/lib/api-utils";
 import { computeOrderTotals, toMoney, roundMoney, changeDue } from "@/lib/money";
 import { businessDay, formatOrderNumber } from "@/lib/session-utils";
+import { saleBlockedReason } from "@/lib/shift-close";
 import { getSettings, getTaxConfig } from "@/lib/settings";
 import { taxBreakdown } from "@/lib/tax";
 import {
@@ -34,7 +35,7 @@ import {
 
 const lineSchema = z.object({
   menuItemId: z.string().min(1),
-  quantity: z.number().int().min(1).max(99),
+  quantity: z.number().int().min(1).max(999),
   notes: z.string().max(200).optional(),
 });
 
@@ -94,6 +95,7 @@ function serialiseOrder(
     id: order.id,
     orderNumber: order.orderNumber,
     clientRef: order.clientRef,
+    sessionId: order.sessionId,
     status: order.status,
     paymentMethod: order.paymentMethod,
     paymentStatus: order.paymentStatus,
@@ -174,6 +176,8 @@ export async function POST(request: Request) {
         "No shift is open. Open the till first so this sale is counted in the right shift.",
       );
     }
+    const blocked = saleBlockedReason(session?.openedAt);
+    if (blocked) return conflict(blocked, { stale: true });
 
     // Rule 2. Re-read every price from the database. What the client sent about
     // money is ignored entirely.
@@ -247,6 +251,18 @@ export async function POST(request: Request) {
           select: { id: true, label: true },
         })
       : null;
+    if (body.tableId && !table) return badRequest("That table is not on the floor.");
+    if (table) {
+      const taken = await prisma.order.findFirst({
+        where: {
+          tableId: table.id,
+          isDemo: false,
+          status: { notIn: [OrderStatus.CANCELLED, OrderStatus.COMPLETED] },
+        },
+        select: { id: true },
+      });
+      if (taken) return badRequest("That table already has an open ticket.");
+    }
 
     const day = businessDay();
     const ip = clientIp(request);
