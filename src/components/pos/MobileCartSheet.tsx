@@ -68,7 +68,7 @@ export default function MobileCartSheet({
       />
 
       <section
-        className="relative flex max-h-[88dvh] flex-col rounded-t-[1.75rem]"
+        className="relative flex h-dvh max-h-dvh flex-col sm:h-auto sm:max-h-[90dvh] sm:rounded-t-[1.75rem]"
         style={{
           background: "var(--s-panel)",
           boxShadow: "0 -12px 40px rgba(26, 29, 31, 0.12)",
@@ -79,7 +79,10 @@ export default function MobileCartSheet({
           className="flex items-center justify-between px-4 py-3 border-b"
           style={{ borderColor: "var(--s-border)" }}
         >
-          <h2 className="font-semibold">This order</h2>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: "var(--s-ink-faint)" }}>Step 1 of 2</p>
+            <h2 className="font-extrabold">Review order</h2>
+          </div>
           <div className="flex items-center gap-1">
             {!empty && (
               <button
@@ -103,7 +106,7 @@ export default function MobileCartSheet({
 
         <div className="px-4 py-3 border-b" style={{ borderColor: "var(--s-border)" }}>
           {tables.length > 0 && (
-          <label className="mb-3 block px-4">
+          <label className="mb-3 block">
             <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide" style={{ color: "var(--s-ink-faint)" }}>
               Table
             </span>
@@ -163,7 +166,7 @@ export default function MobileCartSheet({
               <span className="money text-2xl font-bold">{formatGHS(totals.total)}</span>
             </div>
             <Button size="lg" className="w-full" onClick={onCharge} disabled={locked}>
-              {locked ? "Close the old shift first" : `Charge ${formatGHS(totals.total)}`}
+              {locked ? "Close the old shift first" : `Continue to payment · ${formatGHS(totals.total)}`}
             </Button>
           </div>
         )}

@@ -17,6 +17,8 @@ import {
   X,
   LogOut,
   Store,
+  Bell,
+  Search,
 } from "lucide-react";
 import type { UserRole } from "@/generated/prisma";
 import { canAccess, type Resource } from "@/lib/permissions";
@@ -239,6 +241,50 @@ export default function AdminShell({ user, children }: AdminShellProps) {
       )}
 
       <div className="flex-1 min-w-0 flex flex-col">
+        <header
+          className="hidden lg:flex h-20 items-center gap-4 border-b px-7"
+          style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
+        >
+          <div className="relative max-w-md flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "var(--s-ink-faint)" }} />
+            <input
+              type="search"
+              placeholder="Search menu, orders and more"
+              className="min-h-11 w-full rounded-xl border pl-9 pr-3 text-sm outline-none"
+              style={{ borderColor: "var(--s-border)", background: "var(--s-panel-alt)" }}
+              aria-label="Search back office"
+            />
+          </div>
+          <nav className="flex items-center gap-1 text-xs font-semibold" style={{ color: "var(--s-ink-muted)" }}>
+            {[
+              ["/admin", "Dashboard"],
+              ["/admin/orders", "Orders"],
+              ["/admin/menu", "Menu"],
+              ["/admin/tables", "Tables"],
+              ["/admin/reports", "Analytics"],
+            ].map(([href, label]) => (
+              <Link
+                key={href}
+                href={href}
+                className="rounded-full px-3 py-2"
+                style={{
+                  background: isCurrent(href) ? "var(--s-ink)" : "transparent",
+                  color: isCurrent(href) ? "#fff" : "var(--s-ink-muted)",
+                }}
+              >
+                {label}
+              </Link>
+            ))}
+          </nav>
+          <button type="button" className="grid h-11 w-11 place-items-center rounded-full" style={{ background: "var(--s-panel-alt)" }} aria-label="Notifications">
+            <Bell className="h-4 w-4" />
+          </button>
+          <div className="text-right">
+            <p className="text-sm font-bold">{user.name}</p>
+            <p className="text-[10px] capitalize" style={{ color: "var(--s-ink-faint)" }}>{roleLabel}</p>
+          </div>
+        </header>
+
         {/* Mobile top bar */}
         <header
           className="lg:hidden sticky top-0 z-40 flex items-center gap-2 border-b px-2 py-2"

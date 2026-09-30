@@ -115,10 +115,11 @@ export default function PaymentSheet({
 
   return (
     <Sheet
-      eyebrow="Total due"
+      eyebrow="Step 2 of 2 · Total due"
       title={<span className="money text-2xl">{formatGHS(totals.total)}</span>}
       onClose={onClose}
       dismissible={!submitting}
+      fullOnMobile
       footer={
         <div className="space-y-2">
           <SheetError message={error} />

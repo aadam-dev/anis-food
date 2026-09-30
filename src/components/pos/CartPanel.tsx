@@ -1,5 +1,6 @@
 "use client";
 
+import { Banknote, CreditCard, Smartphone } from "lucide-react";
 import { formatGHS, type OrderTotals } from "@/lib/money";
 import type { CartAction, CartState } from "./cartReducer";
 import type { CartLine } from "./types";
@@ -46,11 +47,16 @@ export default function CartPanel({
 
   return (
     <aside
-      className="hidden lg:flex flex-col"
-      style={{ background: "var(--s-bg)" }}
+      className="hidden min-h-0 lg:flex flex-col overflow-hidden rounded-[1.5rem]"
+      style={{ background: "var(--s-panel)", boxShadow: "var(--s-shadow)" }}
     >
-      <div className="m-3 mb-0 flex items-center justify-between rounded-[1.25rem] px-4 py-3 s-card">
-        <h2 className="font-extrabold tracking-tight">This order</h2>
+      <div className="flex items-center justify-between border-b px-4 py-4" style={{ borderColor: "var(--s-border)" }}>
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: "var(--s-ink-faint)" }}>
+            New order bill
+          </p>
+          <h2 className="font-extrabold tracking-tight">This order</h2>
+        </div>
         {!empty && (
           <button
             onClick={onClear}
@@ -62,7 +68,7 @@ export default function CartPanel({
         )}
       </div>
 
-      <div className="mx-3 mt-3 rounded-[1.25rem] px-4 py-3 s-card">
+      <div className="border-b px-4 py-3" style={{ borderColor: "var(--s-border)" }}>
         <TablePicker tables={tables} tableId={tableId} onTable={onTable} />
         <div className="mt-3">
         <CustomerFields
@@ -85,16 +91,41 @@ export default function CartPanel({
       </div>
 
       {!empty && (
-        <div className="m-3 mt-0 rounded-[1.25rem] px-4 py-4 s-card">
+        <div className="border-t px-4 py-4" style={{ borderColor: "var(--s-border)" }}>
           {totals.discountAmount > 0 && (
             <div className="flex justify-between text-sm mb-1" style={{ color: "var(--s-ink-muted)" }}>
               <span>Discount</span>
               <span className="money">-{formatGHS(totals.discountAmount)}</span>
             </div>
           )}
-          <div className="flex items-baseline justify-between mb-3">
-            <span className="font-semibold">Total</span>
-            <span className="money text-2xl font-bold">{formatGHS(totals.total)}</span>
+          <div className="mb-1 flex justify-between text-xs" style={{ color: "var(--s-ink-muted)" }}>
+            <span>Subtotal</span>
+            <span className="money">{formatGHS(totals.subtotal)}</span>
+          </div>
+          <div className="mb-3 flex items-baseline justify-between border-t pt-2" style={{ borderColor: "var(--s-border)" }}>
+            <span className="font-extrabold" style={{ color: "var(--s-brand)" }}>Total</span>
+            <span className="money text-2xl font-extrabold" style={{ color: "var(--s-brand)" }}>{formatGHS(totals.total)}</span>
+          </div>
+          <p className="mb-2 text-xs font-bold">Payment method</p>
+          <div className="mb-3 grid grid-cols-3 gap-2">
+            {[
+              { icon: Banknote, label: "Cash" },
+              { icon: Smartphone, label: "MoMo" },
+              { icon: CreditCard, label: "Card" },
+            ].map(({ icon: Icon, label }, index) => (
+              <span
+                key={label}
+                className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-bold"
+                style={{
+                  background: index === 1 ? "color-mix(in srgb, var(--s-brand) 10%, white)" : "var(--s-panel-alt)",
+                  color: index === 1 ? "var(--s-brand)" : "var(--s-ink-muted)",
+                  boxShadow: "inset 0 0 0 1px var(--s-border)",
+                }}
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+              </span>
+            ))}
           </div>
           <Button size="lg" className="w-full" onClick={onCharge} disabled={locked}>
             {locked ? "Close the old shift first" : `Charge ${formatGHS(totals.total)}`}
