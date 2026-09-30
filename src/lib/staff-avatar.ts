@@ -26,10 +26,13 @@ export function staffInitials(name: string): string {
 }
 
 export function staffAvatarTint(name: string): string {
-  // FNV-1a — short names hash more evenly than a rolling *31.
+  // Mix first + last token so "Maxwell Kaku" and "Maudallia Tetteh" land on
+  // different slots even when FNV would collide on the full string.
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const key = `${parts[0] ?? ""}|${parts[parts.length - 1] ?? ""}|${name.length}`;
   let hash = 2166136261;
-  for (let i = 0; i < name.length; i++) {
-    hash ^= name.charCodeAt(i);
+  for (let i = 0; i < key.length; i++) {
+    hash ^= key.charCodeAt(i);
     hash = Math.imul(hash, 16777619);
   }
   return AVATAR_TINTS[(hash >>> 0) % AVATAR_TINTS.length];

@@ -13,6 +13,10 @@ describe("staff avatar helpers", () => {
     assert.equal(staffAvatarTint("Karim"), staffAvatarTint("Karim"));
   });
 
+  it("gives Maxwell and Maudallia different tint placeholders", () => {
+    assert.notEqual(staffAvatarTint("Maxwell Kaku"), staffAvatarTint("Maudallia Tetteh"));
+  });
+
   it("covers more than one tint across a few names", () => {
     const tints = new Set(
       ["Maxwell Kaku", "Maudallia Tetteh", "Karim", "IT Administrator", "Ama Mensah"].map(

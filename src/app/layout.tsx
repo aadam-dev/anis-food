@@ -8,6 +8,7 @@ import { Inter, Poppins, Playfair_Display, Plus_Jakarta_Sans } from "next/font/g
 import "@/styles/globals.css";
 import { ToastProvider } from "@/contexts/ToastContext";
 import { ensureMigrations } from "@/lib/ensure-migrations";
+import { ensureCashiers } from "@/lib/ensure-cashiers";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -124,6 +125,7 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   await ensureMigrations();
+  await ensureCashiers();
   return (
     <html lang="en">
       <body
