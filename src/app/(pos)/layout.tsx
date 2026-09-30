@@ -8,11 +8,11 @@ export const metadata: Metadata = {
   title: "Till — Anis",
   robots: { index: false, follow: false },
   manifest: "/app/manifest.webmanifest",
-  appleWebApp: { capable: true, title: "Anis Till", statusBarStyle: "black-translucent" },
+  appleWebApp: { capable: true, title: "Anis Till", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#121110",
+  themeColor: "#F4F6F8",
   // No pinch-zoom: a stray two-finger touch mid-service should not leave the
   // cashier looking at a magnified corner of the register with a queue waiting.
   initialScale: 1,
@@ -28,7 +28,7 @@ export default async function PosLayout({ children }: { children: React.ReactNod
   if (!canAccess(user.role, "pos")) redirect("/admin");
 
   const settings = await getSettings();
-  const theme = asTheme(settings.pos_theme, "dark");
+  const theme = asTheme(settings.pos_theme, "light");
 
   return (
     <div data-surface="pos" data-theme={theme} className="min-h-dvh">

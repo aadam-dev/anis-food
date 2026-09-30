@@ -3,6 +3,7 @@ import { getSettings } from "@/lib/settings";
 import { currentSession } from "@/lib/pos-session";
 import { prisma } from "@/lib/db";
 import { toMoney } from "@/lib/money";
+import { menuImage } from "@/lib/menu-image";
 import { canAccess, canVoidAtTill } from "@/lib/permissions";
 import Register from "@/components/pos/Register";
 import type { OrderView, PosCategory, PosMenuItem, SessionView } from "@/components/pos/types";
@@ -55,7 +56,7 @@ export default async function PosPage() {
     name: item.name,
     price: toMoney(item.price),
     categoryId: item.categoryId,
-    imageUrl: item.imageUrl,
+    imageUrl: menuImage(item.imageUrl, item.categoryId),
     isPopular: item.isPopular,
   }));
 

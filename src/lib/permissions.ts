@@ -13,6 +13,7 @@ export const RESOURCE_ROLES = {
   dashboard: [UserRole.OWNER, UserRole.SUPER_ADMIN, UserRole.MANAGER, UserRole.ACCOUNTANT],
   orders: [UserRole.OWNER, UserRole.SUPER_ADMIN, UserRole.MANAGER, UserRole.ACCOUNTANT],
   menu: [UserRole.OWNER, UserRole.SUPER_ADMIN, UserRole.MANAGER],
+  tables: [UserRole.OWNER, UserRole.SUPER_ADMIN, UserRole.MANAGER],
   expenses: [UserRole.OWNER, UserRole.SUPER_ADMIN, UserRole.MANAGER, UserRole.ACCOUNTANT],
   customers: [UserRole.OWNER, UserRole.SUPER_ADMIN, UserRole.MANAGER, UserRole.ACCOUNTANT],
   reports: [UserRole.OWNER, UserRole.SUPER_ADMIN, UserRole.MANAGER, UserRole.ACCOUNTANT],
@@ -100,6 +101,7 @@ export function landingPathFor(role: UserRole): string {
 const PATH_RESOURCES: ReadonlyArray<readonly [string, Resource]> = [
   ["/admin/orders", "orders"],
   ["/admin/menu", "menu"],
+  ["/admin/tables", "tables"],
   ["/admin/expenses", "expenses"],
   ["/admin/customers", "customers"],
   ["/admin/reports", "reports"],
@@ -110,6 +112,7 @@ const PATH_RESOURCES: ReadonlyArray<readonly [string, Resource]> = [
   ["/pos", "pos"],
   ["/api/admin/orders", "orders"],
   ["/api/admin/menu", "menu"],
+  ["/api/admin/tables", "tables"],
   ["/api/admin/expenses", "expenses"],
   ["/api/admin/customers", "customers"],
   ["/api/admin/reports", "reports"],

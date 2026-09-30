@@ -3,7 +3,18 @@
 import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Search, Check, Loader2, AlertCircle, ImagePlus } from "lucide-react";
+import {
+  Search,
+  Check,
+  Loader2,
+  AlertCircle,
+  ImagePlus,
+  LayoutGrid,
+  List,
+  SlidersHorizontal,
+  MoreHorizontal,
+  Plus,
+} from "lucide-react";
 import { formatGHS, roundMoney } from "@/lib/money";
 import {
   PageHeader,
@@ -46,7 +57,13 @@ export default function MenuManagerClient({ categories, items, canSeeCosts }: Pr
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>(categories[0]?.id ?? "all");
+  const [adding, setAdding] = useState(false);
+  const [draftName, setDraftName] = useState("");
+  const [draftPrice, setDraftPrice] = useState("");
+  const [draftCategory, setDraftCategory] = useState(categories[0]?.id ?? "");
+  const [newCategory, setNewCategory] = useState("");
+  const [editing, setEditing] = useState<AdminMenuItem | null>(null);
   const [saves, setSaves] = useState<Record<string, SaveState>>({});
   // Local echo of edits so a field does not snap back while the server catches up.
   const [overrides, setOverrides] = useState<Record<string, Partial<AdminMenuItem>>>({});
@@ -118,75 +135,273 @@ export default function MenuManagerClient({ categories, items, canSeeCosts }: Pr
     }
   }
 
+  async function addCategory(event: React.FormEvent) {
+    event.preventDefault();
+    const name = newCategory.trim();
+    if (!name) return;
+    const response = await fetch("/api/admin/menu/categories", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (response.ok && data.id) {
+      setNewCategory("");
+      setCategoryFilter(data.id);
+      setDraftCategory(data.id);
+      startTransition(() => router.refresh());
+    }
+  }
+
+  async function createDish(event: React.FormEvent) {
+    event.preventDefault();
+    const price = Number(draftPrice);
+    if (!draftName.trim() || !Number.isFinite(price)) return;
+    const slugBase = draftName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 60);
+    const response = await fetch("/api/admin/menu", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        slug: `${slugBase || "dish"}-${Date.now().toString(36)}`,
+        name: draftName.trim(),
+        price: roundMoney(price),
+        categoryId: draftCategory || categoryFilter,
+        isAvailable: true,
+      }),
+    });
+    if (response.ok) {
+      setAdding(false);
+      setDraftName("");
+      setDraftPrice("");
+      startTransition(() => router.refresh());
+    }
+  }
+
+  const counts = new Map<string, number>();
+  for (const item of merged) counts.set(item.categoryId, (counts.get(item.categoryId) ?? 0) + 1);
+
   return (
     <>
       <PageHeader
-        title="Menu"
+        title="Manage dishes"
         description="What you change here is what the website shows and what the till charges."
+        actions={
+          <div className="flex flex-wrap gap-2">
+            {unavailableCount > 0 && <Chip tone="warn">{unavailableCount} sold out</Chip>}
+            {canSeeCosts && (
+              <Chip tone={costCoverage === merged.length ? "good" : "neutral"}>
+                Cost on {costCoverage}/{merged.length}
+              </Chip>
+            )}
+          </div>
+        }
       />
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_auto]">
-        <div className="relative">
-          <Search
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4"
-            style={{ color: "var(--s-ink-faint)" }}
-          />
-          <input
-            type="search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search dishes"
-            className={`${inputClass} pl-9`}
-            style={inputStyle}
-            aria-label="Search menu items"
-          />
-        </div>
-        <select
-          value={categoryFilter}
-          onChange={(event) => setCategoryFilter(event.target.value)}
-          className={inputClass}
-          style={inputStyle}
-          aria-label="Filter by category"
-        >
-          <option value="all">All categories ({merged.length})</option>
-          {categories.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.name}
-            </option>
-          ))}
-        </select>
-      </div>
+      <div className="grid gap-4 lg:grid-cols-[16rem_1fr]">
+        <aside className="s-card flex flex-col p-3">
+          <p className="px-2 pb-2 text-sm font-extrabold">Dishes category</p>
+          <button
+            type="button"
+            onClick={() => setCategoryFilter("all")}
+            className="mb-1 flex items-center justify-between rounded-2xl px-3 py-2.5 text-left text-sm font-semibold"
+            style={{
+              background: categoryFilter === "all" ? "color-mix(in srgb, var(--s-brand) 10%, white)" : "transparent",
+              color: categoryFilter === "all" ? "var(--s-brand)" : "var(--s-ink)",
+              boxShadow: categoryFilter === "all" ? "inset 0 0 0 1.5px var(--s-brand)" : undefined,
+            }}
+          >
+            All dishes <span className="money text-xs">{merged.length}</span>
+          </button>
+          {categories.map((category) => {
+            const active = categoryFilter === category.id;
+            return (
+              <button
+                key={category.id}
+                type="button"
+                onClick={() => {
+                  setCategoryFilter(category.id);
+                  setDraftCategory(category.id);
+                }}
+                className="mb-1 flex items-center justify-between rounded-2xl px-3 py-2.5 text-left text-sm font-semibold"
+                style={{
+                  background: active ? "color-mix(in srgb, var(--s-brand) 10%, white)" : "transparent",
+                  color: active ? "var(--s-brand)" : "var(--s-ink)",
+                  boxShadow: active ? "inset 0 0 0 1.5px var(--s-brand)" : undefined,
+                }}
+              >
+                {category.name}
+                <span className="money text-xs">{counts.get(category.id) ?? 0}</span>
+              </button>
+            );
+          })}
+          <form onSubmit={addCategory} className="mt-auto pt-3">
+            <input
+              value={newCategory}
+              onChange={(event) => setNewCategory(event.target.value)}
+              placeholder="New category"
+              className={`${inputClass} mb-2`}
+              style={inputStyle}
+              aria-label="New category"
+            />
+            <button
+              type="submit"
+              className="w-full rounded-2xl py-3 text-sm font-bold text-white"
+              style={{ background: "var(--s-brand)" }}
+            >
+              Add category
+            </button>
+          </form>
+        </aside>
 
-      <div className="mb-4 flex flex-wrap gap-2 text-sm">
-        <Chip>{merged.length} dishes</Chip>
-        {unavailableCount > 0 && <Chip tone="warn">{unavailableCount} sold out</Chip>}
-        {canSeeCosts && (
-          <Chip tone={costCoverage === merged.length ? "good" : "neutral"}>
-            Cost price on {costCoverage} of {merged.length}
-          </Chip>
-        )}
-      </div>
-
-      <Panel>
-        {visible.length === 0 ? (
-          <EmptyState
-            title="Nothing matches"
-            hint="Try a different search or category."
-          />
-        ) : (
-          <ul className="divide-y" style={{ borderColor: "var(--s-border)" }}>
-            {visible.map((item) => (
-              <MenuRow
-                key={item.id}
-                item={item}
-                canSeeCosts={canSeeCosts}
-                save={save}
-                state={saves[item.id]}
+        <section className="min-w-0">
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <div className="relative min-w-56 flex-1">
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4"
+                style={{ color: "var(--s-ink-faint)" }}
               />
+              <input
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search dishes"
+                className={`${inputClass} pl-9`}
+                style={inputStyle}
+                aria-label="Search menu items"
+              />
+            </div>
+            <div className="hidden sm:flex rounded-xl p-1" style={{ background: "var(--s-panel)" }}>
+              <button type="button" className="grid h-10 w-10 place-items-center rounded-lg" style={{ color: "var(--s-brand)", background: "color-mix(in srgb, var(--s-brand) 10%, white)" }} aria-label="Grid view">
+                <LayoutGrid className="h-4 w-4" />
+              </button>
+              <button type="button" className="grid h-10 w-10 place-items-center rounded-lg" style={{ color: "var(--s-ink-faint)" }} aria-label="List view">
+                <List className="h-4 w-4" />
+              </button>
+            </div>
+            <button type="button" className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-white px-3 text-sm font-bold shadow-sm">
+              <SlidersHorizontal className="h-4 w-4" /> Filter
+            </button>
+            <button type="button" onClick={() => setAdding(true)} className="inline-flex min-h-12 items-center gap-2 rounded-xl px-4 text-sm font-bold text-white" style={{ background: "var(--s-brand)" }}>
+              <Plus className="h-4 w-4" /> Add New Dish
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+            <button
+              type="button"
+              onClick={() => setAdding(true)}
+              className="flex min-h-56 flex-col items-center justify-center rounded-[1.25rem] border-2 border-dashed text-sm font-bold"
+              style={{ borderColor: "var(--s-brand)", color: "var(--s-brand)", background: "var(--s-panel)" }}
+            >
+              <span className="mb-2 grid h-10 w-10 place-items-center rounded-xl text-white" style={{ background: "var(--s-brand)" }}>
+                <Plus className="h-5 w-5" />
+              </span>
+              Add New Dish
+              {categoryFilter !== "all" && (
+                <span className="mt-1 text-xs font-semibold" style={{ color: "var(--s-ink-muted)" }}>
+                  to {categories.find((c) => c.id === categoryFilter)?.name}
+                </span>
+              )}
+            </button>
+            {visible.map((item) => (
+              <article key={item.id} className="s-card relative min-h-56 overflow-hidden p-3">
+                <input type="checkbox" aria-label={`Select ${item.name}`} className="absolute left-3 top-3 z-10 h-4 w-4 rounded" />
+                <button type="button" onClick={() => setEditing(item)} className="absolute right-2 top-2 z-10 grid h-9 w-9 place-items-center rounded-full" style={{ color: "var(--s-ink-muted)" }} aria-label={`Edit ${item.name}`}>
+                  <MoreHorizontal className="h-4 w-4" />
+                </button>
+                <button type="button" onClick={() => setEditing(item)} className="w-full text-left">
+                <div className="relative mx-auto mt-3 h-24 w-24 overflow-hidden rounded-full bg-[var(--s-panel-alt)]">
+                  <Image src={item.imageUrl || "/images/menu/servings.jpg"} alt="" fill className="object-cover" sizes="96px" />
+                </div>
+                <div className="mt-4">
+                  <p className="text-[10px] font-semibold" style={{ color: "var(--s-ink-faint)" }}>{item.categoryName}</p>
+                  <p className="truncate text-sm font-bold">{item.name}</p>
+                  <p className="money mt-1 text-sm font-extrabold" style={{ color: "var(--s-ink)" }}>
+                    {formatGHS(item.price)}
+                  </p>
+                  {!item.isAvailable && <Chip tone="warn">Sold out</Chip>}
+                </div>
+                </button>
+              </article>
             ))}
-          </ul>
-        )}
-      </Panel>
+          </div>
+
+          {visible.length === 0 && (
+            <Panel className="mt-4">
+              <EmptyState title="Nothing in this category" hint="Add a dish, or pick another category." />
+            </Panel>
+          )}
+        </section>
+      </div>
+
+      {adding && (
+        <div className="fixed inset-0 z-50 grid place-items-end p-4 sm:place-items-center" style={{ background: "rgba(26,29,31,0.35)" }}>
+          <form onSubmit={createDish} className="s-card w-full max-w-md space-y-3 p-5">
+            <h2 className="text-lg font-extrabold">Add dish</h2>
+            <input
+              value={draftName}
+              onChange={(event) => setDraftName(event.target.value)}
+              placeholder="Dish name"
+              className={inputClass}
+              style={inputStyle}
+              required
+              aria-label="Dish name"
+            />
+            <input
+              value={draftPrice}
+              onChange={(event) => setDraftPrice(event.target.value.replace(/[^\d.]/g, ""))}
+              placeholder="Price"
+              inputMode="decimal"
+              className={`${inputClass} money`}
+              style={inputStyle}
+              required
+              aria-label="Price"
+            />
+            <select
+              value={draftCategory || categoryFilter}
+              onChange={(event) => setDraftCategory(event.target.value)}
+              className={inputClass}
+              style={inputStyle}
+              aria-label="Category"
+            >
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+            <div className="flex gap-2">
+              <button type="submit" className="flex-1 rounded-2xl py-3 font-bold text-white" style={{ background: "var(--s-brand)" }}>
+                Save dish
+              </button>
+              <button type="button" onClick={() => setAdding(false)} className="rounded-2xl px-4 py-3 font-bold" style={{ color: "var(--s-ink-muted)" }}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {editing && (
+        <div className="fixed inset-0 z-50 grid place-items-end p-4 sm:place-items-center" style={{ background: "rgba(26,29,31,0.35)" }}>
+          <div className="s-card max-h-[90dvh] w-full max-w-2xl overflow-y-auto">
+            <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: "var(--s-border)" }}>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--s-ink-faint)" }}>Edit dish</p>
+                <h2 className="font-extrabold">{editing.name}</h2>
+              </div>
+              <button type="button" onClick={() => setEditing(null)} className="rounded-xl px-3 text-sm font-bold">Close</button>
+            </div>
+            <ul>
+              <MenuRow item={editing} canSeeCosts={canSeeCosts} save={save} state={saves[editing.id]} />
+            </ul>
+          </div>
+        </div>
+      )}
     </>
   );
 }

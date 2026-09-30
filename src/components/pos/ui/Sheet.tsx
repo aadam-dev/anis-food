@@ -111,7 +111,7 @@ export default function Sheet({
   return createPortal(
     <div
       data-surface="pos"
-      data-theme={document.querySelector("[data-surface]")?.getAttribute("data-theme") ?? "dark"}
+      data-theme={document.querySelector("[data-surface]")?.getAttribute("data-theme") ?? "light"}
       className="fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center sm:p-4"
       style={{ background: "transparent" }}
     >

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search, X } from "lucide-react";
+import { Search, Star, X } from "lucide-react";
 import { formatGHS } from "@/lib/money";
 import { callNumber } from "@/lib/session-utils";
 import type { OrderView, PosCategory, PosMenuItem } from "./types";
@@ -47,10 +47,24 @@ export default function MenuGrid({
     }
     return items.filter((item) => item.categoryId === category);
   }, [items, category, search]);
+  const categoryCount = category === "popular"
+    ? items.filter((item) => item.isPopular).length
+    : items.filter((item) => item.categoryId === category).length;
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <div className="px-3 pt-3">
+      <div className="flex items-center gap-3 px-4 pt-4">
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-bold uppercase tracking-[0.12em]" style={{ color: "var(--s-ink-faint)" }}>
+            Choose category
+          </p>
+          <h1 className="truncate text-lg font-extrabold">
+            {category === "popular" ? "Popular dishes" : categories.find((entry) => entry.id === category)?.name}
+            <span className="ml-2 text-xs font-bold" style={{ color: "var(--s-brand)" }}>
+              {categoryCount} items
+            </span>
+          </h1>
+        </div>
         <div className="relative">
           <Search
             className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4"
@@ -62,7 +76,7 @@ export default function MenuGrid({
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search the menu"
             aria-label="Search the menu"
-            className="w-full rounded-2xl pl-9 pr-10 py-3.5 outline-none"
+            className="w-56 rounded-2xl pl-9 pr-10 py-3 outline-none max-sm:w-44"
             style={{
               background: "var(--s-panel-alt)",
               color: "var(--s-ink)",
@@ -118,11 +132,12 @@ export default function MenuGrid({
       )}
 
       {!search && (
-        <div className="flex gap-2 overflow-x-auto px-3 py-3 no-scrollbar">
+        <div className="flex gap-2 overflow-x-auto px-4 py-3 no-scrollbar">
           <CategoryChip
             active={category === "popular"}
             onClick={() => setCategory("popular")}
             label="Popular"
+            icon={<Star className="h-3.5 w-3.5" />}
           />
           {categories.map((entry) => (
             <CategoryChip
@@ -130,36 +145,30 @@ export default function MenuGrid({
               active={category === entry.id}
               onClick={() => setCategory(entry.id)}
               label={entry.name}
+              count={items.filter((item) => item.categoryId === entry.id).length}
             />
           ))}
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-3 pb-4">
+      <div className="flex-1 overflow-y-auto px-4 pb-4">
         {visible.length === 0 ? (
           <p className="py-12 text-center text-sm" style={{ color: "var(--s-ink-muted)" }}>
             Nothing here. Try another search.
           </p>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
             {visible.map((item) => {
               const qty = quantities[item.id] ?? 0;
               return (
-                <button
+                <article
                   key={item.id}
-                  onClick={() => onAdd(item)}
-                  disabled={locked}
-                  className="relative overflow-hidden text-left active:scale-[0.97] transition-transform flex flex-col disabled:opacity-45 disabled:active:scale-100 rounded-[1.25rem]"
-                  style={{
-                    background:
-                      qty > 0
-                        ? "color-mix(in srgb, var(--s-brand) 14%, var(--s-panel))"
-                        : "var(--s-panel)",
-                    boxShadow:
-                      qty > 0
-                        ? "inset 0 0 0 1.5px var(--s-brand)"
-                        : "inset 0 0 0 1px var(--s-border)",
-                  }}
+                  className="s-card relative flex min-h-52 flex-col items-center overflow-hidden p-3 text-center"
+                  style={
+                    qty > 0
+                      ? { boxShadow: "var(--s-shadow), inset 0 0 0 1.5px var(--s-brand)" }
+                      : undefined
+                  }
                 >
                   {qty > 0 && (
                     <span
@@ -170,16 +179,29 @@ export default function MenuGrid({
                     </span>
                   )}
                   <ItemThumb item={item} />
-                  <span className="px-3 pt-2 block text-sm font-semibold leading-snug line-clamp-2">
+                  <span className="mt-2 block min-h-10 text-sm font-bold leading-snug line-clamp-2">
                     {item.name}
                   </span>
                   <span
-                    className="money px-3 pb-3 pt-1 block text-sm font-bold"
-                    style={{ color: "var(--s-brand)" }}
+                    className="money mt-1 block text-sm font-extrabold"
+                    style={{ color: "var(--s-ink)" }}
                   >
                     {formatGHS(item.price)}
                   </span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => onAdd(item)}
+                    disabled={locked}
+                    className="mt-3 w-full rounded-xl py-2 text-xs font-extrabold active:scale-[0.98] disabled:opacity-45"
+                    style={{
+                      background: qty > 0 ? "var(--s-brand)" : "transparent",
+                      color: qty > 0 ? "#fff" : "var(--s-brand)",
+                      boxShadow: qty > 0 ? undefined : "inset 0 0 0 1px var(--s-brand)",
+                    }}
+                  >
+                    {qty > 0 ? `Added · ${qty}` : "Add"}
+                  </button>
+                </article>
               );
             })}
           </div>
@@ -190,29 +212,46 @@ export default function MenuGrid({
 }
 
 function ItemThumb({ item }: { item: PosMenuItem }) {
-  return <DishThumb name={item.name} imageUrl={item.imageUrl} />;
+  return (
+    <DishThumb
+      name={item.name}
+      imageUrl={item.imageUrl}
+      className="h-24 w-24 rounded-full shadow-sm sm:h-28 sm:w-28"
+      letterClassName="text-2xl"
+    />
+  );
 }
 
 function CategoryChip({
   active,
   onClick,
   label,
+  icon,
+  count,
 }: {
   active: boolean;
   onClick: () => void;
   label: string;
+  icon?: React.ReactNode;
+  count?: number;
 }) {
   return (
     <button
       onClick={onClick}
-      className="shrink-0 rounded-full px-4 py-2 text-sm font-semibold whitespace-nowrap transition-colors"
+      className="flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-bold whitespace-nowrap transition-colors"
       style={{
         background: active ? "var(--s-brand)" : "var(--s-panel-alt)",
         color: active ? "#fff" : "var(--s-ink-muted)",
         boxShadow: active ? undefined : "inset 0 0 0 1px var(--s-border)",
       }}
     >
+      {icon}
       {label}
+      {count !== undefined && (
+        <span className="money text-[10px]" style={{ opacity: 0.72 }}>
+          {count}
+        </span>
+      )}
     </button>
   );
 }

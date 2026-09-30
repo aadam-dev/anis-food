@@ -63,7 +63,7 @@ const SETTINGS: Record<string, string> = {
   receipt_header: "Anis Food and Drink",
   receipt_footer: "Thank you. Please come again!",
   default_opening_float: "200",
-  pos_theme: "dark",
+  pos_theme: "light",
   admin_theme: "light",
 };
 

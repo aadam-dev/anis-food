@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth/session";
 import { canSeeCosts } from "@/lib/permissions";
 import { toMoney } from "@/lib/money";
+import { menuImage } from "@/lib/menu-image";
 import MenuManagerClient, { type AdminMenuItem, type AdminMenuCategory } from "./MenuManagerClient";
 
 export const metadata = { title: "Menu" };
@@ -34,7 +35,7 @@ export default async function AdminMenuPage() {
     costPrice: showCosts && item.costPrice !== null ? toMoney(item.costPrice) : null,
     categoryId: item.categoryId,
     categoryName: item.category.name,
-    imageUrl: item.imageUrl,
+    imageUrl: menuImage(item.imageUrl, item.categoryId),
     isPopular: item.isPopular,
     isAvailable: item.isAvailable,
   }));

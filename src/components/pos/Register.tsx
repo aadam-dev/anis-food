@@ -19,7 +19,9 @@ import {
   LogOut,
   MoreHorizontal,
   Receipt,
+  ReceiptText,
   Store,
+  UserRound,
   Wallet,
 } from "lucide-react";
 import AnisLogo from "@/components/brand/AnisLogo";
@@ -128,6 +130,10 @@ export default function Register({
   const [movingCash, setMovingCash] = useState(false);
   const [focusedMenuItemId, setFocusedMenuItemId] = useState<string | null>(null);
   const [qtyTarget, setQtyTarget] = useState<CartLine | null>(null);
+  const [tableId, setTableId] = useState("");
+  const [tables, setTables] = useState<
+    { id: string; label: string; area: string; seats: number; occupied: boolean }[]
+  >([]);
   const cartKey = useRef(`anis-pos-cart:${user.name}`);
   const skipSave = useRef(true);
 
@@ -281,6 +287,19 @@ export default function Register({
   }, [loadSession]);
 
   useEffect(() => {
+    let cancelled = false;
+    fetch("/api/pos/tables")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.tables) setTables(data.tables);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.id]);
+
+  useEffect(() => {
     if (!banner) return;
     const timer = setTimeout(() => setBanner(null), 5000);
     return () => clearTimeout(timer);
@@ -307,6 +326,7 @@ export default function Register({
       })),
       paymentMethod: method,
       discountAmount: cart.discount || undefined,
+      tableId: tableId || undefined,
       ...extras,
     };
 
@@ -372,6 +392,7 @@ export default function Register({
     dispatch({ type: "clear" });
     setCustomerName("");
     setCustomerPhone("");
+    setTableId("");
     setFocusedMenuItemId(null);
     setQtyTarget(null);
   }
@@ -416,20 +437,27 @@ export default function Register({
   }
 
   return (
-    <div className="min-h-dvh flex flex-col">
+    <div
+      className="min-h-dvh flex flex-col lg:p-4 lg:gap-3"
+      style={{
+        background:
+          "radial-gradient(circle at 0 100%, color-mix(in srgb, var(--s-brand) 8%, transparent), transparent 30%), var(--s-bg)",
+      }}
+    >
       <header
-        className="sticky top-0 z-30 border-b"
+        className="sticky top-0 z-30 border-b lg:static lg:rounded-[1.5rem] lg:border-0 lg:px-2"
         style={{
           background: "color-mix(in srgb, var(--s-panel) 92%, transparent)",
           backdropFilter: "blur(10px)",
           borderColor: "var(--s-border)",
           paddingTop: "env(safe-area-inset-top)",
+          boxShadow: "var(--s-shadow)",
         }}
       >
         <div className="flex items-center gap-3 px-3 pt-2 pb-1.5 lg:px-4">
           <AnisLogo className="h-8 w-auto shrink-0" />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold leading-tight">{firstName}</p>
+            <p className="truncate text-sm font-bold leading-tight">{firstName}</p>
             <p className="truncate text-[11px] leading-tight" style={{ color: "var(--s-ink-muted)" }}>
               <span className="money">
                 {session.takings.orderCount} sale{session.takings.orderCount === 1 ? "" : "s"} ·{" "}
@@ -439,7 +467,7 @@ export default function Register({
           </div>
 
           <nav
-            className="hidden md:grid grid-cols-3 gap-1 rounded-2xl p-1"
+            className="hidden md:grid lg:hidden grid-cols-3 gap-1 rounded-2xl p-1"
             style={{ background: "var(--s-panel-alt)" }}
             aria-label="Till sections"
           >
@@ -569,68 +597,92 @@ export default function Register({
         )}
       </header>
 
-      {view === "register" && (
-        <div className="flex-1 min-h-0 lg:grid lg:grid-cols-[1fr_24rem]">
-          <MenuGrid
-            categories={menu.categories}
-            items={menu.items}
-            quantities={quantities}
-            tickets={tickets}
-            onAdd={addItem}
-            onOpenTicket={(ticket) => setSettling(ticket)}
-            locked={locked}
-          />
-          <CartPanel
-            cart={cart}
-            totals={totals}
-            dispatch={dispatch}
-            focusedMenuItemId={focusedMenuItemId}
-            onFocus={setFocusedMenuItemId}
-            onEditQty={editQty}
-            customerName={customerName}
-            customerPhone={customerPhone}
-            onCustomerName={setCustomerName}
-            onCustomerPhone={setCustomerPhone}
-            onClear={clearOrder}
-            onCharge={() => setPaying(true)}
-            locked={locked}
-          />
-        </div>
-      )}
-
-      {view === "tickets" && (
-        <OpenTickets
-          tickets={tickets}
-          canVoid={canVoid}
-          onTakePayment={(ticket) => setSettling(ticket)}
-          onVoid={(ticket) => setVoiding(ticket)}
+      <div
+        className={`flex-1 min-h-0 lg:grid lg:gap-3 ${
+          view === "register"
+            ? "lg:grid-cols-[5.5rem_minmax(0,1fr)_22.5rem]"
+            : "lg:grid-cols-[5.5rem_minmax(0,1fr)]"
+        }`}
+      >
+        <PosRail
+          view={view}
+          ticketCount={tickets.length}
+          setView={setView}
+          backOfficeHref={backOfficeHref}
+          onSignOut={() => void handleSignOut()}
         />
-      )}
 
-      {view === "shift" && (
-        <ShiftPanel
-          session={session}
-          onCashMovement={() => setMovingCash(true)}
-          onCloseShift={openClose}
-        />
-      )}
+        {view === "register" && (
+          <>
+            <main className="min-h-0 overflow-hidden lg:rounded-[1.5rem] lg:bg-[var(--s-panel)] lg:shadow-[var(--s-shadow)]">
+              <MenuGrid
+                categories={menu.categories}
+                items={menu.items}
+                quantities={quantities}
+                tickets={tickets}
+                onAdd={addItem}
+                onOpenTicket={(ticket) => setSettling(ticket)}
+                locked={locked}
+              />
+            </main>
+            <CartPanel
+              cart={cart}
+              totals={totals}
+              dispatch={dispatch}
+              focusedMenuItemId={focusedMenuItemId}
+              onFocus={setFocusedMenuItemId}
+              onEditQty={editQty}
+              customerName={customerName}
+              customerPhone={customerPhone}
+              onCustomerName={setCustomerName}
+              onCustomerPhone={setCustomerPhone}
+              onClear={clearOrder}
+              onCharge={() => setPaying(true)}
+              locked={locked}
+              tables={tables}
+              tableId={tableId}
+              onTable={setTableId}
+            />
+          </>
+        )}
+
+        {view === "tickets" && (
+          <main className="min-h-0 overflow-hidden lg:rounded-[1.5rem] lg:bg-[var(--s-panel)] lg:shadow-[var(--s-shadow)]">
+            <OpenTickets
+              tickets={tickets}
+              canVoid={canVoid}
+              onTakePayment={(ticket) => setSettling(ticket)}
+              onVoid={(ticket) => setVoiding(ticket)}
+            />
+          </main>
+        )}
+
+        {view === "shift" && (
+          <main className="min-h-0 overflow-hidden lg:rounded-[1.5rem] lg:bg-[var(--s-panel)] lg:shadow-[var(--s-shadow)]">
+            <ShiftPanel
+              session={session}
+              onCashMovement={() => setMovingCash(true)}
+              onCloseShift={openClose}
+            />
+          </main>
+        )}
+      </div>
 
       {/* Mobile: the order bar sits above the home indicator, always reachable.
           Tapping it opens the cart sheet to review before charging, rather than
           jumping straight to payment — a phone cashier gets to catch a mis-tap. */}
       {view === "register" && count > 0 && (
         <div
-          className="lg:hidden sticky bottom-0 border-t px-3 py-2"
+          className="lg:hidden sticky bottom-0 px-3 py-2"
           style={{
-            background: "var(--s-panel)",
-            borderColor: "var(--s-border)",
+            background: "color-mix(in srgb, var(--s-bg) 92%, transparent)",
             paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))",
           }}
         >
           <button
             onClick={() => setCartOpen(true)}
-            className="w-full rounded-2xl px-4 py-3.5 font-bold text-white flex items-center justify-between"
-            style={{ background: "var(--s-brand)" }}
+            className="flex w-full min-h-14 items-center justify-between rounded-2xl px-4 py-3.5 font-bold text-white"
+            style={{ background: "var(--s-brand)", boxShadow: "0 8px 20px color-mix(in srgb, var(--s-brand) 35%, transparent)" }}
           >
             <span>
               View {count} item{count > 1 ? "s" : ""}
@@ -653,6 +705,9 @@ export default function Register({
           onCustomerName={setCustomerName}
           onCustomerPhone={setCustomerPhone}
           onClear={clearOrder}
+          tables={tables}
+          tableId={tableId}
+          onTable={setTableId}
           onClose={() => setCartOpen(false)}
           onCharge={() => {
             setCartOpen(false);
@@ -754,6 +809,90 @@ export default function Register({
         />
       )}
     </div>
+  );
+}
+
+function PosRail({
+  view,
+  ticketCount,
+  setView,
+  backOfficeHref,
+  onSignOut,
+}: {
+  view: View;
+  ticketCount: number;
+  setView: (view: View) => void;
+  backOfficeHref?: string;
+  onSignOut: () => void;
+}) {
+  const entries = [
+    { id: "register" as const, label: "Order", icon: Store },
+    { id: "tickets" as const, label: "Tickets", icon: ReceiptText, count: ticketCount },
+    { id: "shift" as const, label: "Shift", icon: Wallet },
+  ];
+  return (
+    <aside className="hidden lg:flex min-h-0 flex-col items-center rounded-[1.5rem] bg-[var(--s-panel)] px-2 py-4 shadow-[var(--s-shadow)]">
+      <span
+        className="mb-4 grid h-11 w-11 place-items-center rounded-full"
+        style={{ background: "color-mix(in srgb, var(--s-brand) 10%, white)" }}
+        aria-hidden
+      >
+        <UserRound className="h-5 w-5" style={{ color: "var(--s-brand)" }} />
+      </span>
+      <nav className="w-full space-y-2" aria-label="Till sections">
+        {entries.map((entry) => {
+          const Icon = entry.icon;
+          const active = view === entry.id;
+          return (
+            <button
+              key={entry.id}
+              type="button"
+              onClick={() => setView(entry.id)}
+              className="relative flex w-full flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-[10px] font-bold"
+              style={{
+                background: active ? "var(--s-brand)" : "var(--s-panel-alt)",
+                color: active ? "#fff" : "var(--s-ink-muted)",
+              }}
+            >
+              <Icon className="h-4 w-4" />
+              {entry.label}
+              {!!entry.count && (
+                <span
+                  className="absolute right-1.5 top-1.5 grid min-w-4 place-items-center rounded-full px-1 text-[9px]"
+                  style={{
+                    background: active ? "#fff" : "var(--s-brand)",
+                    color: active ? "var(--s-brand)" : "#fff",
+                  }}
+                >
+                  {entry.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </nav>
+      <div className="mt-auto w-full space-y-2">
+        {backOfficeHref && (
+          <a
+            href={backOfficeHref}
+            className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[10px] font-bold"
+            style={{ background: "var(--s-panel-alt)", color: "var(--s-ink-muted)" }}
+          >
+            <LayoutDashboard className="h-4 w-4" />
+            Office
+          </a>
+        )}
+        <button
+          type="button"
+          onClick={onSignOut}
+          className="flex w-full flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-[10px] font-bold"
+          style={{ color: "var(--s-ink-faint)" }}
+        >
+          <LogOut className="h-4 w-4" />
+          Sign out
+        </button>
+      </div>
+    </aside>
   );
 }
 

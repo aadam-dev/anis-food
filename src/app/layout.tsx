@@ -4,7 +4,7 @@
  * Admin and POS have their own layouts without public chrome.
  */
 import type { Metadata, Viewport } from "next";
-import { Inter, Poppins, Playfair_Display } from "next/font/google";
+import { Inter, Poppins, Playfair_Display, Plus_Jakarta_Sans } from "next/font/google";
 import "@/styles/globals.css";
 import { ToastProvider } from "@/contexts/ToastContext";
 
@@ -25,6 +25,13 @@ const playfair = Playfair_Display({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
   variable: "--font-display",
+  display: "swap",
+});
+
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-pos",
   display: "swap",
 });
 
@@ -118,7 +125,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${inter.variable} ${poppins.variable} ${playfair.variable} antialiased`}
+        className={`${inter.variable} ${poppins.variable} ${playfair.variable} ${jakarta.variable} antialiased`}
       >
         <ToastProvider>{children}</ToastProvider>
       </body>
