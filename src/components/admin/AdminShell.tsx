@@ -18,7 +18,6 @@ import {
   LogOut,
   Store,
   Boxes,
-  Bell,
   Search,
 } from "lucide-react";
 import type { UserRole } from "@/generated/prisma";
@@ -93,12 +92,11 @@ export default function AdminShell({ user, children }: AdminShellProps) {
   }
 
   function isCurrent(href: string) {
-    // "/admin" would otherwise light up on every child route.
     return href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
   }
 
   const nav = (
-    <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
+    <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-4 space-y-6">
       {sections.map((section) => (
         <div key={section.title}>
           <p
@@ -162,7 +160,7 @@ export default function AdminShell({ user, children }: AdminShellProps) {
   ) : null;
 
   const sidebarFooter = (
-    <div className="border-t px-3 py-3" style={{ borderColor: "var(--s-border)" }}>
+    <div className="shrink-0 border-t px-3 py-3" style={{ borderColor: "var(--s-border)" }}>
       <div className="flex items-center gap-3 px-2 py-1">
         <span
           className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold text-white"
@@ -189,7 +187,7 @@ export default function AdminShell({ user, children }: AdminShellProps) {
   );
 
   const brand = (
-    <div className="px-4 pt-5 pb-3">
+    <div className="shrink-0 px-4 pt-5 pb-3">
       <AnisLogo priority className="h-9 w-auto" />
       <p
         className="mt-2 text-[0.65rem] font-semibold uppercase tracking-[0.16em]"
@@ -201,8 +199,8 @@ export default function AdminShell({ user, children }: AdminShellProps) {
   );
 
   return (
-    <div className="flex min-h-dvh">
-      {/* Desktop sidebar */}
+    <div className="flex h-dvh max-h-dvh overflow-hidden">
+      {/* Desktop sidebar — pinned; the main column scrolls. */}
       <aside
         data-admin-chrome
         className="hidden lg:flex w-64 shrink-0 flex-col border-r"
@@ -214,7 +212,6 @@ export default function AdminShell({ user, children }: AdminShellProps) {
         {sidebarFooter}
       </aside>
 
-      {/* Mobile drawer */}
       {drawerOpen && (
         <div className="lg:hidden fixed inset-0 z-50 flex">
           <div
@@ -223,10 +220,10 @@ export default function AdminShell({ user, children }: AdminShellProps) {
             aria-hidden
           />
           <aside
-            className="relative w-72 flex flex-col border-r"
+            className="relative flex h-full w-72 flex-col border-r"
             style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
           >
-            <div className="flex items-start justify-between pr-2">
+            <div className="flex shrink-0 items-start justify-between pr-2">
               {brand}
               <button
                 onClick={() => setDrawerOpen(false)}
@@ -243,10 +240,10 @@ export default function AdminShell({ user, children }: AdminShellProps) {
         </div>
       )}
 
-      <div className="flex-1 min-w-0 flex flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <header
           data-admin-chrome
-          className="hidden lg:flex h-20 items-center gap-4 border-b px-7"
+          className="hidden shrink-0 lg:flex h-20 items-center gap-4 border-b px-7"
           style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
         >
           <div className="relative max-w-md flex-1">
@@ -259,40 +256,15 @@ export default function AdminShell({ user, children }: AdminShellProps) {
               aria-label="Search back office"
             />
           </div>
-          <nav className="flex items-center gap-1 text-xs font-semibold" style={{ color: "var(--s-ink-muted)" }}>
-            {[
-              ["/admin", "Dashboard"],
-              ["/admin/orders", "Orders"],
-              ["/admin/menu", "Menu"],
-              ["/admin/tables", "Tables"],
-              ["/admin/reports", "Analytics"],
-            ].map(([href, label]) => (
-              <Link
-                key={href}
-                href={href}
-                className="rounded-full px-3 py-2"
-                style={{
-                  background: isCurrent(href) ? "var(--s-ink)" : "transparent",
-                  color: isCurrent(href) ? "#fff" : "var(--s-ink-muted)",
-                }}
-              >
-                {label}
-              </Link>
-            ))}
-          </nav>
-          <button type="button" className="grid h-11 w-11 place-items-center rounded-full" style={{ background: "var(--s-panel-alt)" }} aria-label="Notifications">
-            <Bell className="h-4 w-4" />
-          </button>
-          <div className="text-right">
+          <div className="ml-auto text-right">
             <p className="text-sm font-bold">{user.name}</p>
             <p className="text-[10px] capitalize" style={{ color: "var(--s-ink-faint)" }}>{roleLabel}</p>
           </div>
         </header>
 
-        {/* Mobile top bar */}
         <header
           data-admin-chrome
-          className="lg:hidden sticky top-0 z-40 flex items-center gap-2 border-b px-2 py-2"
+          className="lg:hidden sticky top-0 z-40 flex shrink-0 items-center gap-2 border-b px-2 py-2"
           style={{
             background: "var(--s-panel)",
             borderColor: "var(--s-border)",
@@ -309,7 +281,9 @@ export default function AdminShell({ user, children }: AdminShellProps) {
           <AnisLogo priority className="h-7 w-auto" />
         </header>
 
-        <main className="flex-1 min-w-0 px-4 py-5 sm:px-6 lg:px-8 lg:py-8">{children}</main>
+        <main className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
+          {children}
+        </main>
       </div>
     </div>
   );

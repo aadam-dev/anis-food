@@ -162,7 +162,14 @@ async function up() {
         throw err;
       }
     }
-    copyFileSync(SCHEMA, APPLIED_SNAPSHOT);
+    try {
+      copyFileSync(SCHEMA, APPLIED_SNAPSHOT);
+    } catch (error) {
+      // Dev-only snapshot for offline diffs. On Vercel the filesystem is
+      // read-only after SQL commits — failing here must not fail `up`.
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn("Could not refresh applied-schema snapshot.", message);
+    }
     console.log(`Applied ${pending.length} migration(s).`);
   } finally {
     await client.end();

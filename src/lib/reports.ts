@@ -54,6 +54,12 @@ function splitByMethod(
 // Dashboard — "how is today going?"
 // ---------------------------------------------------------------------------
 
+export interface PeriodRevenue {
+  revenue: number;
+  orders: number;
+  delta: number | null;
+}
+
 export interface DashboardData {
   booksReady: boolean;
   today: { revenue: number; orders: number; averageTicket: number };
@@ -61,6 +67,8 @@ export interface DashboardData {
    *  honest comparison, not yesterday. */
   lastWeek: { revenue: number; orders: number };
   revenueDelta: number | null;
+  weekToDate: PeriodRevenue;
+  monthToDate: PeriodRevenue;
   paymentMix: { method: string; amount: number }[];
   openTickets: { count: number; value: number; oldestMinutes: number | null };
   boltAwaiting: MoneyCount;
@@ -78,6 +86,28 @@ export interface DashboardData {
   topItems: { name: string; quantity: number; revenue: number }[];
 }
 
+/** Monday of the Accra business week that contains `day` (YYYY-MM-DD). */
+function weekStartDay(day: string): string {
+  const [year, month, date] = day.split("-").map(Number);
+  const noon = new Date(Date.UTC(year, month - 1, date, 12));
+  const weekday = noon.getUTCDay(); // 0 Sun … 6 Sat
+  const mondayOffset = weekday === 0 ? -6 : 1 - weekday;
+  noon.setUTCDate(noon.getUTCDate() + mondayOffset);
+  return noon.toISOString().slice(0, 10);
+}
+
+function addDays(day: string, days: number): string {
+  const [year, month, date] = day.split("-").map(Number);
+  const noon = new Date(Date.UTC(year, month - 1, date, 12));
+  noon.setUTCDate(noon.getUTCDate() + days);
+  return noon.toISOString().slice(0, 10);
+}
+
+function periodDelta(current: number, previous: number): number | null {
+  if (previous <= 0) return null;
+  return roundMoney(((current - previous) / previous) * 100);
+}
+
 export async function getDashboard(now = new Date()): Promise<DashboardData> {
   const todayKey = businessDay(now);
   const today = businessDayRange(todayKey);
@@ -89,10 +119,47 @@ export async function getDashboard(now = new Date()): Promise<DashboardData> {
   const fortnightAgo = new Date(now);
   fortnightAgo.setDate(fortnightAgo.getDate() - 13);
 
+  const weekStart = weekStartDay(todayKey);
+  const weekEndExclusive = addDays(todayKey, 1);
+  const priorWeekStart = addDays(weekStart, -7);
+  // Same Mon→weekday span last week, not the whole prior calendar week.
+  const priorWeekEndExclusive = addDays(todayKey, -6);
+  const monthKey = todayKey.slice(0, 7);
+  const [year, month] = monthKey.split("-").map(Number);
+  const priorMonthKey =
+    month === 1 ? `${year - 1}-12` : `${year}-${String(month - 1).padStart(2, "0")}`;
+  const monthBounds = monthRange(monthKey);
+  const priorMonthBounds = monthRange(priorMonthKey);
+  // Month-to-date ends at the start of tomorrow, not the end of the calendar month.
+  const monthToDateEnd = today.end;
+  // Prior month through the same calendar day (capped to that month's last day).
+  const dayOfMonth = Number(todayKey.slice(8, 10));
+  const priorMonthLastDay = Number(
+    new Date(Date.UTC(year, month === 1 ? 0 : month - 1, 0)).toISOString().slice(8, 10),
+  );
+  const priorMtdDay = Math.min(dayOfMonth, priorMonthLastDay);
+  const priorMonthToDateEnd = businessDayRange(
+    `${priorMonthKey}-${String(priorMtdDay).padStart(2, "0")}`,
+  ).end;
+
   const books = await tillBooksReady();
 
-  const [todayOrders, lastWeekOrders, openTickets, trendOrders, todayItems, boltOrders, adjustments, todayExpenses, todayDeposits, shift] =
-    await Promise.all([
+  const [
+    todayOrders,
+    lastWeekOrders,
+    openTickets,
+    trendOrders,
+    todayItems,
+    boltOrders,
+    adjustments,
+    todayExpenses,
+    todayDeposits,
+    shift,
+    weekOrders,
+    priorWeekOrders,
+    monthOrders,
+    priorMonthOrders,
+  ] = await Promise.all([
       prisma.order.findMany({
         where: { ...REVENUE_WHERE, createdAt: { gte: today.start, lt: today.end } },
         select: { paymentMethod: true, total: true, splitPayments: true },
@@ -148,6 +215,34 @@ export async function getDashboard(now = new Date()): Promise<DashboardData> {
           })
         : Promise.resolve([]),
       books.ok ? currentSession() : Promise.resolve(null),
+      prisma.order.findMany({
+        where: {
+          ...REVENUE_WHERE,
+          createdAt: { gte: businessDayRange(weekStart).start, lt: businessDayRange(weekEndExclusive).start },
+        },
+        select: { total: true },
+      }),
+      prisma.order.findMany({
+        where: {
+          ...REVENUE_WHERE,
+          createdAt: {
+            gte: businessDayRange(priorWeekStart).start,
+            lt: businessDayRange(priorWeekEndExclusive).start,
+          },
+        },
+        select: { total: true },
+      }),
+      prisma.order.findMany({
+        where: { ...REVENUE_WHERE, createdAt: { gte: monthBounds.start, lt: monthToDateEnd } },
+        select: { total: true },
+      }),
+      prisma.order.findMany({
+        where: {
+          ...REVENUE_WHERE,
+          createdAt: { gte: priorMonthBounds.start, lt: priorMonthToDateEnd },
+        },
+        select: { total: true },
+      }),
     ]);
 
   const todayRevenue = roundMoney(
@@ -155,6 +250,14 @@ export async function getDashboard(now = new Date()): Promise<DashboardData> {
   );
   const lastWeekRevenue = roundMoney(
     lastWeekOrders.reduce((sum, order) => sum + toMoney(order.total), 0),
+  );
+  const weekRevenue = roundMoney(weekOrders.reduce((sum, order) => sum + toMoney(order.total), 0));
+  const priorWeekRevenue = roundMoney(
+    priorWeekOrders.reduce((sum, order) => sum + toMoney(order.total), 0),
+  );
+  const monthRevenue = roundMoney(monthOrders.reduce((sum, order) => sum + toMoney(order.total), 0));
+  const priorMonthRevenue = roundMoney(
+    priorMonthOrders.reduce((sum, order) => sum + toMoney(order.total), 0),
   );
 
   const paymentMix = Object.entries(splitByMethod(todayOrders))
@@ -206,6 +309,16 @@ export async function getDashboard(now = new Date()): Promise<DashboardData> {
       lastWeekRevenue > 0
         ? roundMoney(((todayRevenue - lastWeekRevenue) / lastWeekRevenue) * 100)
         : null,
+    weekToDate: {
+      revenue: weekRevenue,
+      orders: weekOrders.length,
+      delta: periodDelta(weekRevenue, priorWeekRevenue),
+    },
+    monthToDate: {
+      revenue: monthRevenue,
+      orders: monthOrders.length,
+      delta: periodDelta(monthRevenue, priorMonthRevenue),
+    },
     paymentMix,
     openTickets: {
       count: openTickets.length,
