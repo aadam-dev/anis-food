@@ -15,16 +15,23 @@ export const CASH_SHORTCUTS = [50, 100, 200, 500] as const;
 export function applyNumpadKey(
   value: string,
   key: string,
-  { maxDigits, allowDecimal }: { maxDigits: number; allowDecimal: boolean },
+  {
+    maxDigits,
+    allowDecimal,
+    replaceFirst = false,
+  }: { maxDigits: number; allowDecimal: boolean; replaceFirst?: boolean },
 ): string {
   if (key === "back") return value.slice(0, -1);
   if (key === "clear") return "";
   if (key === ".") {
-    if (!allowDecimal || value.includes(".")) return value;
-    return value === "" ? "0." : `${value}.`;
+    if (!allowDecimal || (!replaceFirst && value.includes("."))) return value;
+    if (replaceFirst || value === "") return "0.";
+    return `${value}.`;
   }
   if (!/^\d$/.test(key)) return value;
-  const next = value === "0" ? key : `${value}${key}`;
+  // First digit after opening a sheet replaces the seeded value (al-boyut style),
+  // so punching 5-0 on a line that was 1 becomes 50, not 150.
+  const next = replaceFirst || value === "0" ? key : `${value}${key}`;
   const [whole, frac] = next.split(".");
   if (whole.length > maxDigits) return value;
   if (frac !== undefined && frac.length > 2) return value;
@@ -40,6 +47,8 @@ export default function Numpad({
   allowDecimal = false,
   shortcuts = QTY_SHORTCUTS,
   shortcutPrefix = "",
+  replaceFirst = false,
+  onReplaceConsumed,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -50,29 +59,36 @@ export default function Numpad({
   allowDecimal?: boolean;
   shortcuts?: readonly number[];
   shortcutPrefix?: string;
+  /**
+   * When true, the next digit or decimal replaces the current value instead of
+   * appending. Parent should clear this via onReplaceConsumed after that press.
+   */
+  replaceFirst?: boolean;
+  onReplaceConsumed?: () => void;
 }) {
-  const press = (key: string) => onChange(applyNumpadKey(value, key, { maxDigits, allowDecimal }));
-  const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", allowDecimal ? "." : "clear", "0", "back"];
-
-  const keyStyle = {
-    borderColor: "var(--s-border)",
-    background: "var(--s-panel-alt)",
-    color: "var(--s-ink)",
+  const press = (key: string) => {
+    const next = applyNumpadKey(value, key, { maxDigits, allowDecimal, replaceFirst });
+    if (replaceFirst && (key === "." || /^\d$/.test(key))) onReplaceConsumed?.();
+    onChange(next);
   };
+  const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", allowDecimal ? "." : "clear", "0", "back"];
 
   return (
     <div>
       {shortcuts.length > 0 && (
-        <div className="mb-2 grid grid-cols-4 gap-2">
+        <div className="mb-2.5 grid grid-cols-4 gap-2">
           {shortcuts.map((amount) => (
             <button
               key={amount}
               type="button"
-              onClick={() => onChange(String(amount))}
-              className="money rounded-xl border py-2.5 text-sm font-bold active:scale-[0.97] transition-transform"
+              onClick={() => {
+                onChange(String(amount));
+                onReplaceConsumed?.();
+              }}
+              className="money rounded-2xl py-2.5 text-sm font-bold active:scale-[0.97] transition-transform"
               style={{
-                borderColor: "color-mix(in srgb, var(--s-brand) 35%, var(--s-border))",
-                background: "color-mix(in srgb, var(--s-brand) 10%, var(--s-panel))",
+                border: "1px solid color-mix(in srgb, var(--s-brand) 30%, var(--s-border))",
+                background: "color-mix(in srgb, var(--s-brand) 12%, var(--s-panel))",
                 color: "var(--s-ink)",
               }}
             >
@@ -92,8 +108,11 @@ export default function Numpad({
                 type="button"
                 onClick={() => press("back")}
                 aria-label="Backspace"
-                className="rounded-xl border py-3.5 grid place-items-center active:scale-[0.97] transition-transform"
-                style={keyStyle}
+                className="rounded-2xl py-3.5 grid place-items-center active:scale-[0.97] transition-transform"
+                style={{
+                  background: "var(--s-panel-alt)",
+                  color: "var(--s-ink)",
+                }}
               >
                 <Delete className="w-5 h-5" />
               </button>
@@ -104,9 +123,12 @@ export default function Numpad({
               <button
                 key="clear"
                 type="button"
-                onClick={() => press("clear")}
-                className="rounded-xl border py-3.5 text-sm font-semibold active:scale-[0.97] transition-transform"
-                style={{ ...keyStyle, color: "var(--s-ink-muted)" }}
+                onClick={() => {
+                  press("clear");
+                  onReplaceConsumed?.();
+                }}
+                className="rounded-2xl py-3.5 text-sm font-semibold active:scale-[0.97] transition-transform"
+                style={{ background: "var(--s-panel-alt)", color: "var(--s-ink-muted)" }}
               >
                 Clear
               </button>
@@ -117,8 +139,11 @@ export default function Numpad({
               key={key}
               type="button"
               onClick={() => press(key)}
-              className="money rounded-xl border py-3.5 text-xl font-bold active:scale-[0.97] transition-transform"
-              style={{ ...keyStyle, background: "var(--s-panel)" }}
+              className="money rounded-2xl py-3.5 text-xl font-bold active:scale-[0.97] transition-transform"
+              style={{
+                background: "var(--s-panel-alt)",
+                color: "var(--s-ink)",
+              }}
             >
               {key}
             </button>
@@ -130,7 +155,7 @@ export default function Numpad({
         <button
           type="button"
           onClick={onDone}
-          className="mt-3 w-full rounded-2xl py-3.5 text-sm font-bold text-white"
+          className="mt-3 w-full rounded-2xl py-3.5 text-sm font-bold text-white active:scale-[0.98] transition-transform"
           style={{ background: "var(--s-brand)" }}
         >
           {doneLabel}

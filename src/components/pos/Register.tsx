@@ -122,7 +122,9 @@ export default function Register({
   const [customerPhone, setCustomerPhone] = useState("");
   const [settling, setSettling] = useState<OrderView | null>(null);
   const [voiding, setVoiding] = useState<OrderView | null>(null);
-  const [closing, setClosing] = useState(false);
+  // Bound to the session id so a freshly opened shift never inherits a leftover
+  // "closing" flag from the shift that just finished.
+  const [closingId, setClosingId] = useState<string | null>(null);
   const [movingCash, setMovingCash] = useState(false);
   const [focusedMenuItemId, setFocusedMenuItemId] = useState<string | null>(null);
   const [qtyTarget, setQtyTarget] = useState<CartLine | null>(null);
@@ -388,7 +390,7 @@ export default function Register({
   function openClose() {
     setMenuOpen(false);
     void loadTickets();
-    setClosing(true);
+    setClosingId(session?.id ?? null);
   }
 
   const count = cartCount(cart);
@@ -728,15 +730,15 @@ export default function Register({
         />
       )}
 
-      {closing && (
+      {closingId === session.id && (
         <CloseShiftDialog
           session={session}
           tickets={tickets}
           canVoid={canVoid}
           onRefresh={refreshShift}
-          onClose={() => setClosing(false)}
+          onClose={() => setClosingId(null)}
           onFinished={() => {
-            setClosing(false);
+            setClosingId(null);
             clearOrder();
             void refreshShift();
           }}

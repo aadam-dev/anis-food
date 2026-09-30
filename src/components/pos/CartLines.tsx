@@ -13,7 +13,8 @@ import DishThumb from "./DishThumb";
  * tablet — a mis-tapped dish is always recoverable, on any screen.
  *
  * The focused line gets a large photo so the cashier can confirm which dish
- * they just rang before punching a bulk quantity.
+ * they just rang before punching a bulk quantity. Tapping the number opens the
+ * quantity sheet — the al-boyut pattern for orders of 50 without fifty taps.
  */
 export default function CartLines({
   cart,
@@ -42,11 +43,7 @@ export default function CartLines({
 
   return (
     <div>
-      <FocusedLine
-        line={focused}
-        dispatch={dispatch}
-        onEditQty={onEditQty}
-      />
+      <FocusedLine line={focused} dispatch={dispatch} onEditQty={onEditQty} />
 
       {others.length > 0 && (
         <ul className="divide-y border-t" style={{ borderColor: "var(--s-border)" }}>
@@ -61,7 +58,7 @@ export default function CartLines({
                   <DishThumb
                     name={line.name}
                     imageUrl={line.imageUrl}
-                    className="h-12 w-12 shrink-0 rounded-lg overflow-hidden"
+                    className="h-12 w-12 shrink-0 rounded-xl overflow-hidden"
                     letterClassName="text-base"
                   />
                   <div className="min-w-0 flex-1">
@@ -74,37 +71,19 @@ export default function CartLines({
                   </div>
                 </div>
               </button>
-              <div className="mt-2 flex items-center gap-2 pl-15" style={{ paddingLeft: "3.75rem" }}>
-                <button
-                  type="button"
-                  onClick={() => dispatch({ type: "decrement", menuItemId: line.menuItemId })}
-                  className="h-11 w-11 grid place-items-center rounded-lg border"
-                  style={{ borderColor: "var(--s-border)" }}
-                  aria-label={`One less ${line.name}`}
-                >
-                  <Minus className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onEditQty?.(line)}
-                  className="money min-w-10 px-2 text-center font-semibold"
-                  aria-label={`Set quantity for ${line.name}`}
-                >
-                  {line.quantity}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => dispatch({ type: "increment", menuItemId: line.menuItemId })}
-                  className="h-11 w-11 grid place-items-center rounded-lg border"
-                  style={{ borderColor: "var(--s-border)" }}
-                  aria-label={`One more ${line.name}`}
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
+              <div className="mt-2 flex items-center gap-2" style={{ paddingLeft: "3.75rem" }}>
+                <QtyStepper
+                  name={line.name}
+                  quantity={line.quantity}
+                  size="sm"
+                  onDec={() => dispatch({ type: "decrement", menuItemId: line.menuItemId })}
+                  onInc={() => dispatch({ type: "increment", menuItemId: line.menuItemId })}
+                  onEdit={() => onEditQty?.(line)}
+                />
                 <button
                   type="button"
                   onClick={() => dispatch({ type: "remove", menuItemId: line.menuItemId })}
-                  className="ml-auto h-11 w-11 grid place-items-center rounded-lg"
+                  className="ml-auto h-11 w-11 grid place-items-center rounded-xl"
                   style={{ color: "var(--s-ink-faint)" }}
                   aria-label={`Remove ${line.name}`}
                 >
@@ -131,8 +110,11 @@ function FocusedLine({
   return (
     <div className="px-4 py-4">
       <div
-        className="overflow-hidden rounded-2xl border"
-        style={{ borderColor: "var(--s-border)", background: "var(--s-panel-alt)" }}
+        className="overflow-hidden rounded-[1.35rem]"
+        style={{
+          background: "var(--s-panel-alt)",
+          boxShadow: "inset 0 0 0 1px var(--s-border)",
+        }}
       >
         <DishThumb
           name={line.name}
@@ -140,63 +122,104 @@ function FocusedLine({
           className="w-full aspect-[4/3]"
           letterClassName="text-5xl"
         />
-        <div className="p-3">
+        <div className="p-4">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="font-semibold leading-snug">{line.name}</p>
+              <p className="font-semibold leading-snug text-base">{line.name}</p>
               <p className="money mt-0.5 text-sm" style={{ color: "var(--s-ink-muted)" }}>
                 {formatGHS(line.unitPrice)} each
               </p>
             </div>
-            <span className="money text-sm font-bold whitespace-nowrap">
+            <span className="money text-base font-bold whitespace-nowrap">
               {formatGHS(line.unitPrice * line.quantity)}
             </span>
           </div>
 
-          <div className="mt-3 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => dispatch({ type: "decrement", menuItemId: line.menuItemId })}
-              className="h-12 w-12 grid place-items-center rounded-xl border"
-              style={{ borderColor: "var(--s-border)", background: "var(--s-panel)" }}
-              aria-label={`One less ${line.name}`}
-            >
-              <Minus className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => onEditQty?.(line)}
-              className="money flex-1 rounded-xl border py-3 text-center text-2xl font-bold"
-              style={{
-                borderColor: "var(--s-brand)",
-                background: "var(--s-panel)",
-                color: "var(--s-ink)",
-              }}
-              aria-label={`Set quantity for ${line.name}`}
-            >
-              {line.quantity}
-            </button>
-            <button
-              type="button"
-              onClick={() => dispatch({ type: "increment", menuItemId: line.menuItemId })}
-              className="h-12 w-12 grid place-items-center rounded-xl border"
-              style={{ borderColor: "var(--s-border)", background: "var(--s-panel)" }}
-              aria-label={`One more ${line.name}`}
-            >
-              <Plus className="w-4 h-4" />
-            </button>
+          <div className="mt-4 flex items-center gap-2">
+            <QtyStepper
+              name={line.name}
+              quantity={line.quantity}
+              size="lg"
+              onDec={() => dispatch({ type: "decrement", menuItemId: line.menuItemId })}
+              onInc={() => dispatch({ type: "increment", menuItemId: line.menuItemId })}
+              onEdit={() => onEditQty?.(line)}
+            />
             <button
               type="button"
               onClick={() => dispatch({ type: "remove", menuItemId: line.menuItemId })}
-              className="h-12 w-12 grid place-items-center rounded-xl"
+              className="h-12 w-12 grid place-items-center rounded-2xl"
               style={{ color: "var(--s-ink-faint)" }}
               aria-label={`Remove ${line.name}`}
             >
               <Trash2 className="w-4 h-4" />
             </button>
           </div>
+          <p className="mt-2 text-center text-[11px] font-medium" style={{ color: "var(--s-ink-faint)" }}>
+            Tap the number to type a bulk quantity
+          </p>
         </div>
       </div>
     </div>
+  );
+}
+
+function QtyStepper({
+  name,
+  quantity,
+  size,
+  onDec,
+  onInc,
+  onEdit,
+}: {
+  name: string;
+  quantity: number;
+  size: "sm" | "lg";
+  onDec: () => void;
+  onInc: () => void;
+  onEdit: () => void;
+}) {
+  const btn =
+    size === "lg"
+      ? "h-12 w-12 rounded-2xl"
+      : "h-11 w-11 rounded-xl";
+  const qty =
+    size === "lg"
+      ? "flex-1 min-h-12 rounded-2xl text-2xl"
+      : "min-w-12 min-h-11 rounded-xl text-base px-2";
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={onDec}
+        className={`${btn} grid place-items-center active:scale-[0.96] transition-transform`}
+        style={{ background: "var(--s-panel)", boxShadow: "inset 0 0 0 1px var(--s-border)" }}
+        aria-label={`One less ${name}`}
+      >
+        <Minus className="w-4 h-4" />
+      </button>
+      <button
+        type="button"
+        onClick={onEdit}
+        className={`money ${qty} font-bold text-center active:scale-[0.98] transition-transform`}
+        style={{
+          background: "color-mix(in srgb, var(--s-brand) 12%, var(--s-panel))",
+          boxShadow: "inset 0 0 0 1.5px color-mix(in srgb, var(--s-brand) 55%, var(--s-border))",
+          color: "var(--s-ink)",
+        }}
+        aria-label={`Type quantity for ${name}`}
+      >
+        {quantity}
+      </button>
+      <button
+        type="button"
+        onClick={onInc}
+        className={`${btn} grid place-items-center active:scale-[0.96] transition-transform`}
+        style={{ background: "var(--s-panel)", boxShadow: "inset 0 0 0 1px var(--s-border)" }}
+        aria-label={`One more ${name}`}
+      >
+        <Plus className="w-4 h-4" />
+      </button>
+    </>
   );
 }

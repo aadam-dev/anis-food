@@ -34,4 +34,14 @@ describe("numpad", () => {
     assert.equal(applyNumpadKey("123", "back", qty), "12");
     assert.equal(applyNumpadKey("123", "clear", qty), "");
   });
+
+  it("replaces the seeded quantity on the first digit", () => {
+    assert.equal(applyNumpadKey("1", "5", { ...qty, replaceFirst: true }), "5");
+    assert.equal(applyNumpadKey("5", "0", { ...qty, replaceFirst: false }), "50");
+  });
+
+  it("replaces a seeded money amount on the first digit", () => {
+    assert.equal(applyNumpadKey("200", "1", { ...money, replaceFirst: true }), "1");
+    assert.equal(applyNumpadKey("200", ".", { ...money, replaceFirst: true }), "0.");
+  });
 });

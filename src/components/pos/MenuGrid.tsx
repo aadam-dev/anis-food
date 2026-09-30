@@ -62,11 +62,11 @@ export default function MenuGrid({
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search the menu"
             aria-label="Search the menu"
-            className="w-full rounded-xl border pl-9 pr-10 py-3 outline-none"
+            className="w-full rounded-2xl pl-9 pr-10 py-3.5 outline-none"
             style={{
               background: "var(--s-panel-alt)",
-              borderColor: "var(--s-border)",
               color: "var(--s-ink)",
+              boxShadow: "inset 0 0 0 1px var(--s-border)",
             }}
           />
           {search && (
@@ -149,10 +149,16 @@ export default function MenuGrid({
                   key={item.id}
                   onClick={() => onAdd(item)}
                   disabled={locked}
-                  className="relative rounded-2xl border overflow-hidden text-left active:scale-[0.98] transition-transform flex flex-col disabled:opacity-45 disabled:active:scale-100"
+                  className="relative overflow-hidden text-left active:scale-[0.97] transition-transform flex flex-col disabled:opacity-45 disabled:active:scale-100 rounded-[1.25rem]"
                   style={{
-                    background: qty > 0 ? "color-mix(in srgb, var(--s-brand) 12%, var(--s-panel))" : "var(--s-panel)",
-                    borderColor: qty > 0 ? "var(--s-brand)" : "var(--s-border)",
+                    background:
+                      qty > 0
+                        ? "color-mix(in srgb, var(--s-brand) 14%, var(--s-panel))"
+                        : "var(--s-panel)",
+                    boxShadow:
+                      qty > 0
+                        ? "inset 0 0 0 1.5px var(--s-brand)"
+                        : "inset 0 0 0 1px var(--s-border)",
                   }}
                 >
                   {qty > 0 && (
@@ -199,11 +205,11 @@ function CategoryChip({
   return (
     <button
       onClick={onClick}
-      className="shrink-0 rounded-full border px-4 py-2 text-sm font-semibold whitespace-nowrap"
+      className="shrink-0 rounded-full px-4 py-2 text-sm font-semibold whitespace-nowrap transition-colors"
       style={{
-        background: active ? "var(--s-brand)" : "var(--s-panel)",
-        borderColor: active ? "var(--s-brand)" : "var(--s-border)",
+        background: active ? "var(--s-brand)" : "var(--s-panel-alt)",
         color: active ? "#fff" : "var(--s-ink-muted)",
+        boxShadow: active ? undefined : "inset 0 0 0 1px var(--s-border)",
       }}
     >
       {label}

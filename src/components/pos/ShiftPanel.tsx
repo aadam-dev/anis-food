@@ -1,17 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  ArrowDownLeft,
-  ArrowLeftRight,
-  ArrowUpRight,
-  Banknote,
-  LockKeyhole,
-  LogOut,
-  Receipt,
-  Smartphone,
-  Wallet,
-} from "lucide-react";
+import { Banknote, LogOut, Smartphone } from "lucide-react";
 import AnisLogo from "@/components/brand/AnisLogo";
 import { formatGHS } from "@/lib/money";
 import Numpad, { CASH_SHORTCUTS } from "./Numpad";
@@ -23,9 +13,9 @@ import type { SessionView } from "./types";
 /**
  * Opening the drawer when no shift is open.
  *
- * The till cannot take money into a drawer nobody has counted, so this is the
- * whole screen until a shift starts. The figure is punched on a numpad right
- * here; Mobile Money is optional and "not checking" stays distinct from zero.
+ * One clear amount at a time. The big figure is a readout, not a text box —
+ * every digit comes from the pad below. Mobile Money is optional and stays on
+ * its own step so the cashier never wonders which field the pad is writing to.
  */
 export function OpenShiftCard({
   userName,
@@ -42,132 +32,212 @@ export function OpenShiftCard({
   onSignOut: () => void;
   backOfficeHref?: string;
 }) {
-  const [field, setField] = useState<"cash" | "momo">("cash");
+  const [step, setStep] = useState<"cash" | "momo">("cash");
   const [cash, setCash] = useState(defaultOpeningFloat > 0 ? String(defaultOpeningFloat) : "");
   const [momo, setMomo] = useState("");
-  const [checkMomo, setCheckMomo] = useState(false);
+  const [includeMomo, setIncludeMomo] = useState(false);
+  const [replaceFirst, setReplaceFirst] = useState(defaultOpeningFloat > 0);
   const { run, busy, error } = usePosAction();
+
+  function goCash() {
+    setStep("cash");
+    setReplaceFirst(cash !== "");
+  }
+  function goMomo() {
+    setIncludeMomo(true);
+    setStep("momo");
+    setReplaceFirst(momo !== "");
+  }
 
   async function open() {
     const done = await run(() =>
       posRequest("/api/pos/sessions", "POST", {
         openingFloat: Number(cash) || 0,
-        openingMomo: checkMomo && momo !== "" ? Number(momo) || 0 : null,
+        openingMomo: includeMomo && momo !== "" ? Number(momo) || 0 : null,
       }),
     );
     if (done) onOpened();
   }
 
   const firstName = userName.split(" ")[0] || userName;
+  const editingCash = step === "cash";
+  const display = editingCash ? cash : momo;
 
   return (
-    <div className="min-h-dvh flex items-center justify-center px-4 py-6">
-      <div className="w-full max-w-md">
-        <div className="mb-5 flex items-center justify-between">
-          <AnisLogo className="h-9 w-auto" />
-          <div className="flex items-center gap-1">
-            {backOfficeHref && (
-              <a
-                href={backOfficeHref}
-                className="rounded-xl px-3 py-2 text-sm font-semibold"
-                style={{ color: "var(--s-ink-muted)" }}
-              >
-                Back office
-              </a>
-            )}
-            <button
-              type="button"
-              onClick={onSignOut}
-              className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold"
+    <div
+      className="min-h-dvh flex flex-col"
+      style={{
+        background:
+          "radial-gradient(120% 80% at 50% -10%, color-mix(in srgb, var(--s-brand) 18%, transparent), transparent 55%), var(--s-bg)",
+      }}
+    >
+      <header
+        className="flex items-center justify-between px-5 pt-5 pb-2"
+        style={{ paddingTop: "max(1.25rem, env(safe-area-inset-top))" }}
+      >
+        <AnisLogo className="h-8 w-auto" />
+        <div className="flex items-center gap-1">
+          {backOfficeHref && (
+            <a
+              href={backOfficeHref}
+              className="rounded-full px-3 py-2 text-sm font-semibold"
               style={{ color: "var(--s-ink-muted)" }}
             >
-              <LogOut className="w-4 h-4" /> Sign out
-            </button>
-          </div>
-        </div>
-
-        <section className="rounded-3xl border p-5 shadow-xl" style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}>
-          <p className="text-sm font-semibold" style={{ color: "var(--s-ink-muted)" }}>
-            Good to see you, {firstName}
-          </p>
-          <h1 className="mt-0.5 text-2xl font-bold">Open the till</h1>
-          <p className="mt-1 text-sm" style={{ color: "var(--s-ink-muted)" }}>
-            Count the drawer before the first sale. Everything today is measured against it.
-          </p>
-
-          {loadError && (
-            <div className="mt-3">
-              <SheetError message="Could not check for an open shift. If one is open on another device, opening here will say so." />
-            </div>
+              Back office
+            </a>
           )}
-
           <button
             type="button"
-            onClick={() => setField("cash")}
-            aria-pressed={field === "cash"}
-            className="mt-5 flex w-full items-center justify-between rounded-2xl border px-4 py-4 text-left"
-            style={{
-              borderColor: field === "cash" ? "var(--s-brand)" : "var(--s-border)",
-              background: "var(--s-panel-alt)",
-            }}
+            onClick={onSignOut}
+            className="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold"
+            style={{ color: "var(--s-ink-muted)" }}
           >
-            <span className="flex items-center gap-2 text-sm font-semibold">
-              <Banknote className="w-4 h-4" /> Cash in the drawer
-            </span>
-            <span className="money text-3xl font-bold">{formatGHS(Number(cash) || 0)}</span>
+            <LogOut className="w-4 h-4" /> Sign out
           </button>
+        </div>
+      </header>
 
-          <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
-            <button
-              type="button"
-              disabled={!checkMomo}
-              onClick={() => setField("momo")}
-              aria-pressed={field === "momo"}
-              className="flex items-center justify-between rounded-2xl border px-4 py-3 text-left disabled:opacity-60"
-              style={{
-                borderColor: field === "momo" && checkMomo ? "var(--s-brand)" : "var(--s-border)",
-                background: "var(--s-panel-alt)",
-              }}
+      <div className="flex-1 flex items-center justify-center px-4 py-4">
+        <section
+          className="w-full max-w-md overflow-hidden rounded-[1.75rem] border shadow-2xl"
+          style={{
+            background: "var(--s-panel)",
+            borderColor: "var(--s-border)",
+            boxShadow: "0 24px 60px rgba(0,0,0,0.35)",
+          }}
+        >
+          <div className="px-5 pt-6 pb-4">
+            <p
+              className="text-[11px] font-bold uppercase tracking-[0.14em]"
+              style={{ color: "var(--s-ink-faint)" }}
             >
-              <span className="flex items-center gap-2 text-sm font-semibold">
-                <Smartphone className="w-4 h-4" /> Mobile Money
-              </span>
-              <span className="money font-bold">
-                {checkMomo ? formatGHS(Number(momo) || 0) : "Not checking"}
-              </span>
-            </button>
-            <Button
-              tone={checkMomo ? "secondary" : "primary"}
-              onClick={() => {
-                const next = !checkMomo;
-                setCheckMomo(next);
-                setField(next ? "momo" : "cash");
-                if (!next) setMomo("");
-              }}
-            >
-              {checkMomo ? "Skip" : "Add"}
-            </Button>
+              Welcome, {firstName}
+            </p>
+            <h1 className="mt-1 text-[1.65rem] font-bold tracking-tight leading-tight">
+              Open the till
+            </h1>
+            <p className="mt-1.5 text-sm leading-relaxed" style={{ color: "var(--s-ink-muted)" }}>
+              Punch what is in the drawer. Today&apos;s sales are measured against this number.
+            </p>
+            {loadError && (
+              <div className="mt-3">
+                <SheetError message="Could not check for an open shift. If one is open on another device, opening here will say so." />
+              </div>
+            )}
           </div>
 
-          <div className="mt-4">
+          {/* Segmented control: one field at a time, no competing cursors. */}
+          <div className="px-5">
+            <div
+              className="grid grid-cols-2 gap-1 rounded-2xl p-1"
+              style={{ background: "var(--s-panel-alt)" }}
+              role="tablist"
+              aria-label="What to enter"
+            >
+              <SegmentTab
+                active={editingCash}
+                onClick={goCash}
+                icon={Banknote}
+                label="Cash"
+              />
+              <SegmentTab
+                active={!editingCash}
+                onClick={goMomo}
+                icon={Smartphone}
+                label="Mobile Money"
+              />
+            </div>
+          </div>
+
+          <div className="px-5 pt-5 pb-2 text-center">
+            <p className="text-sm font-semibold" style={{ color: "var(--s-ink-muted)" }}>
+              {editingCash ? "Cash in the drawer" : "Mobile Money balance"}
+            </p>
+            <p
+              className="money mt-1 text-[2.75rem] font-bold tracking-tight leading-none tabular-nums"
+              aria-live="polite"
+            >
+              {formatGHS(Number(display) || 0)}
+            </p>
+            {!editingCash && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIncludeMomo(false);
+                  setMomo("");
+                  goCash();
+                }}
+                className="mt-3 text-sm font-semibold underline-offset-2 hover:underline"
+                style={{ color: "var(--s-ink-muted)" }}
+              >
+                Skip Mobile Money
+              </button>
+            )}
+          </div>
+
+          <div className="px-4 pb-2">
             <Numpad
-              value={field === "cash" ? cash : momo}
-              onChange={field === "cash" ? setCash : setMomo}
+              value={display}
+              onChange={editingCash ? setCash : setMomo}
               maxDigits={7}
               allowDecimal
               shortcuts={CASH_SHORTCUTS}
+              replaceFirst={replaceFirst}
+              onReplaceConsumed={() => setReplaceFirst(false)}
             />
           </div>
 
-          <div className="mt-4 space-y-3">
+          <div
+            className="space-y-2 border-t px-5 pt-4"
+            style={{
+              borderColor: "var(--s-border)",
+              paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))",
+            }}
+          >
             <SheetError message={error} />
             <Button size="lg" className="w-full" busy={busy} onClick={open}>
-              Start the shift with {formatGHS(Number(cash) || 0)}
+              Start with {formatGHS(Number(cash) || 0)} cash
+              {includeMomo && momo !== "" ? ` · MoMo ${formatGHS(Number(momo) || 0)}` : ""}
             </Button>
+            {editingCash && !includeMomo && (
+              <p className="text-center text-xs" style={{ color: "var(--s-ink-faint)" }}>
+                MoMo left blank means &quot;not checked&quot; — not zero.
+              </p>
+            )}
           </div>
         </section>
       </div>
     </div>
+  );
+}
+
+function SegmentTab({
+  active,
+  onClick,
+  icon: Icon,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: typeof Banknote;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className="flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-bold transition-colors"
+      style={{
+        background: active ? "var(--s-panel)" : "transparent",
+        color: active ? "var(--s-ink)" : "var(--s-ink-muted)",
+        boxShadow: active ? "0 1px 3px rgba(0,0,0,0.25)" : undefined,
+      }}
+    >
+      <Icon className="w-4 h-4" />
+      {label}
+    </button>
   );
 }
 
@@ -199,46 +269,59 @@ export default function ShiftPanel({
             {session.isStale ? `Shift from ${session.businessDay}` : "This shift"} · opened by{" "}
             {session.openedBy.name} at {time(session.openedAt)}
           </p>
-          <h1 className="text-2xl font-bold">
+          <h1 className="text-2xl font-bold tracking-tight">
             <span className="money">{formatGHS(session.takings.gross)}</span> taken
           </h1>
         </div>
         <div className="flex gap-2">
           <Button tone="secondary" onClick={onCashMovement}>
-            <ArrowLeftRight className="w-4 h-4" /> Cash in / out
+            Cash in / out
           </Button>
-          <Button onClick={onCloseShift}>
-            <LockKeyhole className="w-4 h-4" /> Close shift
-          </Button>
+          <Button onClick={onCloseShift}>Close shift</Button>
         </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Stat icon={Receipt} label="Orders" value={String(session.takings.orderCount)} />
-        <Stat icon={Banknote} label="Cash sales" value={formatGHS(session.takings.cash)} />
-        <Stat icon={Smartphone} label="MoMo sales" value={formatGHS(session.takings.momo)} />
-        <Stat icon={Wallet} label="Drawer should hold" value={formatGHS(session.expectedCash)} strong />
+        <Stat label="Orders" value={String(session.takings.orderCount)} />
+        <Stat label="Cash sales" value={formatGHS(session.takings.cash)} />
+        <Stat label="MoMo sales" value={formatGHS(session.takings.momo)} />
+        <Stat label="Drawer should hold" value={formatGHS(session.expectedCash)} strong />
       </div>
 
-      <section className="rounded-3xl border p-4" style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}>
+      <section
+        className="rounded-[1.5rem] border p-5"
+        style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
+      >
         <h2 className="font-semibold">The drawer</h2>
         <dl className="mt-3 space-y-1.5 text-sm">
           <Row label="Opening float" value={formatGHS(session.openingFloat)} />
           <Row label="Cash sales" value={`+${formatGHS(session.takings.cash)}`} />
           {session.cashIn > 0 && <Row label="Cash put in" value={`+${formatGHS(session.cashIn)}`} />}
-          {session.cashOut > 0 && <Row label="Cash taken out" value={`−${formatGHS(session.cashOut)}`} />}
-          <div className="flex justify-between border-t pt-2 mt-2 font-bold" style={{ borderColor: "var(--s-border)" }}>
+          {session.cashOut > 0 && (
+            <Row label="Cash taken out" value={`−${formatGHS(session.cashOut)}`} />
+          )}
+          <div
+            className="flex justify-between border-t pt-2 mt-2 font-bold"
+            style={{ borderColor: "var(--s-border)" }}
+          >
             <dt>Should be in the drawer</dt>
             <dd className="money">{formatGHS(session.expectedCash)}</dd>
           </div>
           <Row
             label="Mobile Money should be"
-            value={session.expectedMomo === null ? "Not recorded at opening" : formatGHS(session.expectedMomo)}
+            value={
+              session.expectedMomo === null
+                ? "Not recorded at opening"
+                : formatGHS(session.expectedMomo)
+            }
           />
         </dl>
       </section>
 
-      <section className="rounded-3xl border p-4" style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}>
+      <section
+        className="rounded-[1.5rem] border p-5"
+        style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
+      >
         <div className="flex items-center justify-between">
           <h2 className="font-semibold">Cash in and out</h2>
           <button
@@ -258,17 +341,16 @@ export default function ShiftPanel({
           <ol className="mt-3 space-y-2">
             {session.movements.map((movement) => {
               const incoming = movement.direction === "IN";
-              const Icon = incoming ? ArrowDownLeft : ArrowUpRight;
               return (
                 <li key={movement.id} className="flex items-center gap-3">
                   <span
-                    className="grid h-9 w-9 shrink-0 place-items-center rounded-full"
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold"
                     style={{
                       color: incoming ? "var(--s-good)" : "var(--s-bad)",
                       background: `color-mix(in srgb, ${incoming ? "var(--s-good)" : "var(--s-bad)"} 14%, transparent)`,
                     }}
                   >
-                    <Icon className="w-4 h-4" />
+                    {incoming ? "+" : "−"}
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{movement.reason}</p>
@@ -294,29 +376,30 @@ export default function ShiftPanel({
 }
 
 function Stat({
-  icon: Icon,
   label,
   value,
   strong = false,
 }: {
-  icon: typeof Receipt;
   label: string;
   value: string;
   strong?: boolean;
 }) {
   return (
     <div
-      className="rounded-3xl border p-4"
+      className="rounded-[1.25rem] border p-4"
       style={{
-        background: strong ? "color-mix(in srgb, var(--s-brand) 10%, var(--s-panel))" : "var(--s-panel)",
-        borderColor: strong ? "color-mix(in srgb, var(--s-brand) 40%, var(--s-border))" : "var(--s-border)",
+        background: strong
+          ? "color-mix(in srgb, var(--s-brand) 10%, var(--s-panel))"
+          : "var(--s-panel)",
+        borderColor: strong
+          ? "color-mix(in srgb, var(--s-brand) 40%, var(--s-border))"
+          : "var(--s-border)",
       }}
     >
-      <Icon className="w-4 h-4" style={{ color: "var(--s-ink-faint)" }} />
-      <p className="mt-2 text-xs font-semibold" style={{ color: "var(--s-ink-muted)" }}>
+      <p className="text-xs font-semibold" style={{ color: "var(--s-ink-muted)" }}>
         {label}
       </p>
-      <p className="money mt-0.5 text-lg font-bold">{value}</p>
+      <p className="money mt-1 text-lg font-bold tracking-tight">{value}</p>
     </div>
   );
 }
