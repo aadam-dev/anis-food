@@ -29,6 +29,7 @@ export interface AdminOrder {
   paymentMethod: string;
   paymentStatus: string;
   total: number;
+  staffId: string | null;
   staff: string | null;
   customerName: string | null;
   customerPhone: string | null;
@@ -91,10 +92,12 @@ const FILTERS: { id: OrderFilter; label: string }[] = [
 
 export default function OrdersClient({
   orders,
+  cashiers,
   day,
   business,
 }: {
   orders: AdminOrder[];
+  cashiers: { id: string; name: string }[];
   day: string;
   business: {
     header: string;
@@ -113,6 +116,7 @@ export default function OrdersClient({
   const [correcting, setCorrecting] = useState<AdminOrder | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<OrderFilter>("all");
+  const [cashierId, setCashierId] = useState<string>("all");
 
   const active = orders.filter((order) => order.status !== "CANCELLED");
   const total = active.reduce((sum, order) => sum + order.total, 0);
@@ -125,6 +129,7 @@ export default function OrdersClient({
       if (filter === "online" && order.source !== "ONLINE") return false;
       if (filter === "unpaid" && (voided || order.paymentStatus !== "PENDING")) return false;
       if (filter === "paid" && (voided || order.paymentStatus === "PENDING")) return false;
+      if (cashierId !== "all" && order.staffId !== cashierId) return false;
       if (!needle) return true;
       const haystack = [
         order.orderNumber,
@@ -138,7 +143,7 @@ export default function OrdersClient({
         .toLowerCase();
       return haystack.includes(needle);
     });
-  }, [orders, query, filter]);
+  }, [orders, query, filter, cashierId]);
 
   return (
     <>
@@ -152,6 +157,20 @@ export default function OrdersClient({
             style={inputStyle}
             aria-label="Day"
           />
+          <select
+            value={cashierId}
+            onChange={(event) => setCashierId(event.target.value)}
+            className={`${inputClass} w-auto min-w-40`}
+            style={inputStyle}
+            aria-label="Cashier"
+          >
+            <option value="all">All cashiers</option>
+            {cashiers.map((cashier) => (
+              <option key={cashier.id} value={cashier.id}>
+                {cashier.name}
+              </option>
+            ))}
+          </select>
           <Chip>{active.length} orders</Chip>
           <Chip tone="good">{formatGHS(total)}</Chip>
         </div>

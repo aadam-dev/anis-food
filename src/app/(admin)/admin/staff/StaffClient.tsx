@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, Plus, Copy, Check } from "lucide-react";
 import { Panel, Chip, AdminButton, Field, inputClass, inputStyle } from "@/components/admin/ui";
 import { ROLE_LABELS } from "@/components/admin/labels";
+import { staffAvatarTint, staffInitials } from "@/lib/staff-avatar";
 
 export interface StaffMember {
   id: string;
@@ -13,6 +14,7 @@ export interface StaffMember {
   role: string;
   isActive: boolean;
   hasPin: boolean;
+  phone: string | null;
   lastLoginAt: string | null;
   mustChangePassword: boolean;
   editable: boolean;
@@ -106,6 +108,13 @@ function StaffRow({
   return (
     <li className="px-4 py-3 sm:px-5">
       <div className="flex items-center gap-3">
+        <span
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-xs font-bold text-white"
+          style={{ background: staffAvatarTint(member.name) }}
+          aria-hidden
+        >
+          {staffInitials(member.name)}
+        </span>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium flex items-center gap-2 flex-wrap">
             {member.name}
@@ -117,6 +126,7 @@ function StaffRow({
           <p className="text-xs mt-0.5 truncate" style={{ color: "var(--s-ink-faint)" }}>
             {member.email} · {ROLE_LABELS[member.role] ?? member.role}
             {member.role === "CASHIER" ? (member.hasPin ? " · PIN set" : " · no PIN") : ""}
+            {member.phone ? ` · ${member.phone}` : ""}
           </p>
         </div>
         {member.editable && (

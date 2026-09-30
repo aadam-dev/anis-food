@@ -18,15 +18,27 @@ export default async function OrdersPage({
   const { start, end } = businessDayRange(day);
   const settings = await getSettings();
 
-  const orders = await prisma.order.findMany({
-    where: { createdAt: { gte: start, lt: end } },
-    orderBy: { createdAt: "desc" },
-    include: {
-      items: { select: { id: true, name: true, quantity: true, unitPrice: true, lineTotal: true, notes: true } },
-      staff: { select: { name: true } },
-    },
-    take: 300,
-  });
+  const [orders, cashiers] = await Promise.all([
+    prisma.order.findMany({
+      where: { createdAt: { gte: start, lt: end } },
+      orderBy: { createdAt: "desc" },
+      include: {
+        items: { select: { id: true, name: true, quantity: true, unitPrice: true, lineTotal: true, notes: true } },
+        staff: { select: { id: true, name: true } },
+      },
+      take: 300,
+    }),
+    prisma.user.findMany({
+      where: {
+        OR: [
+          { role: "CASHIER" },
+          { orders: { some: { createdAt: { gte: start, lt: end } } } },
+        ],
+      },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+  ]);
 
   const serialized: AdminOrder[] = orders.map((order) => ({
     id: order.id,
@@ -37,6 +49,7 @@ export default async function OrdersPage({
     paymentMethod: order.paymentMethod,
     paymentStatus: order.paymentStatus,
     total: toMoney(order.total),
+    staffId: order.staff?.id ?? null,
     staff: order.staff?.name ?? null,
     customerName: order.customerName,
     customerPhone: order.customerPhone,
@@ -69,6 +82,7 @@ export default async function OrdersPage({
       <PageHeader title="Orders" description="Till sales and online orders for the chosen day." />
       <OrdersClient
         orders={serialized}
+        cashiers={cashiers}
         day={day}
         business={{
           header: settings.receipt_header,

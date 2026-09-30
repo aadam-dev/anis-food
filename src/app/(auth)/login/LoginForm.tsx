@@ -27,6 +27,7 @@ export default function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const typedAddress = name.includes("@");
+  const pinMode = /^\d{0,4}$/.test(password) && password.length <= 4;
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -88,7 +89,7 @@ export default function LoginForm() {
             autoCorrect="off"
             spellCheck={false}
             required
-            placeholder="karim"
+            placeholder="maxwell"
             aria-describedby={typedAddress ? undefined : "staff-domain"}
             value={name}
             onChange={(event) => setName(event.target.value)}
@@ -106,13 +107,37 @@ export default function LoginForm() {
         </div>
       </div>
 
-      <PasswordInput
-        id="password"
-        label="Password"
-        value={password}
-        onChange={setPassword}
-        autoComplete="current-password"
-      />
+      {pinMode ? (
+        <div>
+          <label htmlFor="password" className="block text-sm font-medium mb-1.5">
+            PIN or password
+          </label>
+          <input
+            id="password"
+            type="password"
+            inputMode="numeric"
+            autoComplete="current-password"
+            required
+            maxLength={32}
+            placeholder="••••"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            className="w-full min-h-12 rounded-2xl border px-3.5 outline-none tracking-[0.35em] text-center text-lg"
+            style={fieldStyle}
+          />
+          <p className="mt-1.5 text-xs" style={{ color: "var(--s-ink-faint)" }}>
+            Cashiers use their 4-digit till PIN. Managers use their password.
+          </p>
+        </div>
+      ) : (
+        <PasswordInput
+          id="password"
+          label="PIN or password"
+          value={password}
+          onChange={setPassword}
+          autoComplete="current-password"
+        />
+      )}
 
       {error && (
         <p

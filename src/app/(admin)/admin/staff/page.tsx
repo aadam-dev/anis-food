@@ -22,6 +22,7 @@ export default async function StaffPage() {
       pinHash: true,
       lastLoginAt: true,
       passwordResetRequired: true,
+      staffProfile: { select: { phone: true } },
     },
   });
 
@@ -32,6 +33,7 @@ export default async function StaffPage() {
     role: user.role,
     isActive: user.isActive,
     hasPin: user.pinHash !== null,
+    phone: user.staffProfile?.phone ?? null,
     lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
     mustChangePassword: user.passwordResetRequired,
     // Which accounts this admin is allowed to touch, decided on the server.

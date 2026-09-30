@@ -1,16 +1,16 @@
 /**
- * Seeds a usable Anis back office: the four real accounts, the expense
- * categories Karim actually spends against, the settings the app reads, and the
- * whole menu lifted out of src/data/menu.json.
+ * Seeds a usable Anis back office: the real accounts, the expense categories
+ * Karim actually spends against, the settings the app reads, and the whole menu
+ * lifted out of src/data/menu.json.
  *
  * Safe to re-run. Everything upserts, so a second run updates rather than
- * duplicating. The four seed accounts are reset to the shared test password so
- * sign-in keeps working; no other user's password is touched.
+ * duplicating. Owner and IT keep the shared test password; cashiers get their
+ * own 4-digit till PINs so they can sign in with their first name.
  *
  *   npm run db:seed
  */
 import { PrismaClient, UserRole, SalaryType } from "../src/generated/prisma/index.js";
-import { hashPassword } from "../src/lib/auth/password";
+import { hashPassword, hashPin } from "../src/lib/auth/password";
 import menu from "../src/data/menu.json" with { type: "json" };
 
 const prisma = new PrismaClient();
@@ -20,14 +20,34 @@ interface SeedUser {
   name: string;
   role: UserRole;
   salaryType?: SalaryType;
+  /** 4-digit till PIN for cashiers. */
+  pin?: string;
+  phone?: string;
 }
 
 const USERS: SeedUser[] = [
   { email: "karim@anis.com", name: "Karim", role: UserRole.OWNER },
   { email: "it@anis.com", name: "IT Administrator", role: UserRole.SUPER_ADMIN },
-  { email: "cashier1@anis.com", name: "Cashier One", role: UserRole.CASHIER, salaryType: SalaryType.MONTHLY },
-  { email: "cashier2@anis.com", name: "Cashier Two", role: UserRole.CASHIER, salaryType: SalaryType.MONTHLY },
+  {
+    email: "maxwell@anis.com",
+    name: "Maxwell Kaku",
+    role: UserRole.CASHIER,
+    salaryType: SalaryType.MONTHLY,
+    pin: "4826",
+    phone: "+233 24 555 0101",
+  },
+  {
+    email: "maudallia@anis.com",
+    name: "Maudallia Tetteh",
+    role: UserRole.CASHIER,
+    salaryType: SalaryType.MONTHLY,
+    pin: "7391",
+    phone: "+233 24 555 0102",
+  },
 ];
+
+/** Legacy placeholder cashiers — keep rows but take them off the till. */
+const DEACTIVATE_EMAILS = ["cashier1@anis.com", "cashier2@anis.com"];
 
 const EXPENSE_CATEGORIES: { name: string; isFixed: boolean }[] = [
   { name: "Ingredients & Provisions", isFixed: false },
@@ -67,22 +87,20 @@ const SETTINGS: Record<string, string> = {
 };
 
 /**
- * The password every seeded account gets.
- *
- * Easy and shared on purpose: a fresh database should be testable the moment it
- * is seeded, with one password that unlocks Karim (owner), IT (super admin) and
- * the cashiers alike. Override it with SEED_PASSWORD when you want something
- * else. It is NOT a credential to keep — CHANGE IT before real staff or
- * customers touch the system.
+ * Password for owner / IT (and as a recovery hash for cashiers).
+ * Cashiers sign in at the till with their 4-digit PIN — not this password.
+ * Override with SEED_PASSWORD when you want something else.
  */
 const SEED_PASSWORD = process.env.SEED_PASSWORD || "anis1234";
 
 async function seedUsers() {
-  const created: { email: string; role: string; password: string }[] = [];
+  const created: { email: string; role: string; password: string; pin?: string }[] = [];
 
   for (const seed of USERS) {
     const email = seed.email.toLowerCase();
     const existing = await prisma.user.findUnique({ where: { email } });
+    const pinHash = seed.pin ? await hashPin(seed.pin) : undefined;
+    const passwordHash = await hashPassword(SEED_PASSWORD);
 
     if (existing) {
       await prisma.user.update({
@@ -90,36 +108,69 @@ async function seedUsers() {
         data: {
           name: seed.name,
           role: seed.role,
-          passwordHash: await hashPassword(SEED_PASSWORD),
+          passwordHash,
+          ...(pinHash ? { pinHash } : {}),
           passwordResetRequired: false,
+          isActive: true,
         },
       });
-      created.push({ email, role: seed.role, password: SEED_PASSWORD });
-      console.log(`  = ${email} (${seed.role}) — password set to the shared test password`);
+      if (seed.salaryType || seed.phone) {
+        await prisma.staffProfile.upsert({
+          where: { userId: existing.id },
+          update: {
+            ...(seed.salaryType ? { salaryType: seed.salaryType } : {}),
+            ...(seed.phone ? { phone: seed.phone } : {}),
+          },
+          create: {
+            userId: existing.id,
+            salaryType: seed.salaryType ?? SalaryType.MONTHLY,
+            phone: seed.phone,
+          },
+        });
+      }
+      created.push({ email, role: seed.role, password: SEED_PASSWORD, pin: seed.pin });
+      console.log(
+        seed.pin
+          ? `  = ${email} (${seed.role}) — PIN ${seed.pin}`
+          : `  = ${email} (${seed.role}) — password set to the shared test password`,
+      );
       continue;
     }
 
-    const password = SEED_PASSWORD;
     const user = await prisma.user.create({
       data: {
         email,
         name: seed.name,
         role: seed.role,
-        passwordHash: await hashPassword(password),
-        // Easy seed password, ready to sign in with immediately for testing.
-        // Change it (and this flag stays false) before going live.
+        passwordHash,
+        pinHash,
         passwordResetRequired: false,
       },
     });
 
-    if (seed.salaryType) {
+    if (seed.salaryType || seed.phone) {
       await prisma.staffProfile.create({
-        data: { userId: user.id, salaryType: seed.salaryType },
+        data: {
+          userId: user.id,
+          salaryType: seed.salaryType ?? SalaryType.MONTHLY,
+          phone: seed.phone,
+          startedAt: new Date(),
+        },
       });
     }
 
-    created.push({ email, role: seed.role, password });
-    console.log(`  + ${email} (${seed.role})`);
+    created.push({ email, role: seed.role, password: SEED_PASSWORD, pin: seed.pin });
+    console.log(seed.pin ? `  + ${email} (${seed.role}) — PIN ${seed.pin}` : `  + ${email} (${seed.role})`);
+  }
+
+  for (const email of DEACTIVATE_EMAILS) {
+    const legacy = await prisma.user.findUnique({ where: { email } });
+    if (!legacy) continue;
+    await prisma.user.update({
+      where: { email },
+      data: { isActive: false },
+    });
+    console.log(`  - ${email} deactivated (replaced by named cashiers)`);
   }
 
   return created;
@@ -206,13 +257,16 @@ async function main() {
 
   if (created.length > 0) {
     console.log("\n" + "─".repeat(64));
-    console.log("SEED LOGINS — easy shared password for testing. CHANGE before launch.");
+    console.log("SEED LOGINS — change before launch.");
     console.log("─".repeat(64));
     for (const user of created) {
-      console.log(`  ${user.email.padEnd(22)} ${user.password}   (${user.role})`);
+      if (user.pin) {
+        console.log(`  ${user.email.padEnd(24)} first name + PIN ${user.pin}   (${user.role})`);
+      } else {
+        console.log(`  ${user.email.padEnd(24)} ${user.password}   (${user.role})`);
+      }
     }
     console.log("─".repeat(64));
-    console.log("Cashiers set their 4-digit till PIN after their first sign-in.");
   }
 
   console.log("\nDone.");

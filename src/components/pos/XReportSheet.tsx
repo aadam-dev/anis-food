@@ -23,6 +23,8 @@ export default function XReportSheet({
   const [report, setReport] = useState<XReport | null>(null);
   const [when, setWhen] = useState("");
   const [openedBy, setOpenedBy] = useState("");
+  const [scope, setScope] = useState<"mine" | "shift">("shift");
+  const [cashierName, setCashierName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -32,6 +34,8 @@ export default function XReportSheet({
       businessDay: string;
       openedAt: string;
       openedBy: string;
+      scope?: "mine" | "shift";
+      cashierName?: string | null;
     }>("/api/pos/x-report", "GET")
       .then((data) => {
         if (!alive) return;
@@ -41,6 +45,8 @@ export default function XReportSheet({
         }
         setReport(data.report);
         setOpenedBy(data.openedBy);
+        setScope(data.scope === "mine" ? "mine" : "shift");
+        setCashierName(data.cashierName ?? null);
         setWhen(
           new Date(data.openedAt).toLocaleString("en-GB", {
             timeZone: "Africa/Accra",
@@ -80,7 +86,11 @@ export default function XReportSheet({
           <div className="r-center">
             <div className="r-title">{businessName}</div>
             <div className="r-title">X REPORT</div>
-            <div className="r-small">Opened by {openedBy}</div>
+            {scope === "mine" && cashierName ? (
+              <div className="r-small">My sales · {cashierName}</div>
+            ) : (
+              <div className="r-small">Opened by {openedBy}</div>
+            )}
             <div className="r-small">{when}</div>
             <div className="r-small">Reading only. The shift stays open.</div>
           </div>

@@ -16,16 +16,46 @@ export async function GET() {
     const session = await currentSession();
     if (!session || session.status !== "OPEN") return ok({ report: null });
 
-    const orders = await prisma.order.findMany({
-      where: { sessionId: session.id, isDemo: false },
-      select: {
-        paymentMethod: true,
-        paymentStatus: true,
-        status: true,
-        total: true,
-        splitPayments: true,
-      },
-    });
+    // Cashiers only see the tickets they punched. Managers and owners keep the
+    // full shift reading — they need the drawer, not a personal slice.
+    const mineOnly = auth.user.role === "CASHIER";
+    const [orders, movementRows] = await Promise.all([
+      prisma.order.findMany({
+        where: {
+          sessionId: session.id,
+          isDemo: false,
+          ...(mineOnly ? { staffId: auth.user.sub } : {}),
+        },
+        select: {
+          paymentMethod: true,
+          paymentStatus: true,
+          status: true,
+          total: true,
+          splitPayments: true,
+        },
+      }),
+      mineOnly
+        ? prisma.cashMovement.findMany({
+            where: { sessionId: session.id, createdById: auth.user.sub },
+            select: {
+              direction: true,
+              amount: true,
+              reason: true,
+              kind: true,
+              destination: true,
+            },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    const movements = movementRows
+      ?? session.movements.map((movement) => ({
+          direction: movement.direction,
+          amount: movement.amount,
+          reason: movement.reason,
+          kind: movement.kind,
+          destination: movement.destination,
+        }));
 
     const report = buildXReport({
       openingFloat: session.openingFloat,
@@ -41,9 +71,9 @@ export async function GET() {
             : null,
         }),
       ),
-      movements: session.movements.map((movement) => ({
-        direction: movement.direction,
-        amount: movement.amount,
+      movements: movements.map((movement) => ({
+        direction: movement.direction as "IN" | "OUT",
+        amount: typeof movement.amount === "number" ? movement.amount : Number(movement.amount),
         reason: movement.reason,
         kind: movement.kind,
         destination: movement.destination,
@@ -55,6 +85,8 @@ export async function GET() {
       businessDay: session.businessDay,
       openedAt: session.openedAt,
       openedBy: session.openedBy.name,
+      scope: mineOnly ? "mine" : "shift",
+      cashierName: mineOnly ? auth.user.name : null,
     });
   } catch (error) {
     return handlePrismaError(error, "pos/x-report GET");

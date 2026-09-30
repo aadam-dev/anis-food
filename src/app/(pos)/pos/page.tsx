@@ -105,7 +105,7 @@ export default async function PosPage() {
 
   return (
     <Register
-      user={{ name: user!.name, role: user!.role }}
+      user={{ id: user!.sub, name: user!.name, role: user!.role }}
       business={{
         header: settings.receipt_header,
         address: settings.business_address,

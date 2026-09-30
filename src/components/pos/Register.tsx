@@ -49,6 +49,8 @@ import QuantityEntrySheet from "./QuantityEntrySheet";
 import CashMovementDialog from "./CashMovementDialog";
 import CloseShiftDialog from "./CloseShiftDialog";
 import XReportSheet from "./XReportSheet";
+import CashierSwitchSheet from "./CashierSwitchSheet";
+import { staffAvatarTint, staffInitials } from "@/lib/staff-avatar";
 import type { FulfillmentType } from "./CustomerFields";
 import Button from "./ui/Button";
 import type {
@@ -69,7 +71,7 @@ interface ExpenseCategoryOption {
 }
 
 interface RegisterProps {
-  user: { name: string; role: string };
+  user: { id: string; name: string; role: string };
   business: {
     header: string;
     address: string;
@@ -131,6 +133,8 @@ export default function Register({
   const queued = useSyncExternalStore(subscribeQueue, getQueueCount, getServerQueueCount);
   const [banner, setBanner] = useState<{ tone: "good" | "bad"; text: string } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [switchOpen, setSwitchOpen] = useState(false);
+  const [activeUser, setActiveUser] = useState(user);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
@@ -147,7 +151,7 @@ export default function Register({
   const [tables, setTables] = useState<
     { id: string; label: string; area: string; seats: number; occupied: boolean }[]
   >([]);
-  const cartKey = useRef(`anis-pos-cart:${user.name}`);
+  const cartKey = useRef(`anis-pos-cart:${user.id}`);
   const skipSave = useRef(true);
 
   const locked = gate === "stale";
@@ -528,7 +532,9 @@ export default function Register({
   }
 
   const count = cartCount(cart);
-  const firstName = user.name.split(" ")[0] || user.name;
+  const firstName = activeUser.name.split(" ")[0] || activeUser.name;
+  const avatarTint = staffAvatarTint(activeUser.name);
+  const avatarInitials = staffInitials(activeUser.name);
   const staleTickets = session ? tickets.filter((ticket) => ticket.sessionId === session.id).length : 0;
 
   // No shift at all: the drawer is counted in before anything else. A shift that
@@ -536,7 +542,7 @@ export default function Register({
   if (gate === "none" || gate === "error" || !session) {
     return (
       <OpenShiftCard
-        userName={user.name}
+        userName={activeUser.name}
         defaultOpeningFloat={defaultOpeningFloat}
         loadError={gate === "error"}
         onOpened={() => {
@@ -569,15 +575,31 @@ export default function Register({
       >
         <div className="flex items-center gap-3 px-3 pt-2 pb-1.5 lg:px-4">
           <AnisLogo className="h-8 w-auto shrink-0" />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-bold leading-tight">{firstName}</p>
-            <p className="truncate text-[11px] leading-tight" style={{ color: "var(--s-ink-muted)" }}>
-              <span className="money">
-                {session.takings.orderCount} sale{session.takings.orderCount === 1 ? "" : "s"} ·{" "}
-                {formatGHS(session.takings.gross)}
-              </span>
-            </p>
-          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setMenuOpen(false);
+              setSwitchOpen(true);
+            }}
+            className="flex min-w-0 flex-1 items-center gap-2.5 rounded-2xl px-1 py-0.5 text-left"
+            aria-label="Switch cashier"
+          >
+            <span
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-xs font-bold text-white"
+              style={{ background: avatarTint }}
+            >
+              {avatarInitials}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-bold leading-tight">{firstName}</p>
+              <p className="truncate text-[11px] leading-tight" style={{ color: "var(--s-ink-muted)" }}>
+                <span className="money">
+                  {session.takings.orderCount} sale{session.takings.orderCount === 1 ? "" : "s"} ·{" "}
+                  {formatGHS(session.takings.gross)}
+                </span>
+              </p>
+            </div>
+          </button>
 
           <nav
             className="hidden md:grid lg:hidden grid-cols-3 gap-1 rounded-2xl p-1"
@@ -626,6 +648,14 @@ export default function Register({
                   className="absolute right-0 top-full z-50 mt-1 w-56 rounded-2xl border p-1 shadow-xl"
                   style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
                 >
+                  <MenuItem
+                    icon={UserRound}
+                    label="Switch cashier"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setSwitchOpen(true);
+                    }}
+                  />
                   <MenuItem icon={LockKeyhole} label="Close shift" onClick={openClose} />
                   {backOfficeHref && (
                     <MenuItem
@@ -996,12 +1026,25 @@ export default function Register({
       {xReportOpen && (
         <XReportSheet businessName={business.header} onClose={() => setXReportOpen(false)} />
       )}
+      {switchOpen && (
+        <CashierSwitchSheet
+          currentUserId={activeUser.id}
+          onClose={() => setSwitchOpen(false)}
+          onSwitched={(next) => {
+            setActiveUser({ id: next.id, name: next.name, role: next.role });
+            cartKey.current = `anis-pos-cart:${next.id}`;
+            setSwitchOpen(false);
+            setBanner({ tone: "good", text: `${next.name.split(" ")[0]} is on the till` });
+            router.refresh();
+          }}
+        />
+      )}
 
       {receipt && (
         <ReceiptModal
           order={receipt}
           business={business}
-          soldBy={user.name}
+          soldBy={activeUser.name}
           kind={slipKind}
           onClose={() => setReceipt(null)}
         />

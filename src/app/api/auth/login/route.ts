@@ -1,29 +1,27 @@
 import { NextResponse, after } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { verifyPassword } from "@/lib/auth/password";
+import { isValidPin, verifyPassword, verifyPin } from "@/lib/auth/password";
 import { signSession, writeSessionCookie } from "@/lib/auth/session";
 import { landingPathFor } from "@/lib/permissions";
 import { logAudit, clientIp } from "@/lib/api-auth";
 import { ok, parseBody, handlePrismaError } from "@/lib/api-utils";
+import { firstNameKey } from "@/lib/staff-avatar";
 
 const loginSchema = z.object({
-  email: z.string().min(1, "Enter your email").max(200),
-  password: z.string().min(1, "Enter your password").max(200),
+  email: z.string().min(1, "Enter your name").max(200),
+  password: z.string().min(1, "Enter your PIN or password").max(200),
 });
 
 /**
- * Deliberately vague: "Email or password is not correct" never reveals whether
- * the address exists. Telling an attacker which half they got right halves the
- * work of guessing the other.
+ * Deliberately vague: never reveal whether the name, email, PIN or password was
+ * the half that failed. Same message for every rejection.
  */
-const REJECTION = "Email or password is not correct.";
+const REJECTION = "Name or PIN is not correct.";
 
 /**
- * A real bcrypt hash (of a throwaway string) used only to burn the same ~300ms
- * when the email does not exist. It must be a *valid* hash: bcrypt.compare
- * against a malformed one returns in under a millisecond, and that difference is
- * enough to enumerate which staff emails are real.
+ * A real bcrypt hash used only to burn the same ~300ms when the account is
+ * missing, so timing cannot enumerate who works here.
  */
 const TIMING_EQUALISER = "$2b$12$OSP41yHdrQBW9BqeMCoTi.6X5kAKUsRtr2uyf.5y9Vt/koaHc3mjO";
 
@@ -31,25 +29,30 @@ export async function POST(request: Request) {
   const parsed = await parseBody(request, loginSchema);
   if (parsed instanceof NextResponse) return parsed;
   const { email, password } = parsed.data;
+  const pinAttempt = isValidPin(password.trim());
 
   try {
-    const user = await prisma.user.findUnique({
-      where: { email: email.trim().toLowerCase() },
-    });
+    const user = await findStaff(email.trim());
 
-    // Do the same work when the account is missing, so a request for an unknown
-    // email takes as long as one for a real email.
     if (!user) {
-      await verifyPassword(password, TIMING_EQUALISER);
+      if (pinAttempt) await verifyPin(password.trim(), TIMING_EQUALISER);
+      else await verifyPassword(password, TIMING_EQUALISER);
       return NextResponse.json({ error: REJECTION }, { status: 401 });
     }
 
-    const passwordMatches = await verifyPassword(password, user.passwordHash);
-    if (!passwordMatches) {
-      // after() runs once the response has been sent. Awaiting the audit write
-      // here would add a database round-trip that only happens when the email is
-      // real — and a measured ~0.85s gap between "wrong password" and "no such
-      // account" is enough to enumerate the staff list without ever logging in.
+    let matched = false;
+    let viaPin = false;
+
+    if (pinAttempt && user.pinHash) {
+      matched = await verifyPin(password.trim(), user.pinHash);
+      viaPin = matched;
+    }
+
+    if (!matched) {
+      matched = await verifyPassword(password, user.passwordHash);
+    }
+
+    if (!matched) {
       after(
         logAudit({
           actorId: user.id,
@@ -69,6 +72,8 @@ export async function POST(request: Request) {
       );
     }
 
+    // Cashiers without a PIN yet must set one before using the till.
+    const needsPin = user.role === "CASHIER" && !user.pinHash;
     const now = Math.floor(Date.now() / 1000);
     await writeSessionCookie(
       await signSession({
@@ -77,11 +82,10 @@ export async function POST(request: Request) {
         name: user.name,
         role: user.role,
         roleCheckedAt: now,
+        ...(viaPin ? { pinVerifiedAt: now } : {}),
       }),
     );
 
-    // Bookkeeping, not part of signing in. Off the response path so a cashier
-    // at the counter is not waiting on two extra round-trips to Paris.
     const ip = clientIp(request);
     after(async () => {
       await prisma.user.update({
@@ -90,23 +94,50 @@ export async function POST(request: Request) {
       });
       await logAudit({
         actorId: user.id,
-        action: "auth.login",
+        action: viaPin ? "auth.login.pin" : "auth.login",
         resource: "User",
         resourceId: user.id,
         ip,
       });
     });
 
+    const redirectTo = user.passwordResetRequired
+      ? "/account/password"
+      : needsPin
+        ? "/account/pin"
+        : landingPathFor(user.role);
+
     return ok({
       user: { name: user.name, email: user.email, role: user.role },
-      // A first-time or reset password must be changed before anything else.
       mustChangePassword: user.passwordResetRequired,
-      needsPin: user.role === "CASHIER" && !user.pinHash,
-      redirectTo: user.passwordResetRequired
-        ? "/account/password"
-        : landingPathFor(user.role),
+      needsPin,
+      redirectTo,
     });
   } catch (error) {
     return handlePrismaError(error, "auth/login");
   }
+}
+
+/**
+ * Resolve staff by full email, or by first name when they typed only "maxwell".
+ * First-name lookup is limited to active accounts so deactivated placeholders
+ * never steal a live cashier's name.
+ */
+async function findStaff(raw: string) {
+  const value = raw.toLowerCase().replace(/\s+/g, "");
+  const email = value.includes("@") ? value : `${value}@anis.com`;
+
+  const byEmail = await prisma.user.findUnique({ where: { email } });
+  if (byEmail) return byEmail;
+
+  // Typed a bare first name that does not match the email local-part (rare, but
+  // Maudallia might one day sign as "maud" if we ever support nicknames).
+  const needle = firstNameKey(raw);
+  if (!needle || needle.includes("@")) return null;
+
+  const candidates = await prisma.user.findMany({
+    where: { isActive: true },
+    take: 50,
+  });
+  return candidates.find((user) => firstNameKey(user.name) === needle) ?? null;
 }
