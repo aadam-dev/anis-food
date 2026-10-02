@@ -18,8 +18,16 @@ export function printReceiptNow(waitMs = 300): void {
   const images = Array.from(root?.querySelectorAll<HTMLImageElement>("img") ?? []);
   const pending = images.filter((img) => !img.complete);
 
+  const runPrint = () => {
+    try {
+      window.print();
+    } catch (error) {
+      console.warn("Receipt print was blocked.", error);
+    }
+  };
+
   if (pending.length === 0) {
-    window.print();
+    runPrint();
     return;
   }
 
@@ -27,7 +35,7 @@ export function printReceiptNow(waitMs = 300): void {
   const finish = () => {
     if (done) return;
     done = true;
-    window.print();
+    runPrint();
   };
 
   // Print once the LAST image settles. Each image is counted at most once: a

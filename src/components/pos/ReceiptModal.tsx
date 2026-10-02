@@ -101,22 +101,35 @@ export default function ReceiptModal({
   };
 
   useEffect(() => {
-    // Print once, as soon as the QR is in the DOM — printReceiptNow waits for the
-    // image to decode so the QR never lands on paper as a blank box. If the QR is
-    // slow or fails, a 1.2s fallback prints the receipt without it rather than
-    // leaving the cashier waiting with a customer's hand out.
+    // Defer auto-print so the receipt sheet paints and the payment spinner can
+    // clear before the browser print dialog blocks the main thread. On some POS
+    // Chromes, print() hung the UI while "Processing…" was still showing.
     if (printed.current) return;
-    if (qrDataUrl) {
-      printed.current = true;
-      printReceiptNow();
-      return;
+    if (!qrDataUrl) {
+      const timer = setTimeout(() => {
+        if (printed.current) return;
+        printed.current = true;
+        queueMicrotask(() => {
+          try {
+            printReceiptNow();
+          } catch {
+            // Print is best-effort; cashier can tap Print.
+          }
+        });
+      }, 1200);
+      return () => clearTimeout(timer);
     }
-    const timer = setTimeout(() => {
-      if (printed.current) return;
-      printed.current = true;
-      printReceiptNow();
-    }, 1200);
-    return () => clearTimeout(timer);
+    printed.current = true;
+    const frame = requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        try {
+          printReceiptNow();
+        } catch {
+          // Print is best-effort.
+        }
+      }, 80);
+    });
+    return () => cancelAnimationFrame(frame);
   }, [qrDataUrl]);
 
   useEffect(() => {

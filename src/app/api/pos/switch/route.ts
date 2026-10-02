@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { isValidPin, verifyPin } from "@/lib/auth/password";
 import { requireResource, logAudit, clientIp } from "@/lib/api-auth";
 import { signSession, writeSessionCookie } from "@/lib/auth/session";
+import { RESOURCE_ROLES } from "@/lib/permissions";
 import { ok, parseBody, badRequest, handlePrismaError } from "@/lib/api-utils";
 
 const switchSchema = z.object({
@@ -42,9 +43,10 @@ export async function POST(request: Request) {
       },
     });
 
-    if (!target || !target.isActive || target.role !== "CASHIER" || !target.pinHash) {
+    const tillRoles = new Set<string>(RESOURCE_ROLES.pos);
+    if (!target || !target.isActive || !tillRoles.has(target.role) || !target.pinHash) {
       return NextResponse.json(
-        { error: "That cashier cannot take the till." },
+        { error: "That person cannot take the till." },
         { status: 404 },
       );
     }

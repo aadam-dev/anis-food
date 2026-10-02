@@ -4,8 +4,7 @@
  * lifted out of src/data/menu.json.
  *
  * Safe to re-run. Everything upserts, so a second run updates rather than
- * duplicating. Owner and IT keep the shared test password; cashiers get their
- * own 4-digit till PINs so they can sign in with their first name.
+ * duplicating. Everyone who works the till gets a 4-digit PIN (Karim included).
  *
  *   npm run db:seed
  */
@@ -26,8 +25,8 @@ interface SeedUser {
 }
 
 const USERS: SeedUser[] = [
-  { email: "karim@anis.com", name: "Karim", role: UserRole.OWNER },
-  { email: "it@anis.com", name: "IT Administrator", role: UserRole.SUPER_ADMIN },
+  { email: "karim@anis.com", name: "Karim", role: UserRole.OWNER, pin: "5820" },
+  { email: "it@anis.com", name: "IT Administrator", role: UserRole.SUPER_ADMIN, pin: "9041" },
   {
     email: "maxwell@anis.com",
     name: "Maxwell Kaku",

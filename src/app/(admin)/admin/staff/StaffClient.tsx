@@ -125,7 +125,7 @@ function StaffRow({
           </p>
           <p className="text-xs mt-0.5 truncate" style={{ color: "var(--s-ink-faint)" }}>
             {member.email} · {ROLE_LABELS[member.role] ?? member.role}
-            {member.role === "CASHIER" ? (member.hasPin ? " · PIN set" : " · no PIN") : ""}
+            {member.hasPin ? " · PIN set" : " · no PIN"}
             {member.phone ? ` · ${member.phone}` : ""}
           </p>
         </div>
@@ -161,7 +161,7 @@ function StaffRow({
           >
             Reset password
           </AdminButton>
-          {member.role === "CASHIER" && member.hasPin && (
+          {member.hasPin && (
             <AdminButton
               onClick={() => patch({ clearPin: true })}
               disabled={busy}

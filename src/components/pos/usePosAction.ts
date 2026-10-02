@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { fetchWithTimeout } from "@/lib/fetch-timeout";
 
 /**
  * One way to call the till's API.
@@ -26,13 +27,19 @@ export async function posRequest<T = Record<string, unknown>>(
 ): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(path, {
-      method,
-      headers: body === undefined ? undefined : { "Content-Type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-  } catch {
-    throw new PosRequestError("No connection. Check the network and try again.", 0);
+    response = await fetchWithTimeout(
+      path,
+      {
+        method,
+        headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      },
+      20_000,
+    );
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "No connection. Check the network and try again.";
+    throw new PosRequestError(message, 0);
   }
   const data = (await response.json().catch(() => ({}))) as T & { error?: string; detail?: unknown };
   if (response.status === 401) {

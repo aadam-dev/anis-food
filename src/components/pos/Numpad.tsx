@@ -49,6 +49,7 @@ export default function Numpad({
   shortcutPrefix = "",
   replaceFirst = false,
   onReplaceConsumed,
+  compact = false,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -65,6 +66,8 @@ export default function Numpad({
    */
   replaceFirst?: boolean;
   onReplaceConsumed?: () => void;
+  /** Tighter keys for short POS screens (open-till). */
+  compact?: boolean;
 }) {
   const press = (key: string) => {
     const next = applyNumpadKey(value, key, { maxDigits, allowDecimal, replaceFirst });
@@ -72,11 +75,13 @@ export default function Numpad({
     onChange(next);
   };
   const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", allowDecimal ? "." : "clear", "0", "back"];
+  const keyPad = compact ? "rounded-xl py-2.5 text-lg" : "rounded-2xl py-3.5 text-xl";
+  const shortcutPad = compact ? "rounded-xl py-2 text-sm" : "rounded-2xl py-2.5 text-sm";
 
   return (
     <div>
       {shortcuts.length > 0 && (
-        <div className="mb-2.5 grid grid-cols-4 gap-2">
+        <div className={`grid grid-cols-4 gap-2 ${compact ? "mb-2" : "mb-2.5"}`}>
           {shortcuts.map((amount) => (
             <button
               key={amount}
@@ -85,7 +90,7 @@ export default function Numpad({
                 onChange(String(amount));
                 onReplaceConsumed?.();
               }}
-              className="money rounded-2xl py-2.5 text-sm font-bold active:scale-[0.97] transition-transform"
+              className={`money font-bold active:scale-[0.97] transition-transform ${shortcutPad}`}
               style={{
                 border: "1px solid color-mix(in srgb, var(--s-brand) 30%, var(--s-border))",
                 background: "color-mix(in srgb, var(--s-brand) 12%, var(--s-panel))",
@@ -99,7 +104,7 @@ export default function Numpad({
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className={`grid grid-cols-3 ${compact ? "gap-1.5" : "gap-2"}`}>
         {keys.map((key) => {
           if (key === "back") {
             return (
@@ -108,7 +113,7 @@ export default function Numpad({
                 type="button"
                 onClick={() => press("back")}
                 aria-label="Backspace"
-                className="rounded-2xl py-3.5 grid place-items-center active:scale-[0.97] transition-transform"
+                className={`grid place-items-center active:scale-[0.97] transition-transform ${keyPad}`}
                 style={{
                   background: "var(--s-panel-alt)",
                   color: "var(--s-ink)",
@@ -127,7 +132,7 @@ export default function Numpad({
                   press("clear");
                   onReplaceConsumed?.();
                 }}
-                className="rounded-2xl py-3.5 text-sm font-semibold active:scale-[0.97] transition-transform"
+                className={`text-sm font-semibold active:scale-[0.97] transition-transform ${keyPad}`}
                 style={{ background: "var(--s-panel-alt)", color: "var(--s-ink-muted)" }}
               >
                 Clear
@@ -139,7 +144,7 @@ export default function Numpad({
               key={key}
               type="button"
               onClick={() => press(key)}
-              className="money rounded-2xl py-3.5 text-xl font-bold active:scale-[0.97] transition-transform"
+              className={`money font-bold active:scale-[0.97] transition-transform ${keyPad}`}
               style={{
                 background: "var(--s-panel-alt)",
                 color: "var(--s-ink)",

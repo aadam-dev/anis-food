@@ -50,7 +50,9 @@ import CashMovementDialog from "./CashMovementDialog";
 import CloseShiftDialog from "./CloseShiftDialog";
 import XReportSheet from "./XReportSheet";
 import CashierSwitchSheet from "./CashierSwitchSheet";
+import FullscreenToggle from "./FullscreenToggle";
 import { staffAvatarTint, staffInitials } from "@/lib/staff-avatar";
+import { fetchWithTimeout } from "@/lib/fetch-timeout";
 import type { FulfillmentType } from "./CustomerFields";
 import Button from "./ui/Button";
 import type {
@@ -432,22 +434,31 @@ export default function Register({
 
     let response: Response;
     try {
-      response = await fetch("/api/pos/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-    } catch {
-      // No connection. Keep the sale rather than losing it — the clientRef makes
-      // replaying it safe even if the request actually did reach the server.
-      await enqueue(clientRef, payload);
-      clearOrder();
-      setPaying(false);
-      setBanner({
-        tone: "good",
-        text: "Saved on this device. It will send itself when the network is back.",
-      });
-      return;
+      response = await fetchWithTimeout(
+        "/api/pos/orders",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+        20_000,
+      );
+    } catch (error) {
+      // Timeout or offline. Keep the sale rather than losing it — the clientRef
+      // makes replaying it safe even if the request actually did reach the server.
+      const timedOut =
+        error instanceof Error && error.message.toLowerCase().includes("too long");
+      if (!timedOut) {
+        await enqueue(clientRef, payload);
+        clearOrder();
+        setPaying(false);
+        setBanner({
+          tone: "good",
+          text: "Saved on this device. It will send itself when the network is back.",
+        });
+        return;
+      }
+      throw error;
     }
 
     if (response.status === 401) {
@@ -472,6 +483,9 @@ export default function Register({
     setChargeIds(null);
     setPaying(false);
     setSlipKind("receipt");
+    if (!data.order) {
+      throw new Error("Payment went through, but the receipt did not come back. Check Orders.");
+    }
     setReceipt(data.order);
     void loadSession();
     void loadTickets();
@@ -617,6 +631,8 @@ export default function Register({
           >
             <ChefHat className="h-5 w-5" />
           </Link>
+
+          <FullscreenToggle />
 
           {(!online || queued > 0) && (
             <Pill tone="warn">

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { isValidPin, verifyPassword, verifyPin } from "@/lib/auth/password";
 import { signSession, writeSessionCookie } from "@/lib/auth/session";
-import { landingPathFor } from "@/lib/permissions";
+import { landingPathFor, canAccess } from "@/lib/permissions";
 import { logAudit, clientIp } from "@/lib/api-auth";
 import { ok, parseBody, handlePrismaError } from "@/lib/api-utils";
 import { firstNameKey } from "@/lib/staff-avatar";
@@ -72,8 +72,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Cashiers without a PIN yet must set one before using the till.
-    const needsPin = user.role === "CASHIER" && !user.pinHash;
+    // Anyone who works the till needs a PIN. Password still works as a fallback
+    // for managers, but a missing PIN sends them to set one first.
+    const needsPin = canAccess(user.role, "pos") && !user.pinHash;
     const now = Math.floor(Date.now() / 1000);
     await writeSessionCookie(
       await signSession({

@@ -126,7 +126,7 @@ export default function LoginForm() {
             style={fieldStyle}
           />
           <p className="mt-1.5 text-xs" style={{ color: "var(--s-ink-faint)" }}>
-            Cashiers use their 4-digit till PIN. Managers use their password.
+            Everyone uses a 4-digit till PIN. Password still works as a backup.
           </p>
         </div>
       ) : (

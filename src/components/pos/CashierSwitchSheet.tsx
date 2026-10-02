@@ -163,7 +163,7 @@ export default function CashierSwitchSheet({
               })}
               {cashiers.length === 0 && (
                 <li className="col-span-2 py-8 text-center text-sm" style={{ color: "var(--s-ink-faint)" }}>
-                  No cashiers with a PIN are set up yet.
+                  No one with a PIN is set up yet.
                 </li>
               )}
             </ul>
