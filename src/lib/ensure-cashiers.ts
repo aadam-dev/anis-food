@@ -6,12 +6,15 @@ import { hashPassword, hashPin } from "@/lib/auth/password";
 /**
  * Named till staff that must exist (and have a PIN) in every environment.
  *
- * Seed is not run on Vercel, so production would otherwise miss Maxwell /
- * Maudallia / Karim's PIN until someone remembered to seed. Idempotent: fills
- * missing accounts and missing PINs only — never overwrites a PIN already set.
+ * Seed is not run on Vercel. These four accounts are code-managed. A version
+ * stamp in Settings means we only re-hash PINs when the managed set changes —
+ * not on every cold start.
  */
 
 const SEED_PASSWORD = process.env.SEED_PASSWORD || "anis1234";
+/** Bump when a managed PIN or account in STAFF changes. */
+const STAFF_PINS_VERSION = "2026-10-02-karim-1642";
+const STAFF_PINS_SETTING = "staff_pins_version";
 
 const STAFF: {
   email: string;
@@ -21,7 +24,7 @@ const STAFF: {
   phone?: string;
   salaryType?: SalaryType;
 }[] = [
-  { email: "karim@anis.com", name: "Karim", role: UserRole.OWNER, pin: "5820" },
+  { email: "karim@anis.com", name: "Karim", role: UserRole.OWNER, pin: "1642" },
   { email: "it@anis.com", name: "IT Administrator", role: UserRole.SUPER_ADMIN, pin: "9041" },
   {
     email: "maxwell@anis.com",
@@ -62,6 +65,9 @@ export function ensureTillStaff(): Promise<void> {
 }
 
 async function provision(): Promise<void> {
+  const version = await prisma.setting.findUnique({ where: { key: STAFF_PINS_SETTING } });
+  const pinsCurrent = version?.value === STAFF_PINS_VERSION;
+
   for (const person of STAFF) {
     const email = person.email.toLowerCase();
     const existing = await prisma.user.findUnique({
@@ -95,13 +101,15 @@ async function provision(): Promise<void> {
       continue;
     }
 
+    const needsPin = !pinsCurrent || !existing.pinHash;
     await prisma.user.update({
       where: { email },
       data: {
         name: person.name,
         role: person.role,
         isActive: true,
-        ...(existing.pinHash ? {} : { pinHash: await hashPin(person.pin) }),
+        passwordResetRequired: false,
+        ...(needsPin ? { pinHash: await hashPin(person.pin) } : {}),
       },
     });
 
@@ -132,5 +140,14 @@ async function provision(): Promise<void> {
       where: { email, isActive: true },
       data: { isActive: false },
     });
+  }
+
+  if (!pinsCurrent) {
+    await prisma.setting.upsert({
+      where: { key: STAFF_PINS_SETTING },
+      update: { value: STAFF_PINS_VERSION },
+      create: { key: STAFF_PINS_SETTING, value: STAFF_PINS_VERSION },
+    });
+    console.log(`Till staff PINs synced (${STAFF_PINS_VERSION}).`);
   }
 }
