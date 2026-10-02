@@ -25,8 +25,8 @@ interface SeedUser {
 }
 
 const USERS: SeedUser[] = [
-  { email: "karim@anis.com", name: "Karim", role: UserRole.OWNER, pin: "1642" },
-  { email: "it@anis.com", name: "IT Administrator", role: UserRole.SUPER_ADMIN, pin: "9041" },
+  { email: "karim@anis.com", name: "Karim", role: UserRole.OWNER, pin: "5820" },
+  { email: "it@anis.com", name: "IT Administrator", role: UserRole.SUPER_ADMIN, pin: "1642" },
   {
     email: "maxwell@anis.com",
     name: "Maxwell Kaku",

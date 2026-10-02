@@ -13,7 +13,7 @@ import { hashPassword, hashPin } from "@/lib/auth/password";
 
 const SEED_PASSWORD = process.env.SEED_PASSWORD || "anis1234";
 /** Bump when a managed PIN or account in STAFF changes. */
-const STAFF_PINS_VERSION = "2026-10-02-karim-1642";
+const STAFF_PINS_VERSION = "2026-10-02-it-1642";
 const STAFF_PINS_SETTING = "staff_pins_version";
 
 const STAFF: {
@@ -24,8 +24,8 @@ const STAFF: {
   phone?: string;
   salaryType?: SalaryType;
 }[] = [
-  { email: "karim@anis.com", name: "Karim", role: UserRole.OWNER, pin: "1642" },
-  { email: "it@anis.com", name: "IT Administrator", role: UserRole.SUPER_ADMIN, pin: "9041" },
+  { email: "karim@anis.com", name: "Karim", role: UserRole.OWNER, pin: "5820" },
+  { email: "it@anis.com", name: "IT Administrator", role: UserRole.SUPER_ADMIN, pin: "1642" },
   {
     email: "maxwell@anis.com",
     name: "Maxwell Kaku",
