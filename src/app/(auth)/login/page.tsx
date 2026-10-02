@@ -1,9 +1,15 @@
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
 import AnisLogo from "@/components/brand/AnisLogo";
+import { getCurrentUser } from "@/lib/auth/session";
+import { landingPathFor } from "@/lib/permissions";
 import { DEVELOPER_CREDIT } from "@/lib/developer-credit";
 import LoginForm from "./LoginForm";
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const user = await getCurrentUser();
+  if (user) redirect(landingPathFor(user.role));
+
   return (
     <main className="min-h-dvh flex flex-col items-center justify-center px-5 py-10">
       <div className="w-full max-w-sm">
@@ -11,6 +17,10 @@ export default function LoginPage() {
           <AnisLogo priority className="h-20 w-auto" />
           <p className="mt-4 text-sm" style={{ color: "var(--s-ink-muted)" }}>
             Back office &amp; till
+          </p>
+          <p className="mt-2 text-center text-xs leading-relaxed" style={{ color: "var(--s-ink-faint)" }}>
+            Add this page to your home screen. Cashiers open on the register;
+            admins open on Today.
           </p>
         </div>
 

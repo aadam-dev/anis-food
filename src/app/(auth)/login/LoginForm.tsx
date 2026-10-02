@@ -48,11 +48,14 @@ export default function LoginForm() {
         return;
       }
 
-      // Only follow a relative path. An attacker who can craft the link a
-      // cashier taps must not be able to bounce them to a lookalike site.
+      // Prefer the role landing over a stale ?next=/ from an old bookmark so
+      // staff open on the till or back office, not the customer homepage.
       const requested = searchParams.get("next");
       const safeRequested =
-        requested && requested.startsWith("/") && !requested.startsWith("//")
+        requested &&
+        requested.startsWith("/") &&
+        !requested.startsWith("//") &&
+        requested !== "/"
           ? requested
           : null;
 

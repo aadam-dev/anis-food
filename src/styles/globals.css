@@ -293,9 +293,10 @@ body:has([data-surface][data-theme="light"]) {
   background: #fff;
   color: #000;
   font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", "Roboto Mono", Menlo, Consolas, monospace;
-  font-size: 12.5px;
+  /* ~15px reads clearly on 80mm thermal once the slip fills the roll. */
+  font-size: 15px;
   font-weight: 600;
-  line-height: 1.28;
+  line-height: 1.3;
   padding: 2mm 2mm;
   -webkit-font-smoothing: none;
   print-color-adjust: exact;
@@ -311,15 +312,15 @@ body:has([data-surface][data-theme="light"]) {
 }
 
 .anis-receipt .r-center { text-align: center; }
-.anis-receipt .r-title { font-size: 15px; font-weight: 800; letter-spacing: 0.02em; }
-.anis-receipt .r-small { font-size: 11px; font-weight: 600; color: #000; }
-.anis-receipt .r-note { font-size: 10.5px; font-weight: 500; padding-left: 0; }
+.anis-receipt .r-title { font-size: 18px; font-weight: 800; letter-spacing: 0.02em; }
+.anis-receipt .r-small { font-size: 13px; font-weight: 600; color: #000; }
+.anis-receipt .r-note { font-size: 12.5px; font-weight: 500; padding-left: 0; }
 .anis-receipt .r-spacer { height: 1.5mm; }
 
 /* The call number. Large enough to read across a counter, not so large it
    wastes half the roll before the dishes appear. */
 .anis-receipt .r-callno {
-  font-size: 28px;
+  font-size: 34px;
   font-weight: 800;
   line-height: 1.05;
   letter-spacing: 0.02em;
@@ -337,22 +338,22 @@ body:has([data-surface][data-theme="light"]) {
 }
 .anis-receipt .r-table td {
   vertical-align: top;
-  padding: 0.8mm 0;
+  padding: 1mm 0;
   color: #000;
 }
 .anis-receipt .r-qty {
-  width: 7mm;
+  width: 8mm;
   font-weight: 800;
 }
 .anis-receipt .r-name {
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 700;
   word-break: break-word;
   overflow-wrap: anywhere;
   padding-right: 2mm;
 }
 .anis-receipt .r-amt {
-  width: 22mm;
+  width: 24mm;
   text-align: right;
   white-space: nowrap;
   font-weight: 800;
@@ -366,28 +367,28 @@ body:has([data-surface][data-theme="light"]) {
   font-weight: 700;
 }
 .anis-receipt .r-total {
-  font-size: 15px;
+  font-size: 18px;
   font-weight: 800;
   margin: 1.2mm 0;
 }
 .anis-receipt .r-change { font-weight: 800; }
 
 .anis-receipt .r-logo {
-  width: 28mm;
+  width: 30mm;
   height: auto;
   margin: 0 auto 1.5mm;
   display: block;
 }
 
 .anis-receipt .r-qr {
-  width: 22mm;
-  height: 22mm;
+  width: 24mm;
+  height: 24mm;
   margin: 0 auto;
   display: block;
 }
 
 .anis-receipt .r-credit {
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 600;
   letter-spacing: 0.01em;
 }
@@ -461,6 +462,21 @@ body:has([data-surface][data-theme="light"]) {
     margin: 0 !important;
     color: #000 !important;
     background: #fff !important;
+    font-size: 15px !important;
+  }
+
+  [data-anis-receipt] .r-title,
+  [data-anis-receipt] .r-total {
+    font-size: 18px !important;
+  }
+
+  [data-anis-receipt] .r-name,
+  [data-anis-receipt] .r-small {
+    font-size: 14px !important;
+  }
+
+  [data-anis-receipt] .r-callno {
+    font-size: 34px !important;
   }
 
   [data-admin-chrome],
