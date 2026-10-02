@@ -143,11 +143,11 @@ export default function ReceiptModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70" onClick={onClose} aria-hidden />
       <div
-        className="relative w-full max-w-sm max-h-[92dvh] overflow-y-auto rounded-2xl border"
+        className="relative flex w-full max-w-sm max-h-[92dvh] flex-col overflow-hidden rounded-2xl border"
         style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
       >
         <div
-          className="sticky top-0 flex items-center justify-between px-4 py-3 border-b"
+          className="flex shrink-0 items-center justify-between border-b px-4 py-3"
           style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
         >
           <h2 className="font-semibold">{slipKind === "invoice" ? "Invoice" : "Receipt"}</h2>
@@ -176,11 +176,15 @@ export default function ReceiptModal({
           </div>
         </div>
 
-        <div className="p-4">
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">
           <Receipt80mm data={data} preview />
         </div>
 
-        <div className="space-y-2 px-4 pb-4">
+        {/* Pinned under the slip so WhatsApp is never buried below a long receipt. */}
+        <div
+          className="shrink-0 space-y-2 border-t px-4 py-3"
+          style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
+        >
           <ReceiptWhatsAppButton order={order} businessName={business.header} />
           <button
             onClick={onClose}

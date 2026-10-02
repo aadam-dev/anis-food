@@ -2,6 +2,9 @@
  * Homepage — rebuilt to mirror the reference site's structure in Anis's own
  * light + red identity. Server component: fetches popular items from the DB so
  * the hero's signature dish and the featured grid stay in sync with admin edits.
+ *
+ * Signed-in staff hitting `/` are bounced to the till/back office in `proxy.ts`
+ * (not here) so this page can stay ISR-cached for customers.
  */
 import Hero, { type HeroDish } from "@/components/public/Hero";
 import StorySection from "@/components/public/StorySection";

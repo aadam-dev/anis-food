@@ -34,13 +34,20 @@ export async function proxy(request: NextRequest) {
   headers.delete("x-middleware-subrequest");
   const forward = { request: { headers } };
 
+  const token = request.cookies.get(SESSION_COOKIE)?.value;
+  const session = token ? await verifySession(token) : null;
+
+  // Signed-in staff who open `/` (customer homepage or an old home-screen
+  // shortcut) go straight to the till or back office.
+  if (pathname === "/" && session) {
+    return NextResponse.redirect(new URL(landingPathFor(session.role), request.url));
+  }
+
   if (!isProtected(pathname)) {
     return NextResponse.next(forward);
   }
 
   const isApi = pathname.startsWith("/api/");
-  const token = request.cookies.get(SESSION_COOKIE)?.value;
-  const session = token ? await verifySession(token) : null;
 
   if (!session) {
     if (isApi) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
@@ -66,6 +73,7 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
+    "/",
     "/admin/:path*",
     "/pos/:path*",
     "/account/:path*",
