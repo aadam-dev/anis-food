@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  getWhatsAppShareUrl,
   getWhatsAppUrl,
   onlineOrderConfirmMessage,
   onlineOrderPaymentMessage,
+  receiptShareMessage,
   whatsappDigits,
 } from "./utils";
 
@@ -35,5 +37,26 @@ describe("whatsapp helpers", () => {
 
     const url = getWhatsAppUrl("0552501280", confirm);
     assert.match(url, /^https:\/\/wa\.me\/233552501280\?text=/);
+  });
+
+  it("builds a receipt share link with the verify URL", () => {
+    const message = receiptShareMessage({
+      businessName: "Anis Food and Drink",
+      customerName: "Ama",
+      orderNumber: "ANIS-20261002-0001",
+      callNumber: "1",
+      total: 110,
+      items: [{ quantity: 1, name: "Jollof" }],
+      verifyUrl: "https://example.com/receipt/abc",
+    });
+    assert.match(message, /ANIS-20261002-0001/);
+    assert.match(message, /https:\/\/example.com\/receipt\/abc/);
+    assert.match(message, /GHS 110.00/);
+
+    assert.match(
+      getWhatsAppShareUrl("0552501280", message),
+      /^https:\/\/wa\.me\/233552501280\?text=/,
+    );
+    assert.match(getWhatsAppShareUrl(null, message), /^https:\/\/wa\.me\/\?text=/);
   });
 });
