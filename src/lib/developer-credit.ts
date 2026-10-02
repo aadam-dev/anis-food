@@ -1,27 +1,17 @@
 /**
- * Developer credit — three separate identities, on purpose.
+ * Developer / product credit — Pronaj everywhere the customer or staff might
+ * click through from a receipt, the site footer, or the till.
  *
- * `DEVELOPER_CREDIT` is the public-facing one (site footer, sign-in screen):
- * the product brand, Pronaj, linking to its web-development page.
- *
- * `RECEIPT_CREDIT` is what prints on the thermal slip: Pronaj, the product name
- * the restaurant's customers and staff see on paper every day. A shopfront brand
- * for the point-of-sale, distinct from the developer's personal site.
- *
- * `VERIFY_CREDIT` is what shows on the public receipt-verification page a
- * customer reaches by scanning the QR — back to aadambuilds.dev.
- *
- * They are three constants rather than one with overrides so a later edit to the
- * receipt footer can never silently change what the footer or the verify page
- * advertises, or the reverse. This mirrors al-boyut's split.
+ * The URL always opens Pronaj's web / systems page so a curious owner lands on
+ * the right offer, not a personal portfolio.
  */
+
+const PRONAJ_SYSTEMS_URL = "https://pronajgh.com/digital/web-development";
 
 export const DEVELOPER_CREDIT = {
   name: "Pronaj",
-  url: "https://pronajgh.com/digital/web-development",
-  /** Used where a link works — the site footer, the sign-in screen. */
+  url: PRONAJ_SYSTEMS_URL,
   label: "Powered by Pronaj",
-  /** Kept for any text-only surface; the public site uses the linked label above. */
   printLines: ["Powered by Pronaj", "pronajgh.com"] as const,
 } as const;
 
@@ -29,17 +19,22 @@ export const DEVELOPER_CREDIT = {
 export const RECEIPT_CREDIT = {
   name: "Pronaj",
   site: "pronajgh.com",
-  siteUrl: "https://pronajgh.com",
+  siteUrl: PRONAJ_SYSTEMS_URL,
   phoneDisplay: "0263039818",
-  tagline: "POS & retail systems for Ghana",
+  tagline: "Retail & POS systems for Ghana",
+  /** Kept short — thermal paper is precious. */
   printLines: ["Powered by Pronaj", "pronajgh.com · 0263039818"] as const,
 } as const;
 
-/** Shown on the public QR receipt-verification page only. */
+/**
+ * Shown on the public QR receipt-verification page. Same Pronaj destination as
+ * the site footer, with a soft CTA for owners who like the system.
+ */
 export const VERIFY_CREDIT = {
-  name: "Aadam",
-  site: "aadambuilds.dev",
-  siteUrl: "https://aadambuilds.dev",
-  label: "Built by Aadam",
-  tagline: "POS & retail systems for Ghana",
+  name: "Pronaj",
+  site: "pronajgh.com",
+  siteUrl: PRONAJ_SYSTEMS_URL,
+  label: "Powered by Pronaj",
+  tagline: "Need a system like this?",
+  cta: "Contact Pronaj for retail and POS systems built for Ghana.",
 } as const;

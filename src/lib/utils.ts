@@ -237,3 +237,43 @@ export function onlineOrderPaymentMessage(input: {
   ].join("\n");
 }
 
+/** Staff → customer: share a till receipt over WhatsApp with the verify link. */
+export function receiptShareMessage(input: {
+  businessName: string;
+  customerName?: string | null;
+  orderNumber: string;
+  callNumber?: string;
+  total: number;
+  items: { quantity: number; name: string }[];
+  verifyUrl: string;
+}): string {
+  const who = input.customerName?.trim() || "there";
+  const lines = input.items
+    .slice(0, 8)
+    .map((item) => `• ${item.quantity}× ${item.name}`)
+    .join("\n");
+  const more =
+    input.items.length > 8 ? `\n• …and ${input.items.length - 8} more` : "";
+  const call = input.callNumber ? ` (#${input.callNumber})` : "";
+  return [
+    `Hello ${who},`,
+    "",
+    `Here is your receipt from ${input.businessName} — order ${input.orderNumber}${call}.`,
+    `Total: GHS ${input.total.toFixed(2)}.`,
+    "",
+    lines + more,
+    "",
+    "View or save your receipt:",
+    input.verifyUrl,
+    "",
+    "Thank you — please come again!",
+  ].join("\n");
+}
+
+/** Open WhatsApp with a prefilled message. Blank phone opens the contact picker. */
+export function getWhatsAppShareUrl(phone: string | null | undefined, message: string): string {
+  const digits = phone ? whatsappDigits(phone) : "";
+  const base = digits ? `https://wa.me/${digits}` : "https://wa.me/";
+  return `${base}?text=${encodeURIComponent(message)}`;
+}
+

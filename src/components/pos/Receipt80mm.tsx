@@ -104,7 +104,7 @@ export default function Receipt80mm({
             <img
               src={data.logoUrl}
               alt=""
-              style={{ width: "38mm", height: "auto", margin: "0 auto 1mm", display: "block" }}
+              className="r-logo"
             />
           </>
         ) : (
@@ -295,14 +295,14 @@ export default function Receipt80mm({
           <img
             src={data.qrDataUrl}
             alt=""
-            style={{ width: "30mm", height: "30mm", margin: "0 auto", display: "block" }}
+            className="r-qr"
           />
           <div>Scan to verify this receipt</div>
         </div>
       )}
 
       <div className="r-rule" />
-      <div className="r-center r-small">
+      <div className="r-center r-credit">
         <div className="r-spacer" />
         {RECEIPT_CREDIT.printLines.map((line) => (
           <div key={line}>{line}</div>

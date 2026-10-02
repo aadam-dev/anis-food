@@ -275,60 +275,121 @@ body:has([data-surface][data-theme="light"]) {
 }
 
 /* ===========================================================================
-   Thermal receipt — 80mm paper, 72mm printable
+   Thermal receipt — 80mm paper, safe printable area
    ---------------------------------------------------------------------------
    Always black on white regardless of the till's theme: thermal paper has one
    colour, and a "dark mode" receipt prints as a solid black rectangle that eats
    a roll and comes out unreadable.
+
+   Width is the full 80mm with side padding so Chrome + common ESC/POS drivers
+   do not clip the right-hand amounts. Fonts stay bold and larger than a screen
+   preview would suggest — faint 9–10px mono is unreadable once burnt onto paper.
    =========================================================================== */
 .anis-receipt {
-  width: 72mm;
+  box-sizing: border-box;
+  width: 80mm;
+  max-width: 80mm;
   background: #fff;
   color: #000;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 1.35;
-  padding: 2mm 0;
+  font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", "Roboto Mono", Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.28;
+  padding: 2mm 3.5mm;
+  -webkit-font-smoothing: none;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
 }
 
 .anis-receipt--preview {
   margin: 0 auto;
   border: 1px solid var(--s-border, #ddd);
   border-radius: 6px;
-  padding: 4mm 3mm;
+  padding: 4mm 3.5mm;
   max-width: 100%;
 }
 
 .anis-receipt .r-center { text-align: center; }
-.anis-receipt .r-title { font-size: 15px; font-weight: 700; letter-spacing: 0.02em; }
-.anis-receipt .r-small { font-size: 10px; }
-.anis-receipt .r-note { font-size: 9px; padding-left: 1mm; }
-.anis-receipt .r-spacer { height: 2mm; }
+.anis-receipt .r-title { font-size: 15px; font-weight: 800; letter-spacing: 0.02em; }
+.anis-receipt .r-small { font-size: 11px; font-weight: 600; color: #000; }
+.anis-receipt .r-note { font-size: 10.5px; font-weight: 500; padding-left: 0; }
+.anis-receipt .r-spacer { height: 1.5mm; }
 
-/* The call number. Deliberately oversized — it is read from across a room. */
+/* The call number. Large enough to read across a counter, not so large it
+   wastes half the roll before the dishes appear. */
 .anis-receipt .r-callno {
-  font-size: 34px;
-  font-weight: 700;
+  font-size: 28px;
+  font-weight: 800;
   line-height: 1.05;
+  letter-spacing: 0.02em;
 }
 
 .anis-receipt .r-rule {
-  border-top: 1px dashed #000;
-  margin: 1.5mm 0;
+  border-top: 1.5px dashed #000;
+  margin: 1.8mm 0;
 }
 
-.anis-receipt .r-table { width: 100%; border-collapse: collapse; }
-.anis-receipt .r-table td { vertical-align: top; padding: 0.4mm 0; }
-.anis-receipt .r-qty { width: 6mm; }
-.anis-receipt .r-amt { text-align: right; white-space: nowrap; padding-left: 2mm; }
+.anis-receipt .r-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.anis-receipt .r-table td {
+  vertical-align: top;
+  padding: 0.8mm 0;
+  color: #000;
+}
+.anis-receipt .r-qty {
+  width: 7mm;
+  font-weight: 800;
+}
+.anis-receipt .r-name {
+  font-size: 12px;
+  font-weight: 700;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  padding-right: 2mm;
+}
+.anis-receipt .r-amt {
+  width: 22mm;
+  text-align: right;
+  white-space: nowrap;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
 
 .anis-receipt .r-row {
   display: flex;
   justify-content: space-between;
   gap: 3mm;
+  font-weight: 700;
 }
-.anis-receipt .r-total { font-size: 14px; font-weight: 700; margin: 1mm 0; }
-.anis-receipt .r-change { font-weight: 700; }
+.anis-receipt .r-total {
+  font-size: 15px;
+  font-weight: 800;
+  margin: 1.2mm 0;
+}
+.anis-receipt .r-change { font-weight: 800; }
+
+.anis-receipt .r-logo {
+  width: 28mm;
+  height: auto;
+  margin: 0 auto 1.5mm;
+  display: block;
+}
+
+.anis-receipt .r-qr {
+  width: 22mm;
+  height: 22mm;
+  margin: 0 auto;
+  display: block;
+}
+
+.anis-receipt .r-credit {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
 
 /* Print: show only the receipt.
    Two selectors because the public site's WhatsApp order receipt uses
@@ -354,6 +415,8 @@ body:has([data-surface][data-theme="light"]) {
     height: auto !important;
     min-height: 0 !important;
     overflow: visible !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 
   body * {
@@ -385,13 +448,16 @@ body:has([data-surface][data-theme="light"]) {
     max-width: none;
   }
 
-  /* The thermal receipt keeps its exact width; stretching it to the page would
-     wrap every line in the wrong place. */
+  /* Keep the slip at paper width with side padding so amounts are not clipped. */
   [data-anis-receipt] {
-    width: 72mm;
+    box-sizing: border-box !important;
+    width: 80mm !important;
+    max-width: 80mm !important;
     border-radius: 0 !important;
-    padding: 0 !important;
+    padding: 1mm 3.5mm 3mm !important;
     margin: 0 !important;
+    color: #000 !important;
+    background: #fff !important;
   }
 
   [data-admin-chrome],

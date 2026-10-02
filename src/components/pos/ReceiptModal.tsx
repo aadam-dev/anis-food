@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { FileText, X, Printer } from "lucide-react";
 import QRCode from "qrcode";
 import Receipt80mm, { type ReceiptData } from "./Receipt80mm";
+import ReceiptWhatsAppButton from "./ReceiptWhatsAppButton";
 import { printReceiptNow } from "@/lib/receipt-print";
 import type { OrderView } from "./types";
 
@@ -179,7 +180,8 @@ export default function ReceiptModal({
           <Receipt80mm data={data} preview />
         </div>
 
-        <div className="px-4 pb-4">
+        <div className="space-y-2 px-4 pb-4">
+          <ReceiptWhatsAppButton order={order} businessName={business.header} />
           <button
             onClick={onClose}
             className="w-full rounded-xl px-4 py-3.5 font-bold text-white"

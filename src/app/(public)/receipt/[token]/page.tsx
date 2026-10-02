@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { formatGHS, toMoney } from "@/lib/money";
 import { getSettings } from "@/lib/settings";
 import { VERIFY_CREDIT } from "@/lib/developer-credit";
+import VerifyReceiptWhatsApp from "@/components/order/VerifyReceiptWhatsApp";
 
 /**
  * Public receipt verification.
@@ -74,6 +75,9 @@ export default async function ReceiptVerifyPage({
     dateStyle: "medium",
     timeStyle: "short",
   });
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://anisfoodanddrink.com";
+  const verifyUrl = `${siteUrl}/receipt/${order.clientRef}`;
 
   return (
     <main className="mx-auto max-w-md px-4 py-12">
@@ -150,19 +154,43 @@ export default async function ReceiptVerifyPage({
             ))}
           </div>
         )}
+
+        <VerifyReceiptWhatsApp
+          businessName={settings.business_name}
+          customerName={order.customerName}
+          customerPhone={order.customerPhone}
+          orderNumber={order.orderNumber}
+          total={toMoney(order.total)}
+          items={order.items.map((item) => ({ quantity: item.quantity, name: item.name }))}
+          verifyUrl={verifyUrl}
+        />
       </div>
 
-      <p className="mt-6 text-center text-xs text-neutral-400">
-        {VERIFY_CREDIT.label} ·{" "}
-        <a
-          href={VERIFY_CREDIT.siteUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="underline"
-        >
-          {VERIFY_CREDIT.site}
-        </a>
-      </p>
+      <div className="mt-8 text-center">
+        <p className="text-xs font-semibold text-neutral-500">{VERIFY_CREDIT.tagline}</p>
+        <p className="mt-1 text-xs leading-relaxed text-neutral-400">
+          {VERIFY_CREDIT.cta}
+        </p>
+        <p className="mt-3 text-xs text-neutral-400">
+          <a
+            href={VERIFY_CREDIT.siteUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-neutral-600 underline-offset-2 hover:underline"
+          >
+            {VERIFY_CREDIT.label}
+          </a>
+          {" · "}
+          <a
+            href={VERIFY_CREDIT.siteUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline-offset-2 hover:underline"
+          >
+            {VERIFY_CREDIT.site}
+          </a>
+        </p>
+      </div>
     </main>
   );
 }
