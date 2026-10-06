@@ -15,6 +15,8 @@ import { RECEIPT_CREDIT } from "@/lib/developer-credit";
 
 export interface ReceiptLine {
   name: string;
+  /** Size chosen, e.g. "Large". Printed after the name. */
+  size?: string | null;
   quantity: number;
   unitPrice: number;
   lineTotal: number;
@@ -54,6 +56,9 @@ export interface ReceiptData {
   footer: string;
   /** "Invoice" on a customer slip. A plain receipt leaves this off. */
   documentTitle?: string;
+  /** A bill is presented before payment: amount due, no "paid by", no change,
+   *  no verify code. A receipt proves a payment. */
+  kind?: "receipt" | "bill";
   /** Brand logo shown at the top of the slip; falls back to the text name. */
   logoUrl?: string;
   /** Public URL a customer can open to verify this sale (printed under the QR). */
@@ -158,6 +163,7 @@ export default function Receipt80mm({
               <td className="r-qty">{line.quantity}</td>
               <td className="r-name">
                 {line.name}
+                {line.size ? ` · ${line.size}` : ""}
                 {line.notes && <div className="r-note">{line.notes}</div>}
                 {line.quantity > 1 && (
                   <div className="r-note">@ {formatGHS(line.unitPrice)}</div>
@@ -243,7 +249,15 @@ export default function Receipt80mm({
 
       <div className="r-rule" />
 
-      {data.splitPayments && data.splitPayments.length > 0 ? (
+      {data.kind === "bill" ? (
+        <>
+          <div className="r-row r-total">
+            <span>AMOUNT DUE</span>
+            <span>{formatGHS(data.total)}</span>
+          </div>
+          <div className="r-small">Not paid yet. Pay by cash, MoMo or card at the counter.</div>
+        </>
+      ) : data.splitPayments && data.splitPayments.length > 0 ? (
         <>
           {data.splitPayments.map((leg, index) => (
             <div className="r-row" key={index}>
@@ -259,11 +273,11 @@ export default function Receipt80mm({
         </div>
       )}
 
-      {data.paymentMethod === "BOLT_FOOD" && (
+      {data.kind !== "bill" && data.paymentMethod === "BOLT_FOOD" && (
         <div className="r-small">Money is with Bolt. Not collected at the till.</div>
       )}
 
-      {data.tenderedAmount !== null && data.tenderedAmount !== undefined && (
+      {data.kind !== "bill" && data.tenderedAmount !== null && data.tenderedAmount !== undefined && (
         <>
           <div className="r-row">
             <span>Cash given</span>
@@ -288,7 +302,7 @@ export default function Receipt80mm({
         <div>{data.footer}</div>
       </div>
 
-      {data.qrDataUrl && (
+      {data.kind !== "bill" && data.qrDataUrl && (
         <div className="r-center r-small" style={{ marginTop: 8 }}>
           {/* eslint-disable-next-line @next/next/no-img-element -- inline data: URL,
               printed directly; next/image's loader would break the thermal print. */}

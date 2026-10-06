@@ -21,13 +21,13 @@ const METHODS: { value: PaymentChoice; label: string }[] = [
   { value: "CASH", label: "Cash" },
   { value: "MOMO", label: "MoMo" },
   { value: "CARD", label: "Card" },
-  { value: "BANK_TRANSFER", label: "Transfer" },
   { value: "BOLT_FOOD", label: "Bolt" },
   { value: "SPLIT", label: "Split" },
   { value: "UNPAID", label: "Pay later" },
 ];
 
-const SPLIT_METHODS = ["CASH", "MOMO", "CARD", "BANK_TRANSFER"] as const;
+const SPLIT_METHODS = ["CASH", "MOMO", "CARD"] as const;
+const SPLIT_LABELS: Record<(typeof SPLIT_METHODS)[number], string> = { CASH: "Cash", MOMO: "MoMo", CARD: "Card" };
 
 export default function PaymentSheet({
   totals,
@@ -158,8 +158,8 @@ export default function PaymentSheet({
       }
     >
       <div className="space-y-4">
-        <div className="grid grid-cols-4 gap-2">
-          {METHODS.slice(0, 4).map((entry) => (
+        <div className="grid grid-cols-3 gap-2">
+          {METHODS.slice(0, 3).map((entry) => (
             <MethodTile
               key={entry.value}
               entry={entry}
@@ -169,7 +169,7 @@ export default function PaymentSheet({
           ))}
         </div>
         <div className="grid grid-cols-3 gap-2">
-          {METHODS.slice(4).map((entry) => (
+          {METHODS.slice(3).map((entry) => (
             <MethodTile
               key={entry.value}
               entry={entry}
@@ -220,7 +220,7 @@ export default function PaymentSheet({
           </div>
         )}
 
-        {(method === "MOMO" || method === "BANK_TRANSFER" || method === "CARD") && (
+        {(method === "MOMO" || method === "CARD") && (
           <div>
             <FieldLabel htmlFor="payment-ref" hint="Optional">
               Reference
@@ -258,7 +258,7 @@ export default function PaymentSheet({
                   >
                     {SPLIT_METHODS.map((option) => (
                       <option key={option} value={option}>
-                        {option === "BANK_TRANSFER" ? "Transfer" : option === "MOMO" ? "MoMo" : option === "CARD" ? "Card" : "Cash"}
+                        {SPLIT_LABELS[option]}
                       </option>
                     ))}
                   </FieldSelect>

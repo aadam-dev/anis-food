@@ -6,135 +6,180 @@ import { computeOrderTotals, roundMoney, toMoney } from "@/lib/money";
 import { getSettings, getTaxConfig } from "@/lib/settings";
 import { taxBreakdown } from "@/lib/tax";
 import { serialiseOrder } from "@/lib/serialise-order";
-import {
-  isUnpaidTicket,
-  settlementAfterCorrection,
-  splitAddsUp,
-} from "@/lib/till-rules";
+import { canEditPaidOrders } from "@/lib/permissions";
+import { editVerdict } from "@/lib/order-edit-rules";
+import { priceLines } from "@/lib/order-lines";
+import { settlementAfterCorrection, splitAddsUp } from "@/lib/till-rules";
 import {
   OrderEventType,
   OrderStatus,
   PaymentMethod,
   PaymentStatus,
-  SessionStatus,
+  type UserRole,
 } from "@/generated/prisma";
 
+/**
+ * Changing an order after it was rung — from the till or the back office, with
+ * one set of rules (lib/order-edit-rules). Every change is recorded as an
+ * EDITED event with what it was before and after, and the order is marked
+ * edited so the back office can show and filter it.
+ */
+
 const splitLegSchema = z.object({
-  method: z.enum(["CASH", "MOMO", "CARD", "BANK_TRANSFER", "BOLT_FOOD"]),
+  method: z.enum(["CASH", "MOMO", "CARD"]),
   amount: z.number().min(0).max(1000000),
   ref: z.string().max(100).optional(),
 });
 
+const paymentSchema = z.object({
+  paymentMethod: z.enum(["CASH", "MOMO", "CARD", "BOLT_FOOD", "SPLIT"]),
+  splitPayments: z.array(splitLegSchema).optional(),
+  paymentReference: z.string().max(100).optional(),
+  tenderedAmount: z.number().min(0).max(1000000).optional(),
+});
+
 export const deskSchema = z.discriminatedUnion("action", [
+  /** Correct how a paid order was paid, without touching its items. */
+  z.object({ action: z.literal("payment"), reason: z.string().trim().max(200).optional() }).merge(paymentSchema),
+  /**
+   * The order as it should now be. Existing lines are referenced by `id` and
+   * keep the price they were sold at; lines without an `id` are new and are
+   * priced from the menu now. Lines left out are removed.
+   */
   z.object({
-    action: z.literal("payment"),
-    paymentMethod: z.enum(["CASH", "MOMO", "CARD", "BANK_TRANSFER", "BOLT_FOOD", "SPLIT"]),
-    splitPayments: z.array(splitLegSchema).optional(),
-    paymentReference: z.string().max(100).optional(),
-  }),
-  z.object({
-    action: z.literal("lines"),
+    action: z.literal("edit"),
     lines: z
       .array(
         z.object({
-          id: z.string().min(1),
-          quantity: z.number().int().min(0).max(999),
+          id: z.string().min(1).optional(),
+          menuItemId: z.string().min(1).optional(),
+          sizeId: z.string().min(1).nullish(),
+          quantity: z.number().int().min(1).max(999),
+          notes: z.string().max(200).nullish(),
         }),
       )
-      .min(1),
+      .min(1, "An order needs at least one item. Void it instead."),
+    discountAmount: z.number().min(0).max(1000000).optional(),
+    /** Paid orders only: how the new total is paid. Defaults to the old method. */
+    payment: paymentSchema.optional(),
+    reason: z.string().trim().max(200).optional(),
   }),
 ]);
 
+export type DeskInput = z.infer<typeof deskSchema>;
+
 export type DeskResult =
   | { ok: true; order: ReturnType<typeof serialiseOrder> }
-  | { ok: false; status: 400 | 404 | 409; message: string };
+  | { ok: false; status: 400 | 403 | 404 | 409; message: string };
 
-/**
- * Fix a tender, or change an unpaid ticket, while the shift is still open.
- * A paid mistake is not rewritten here — that is a void and a new sale.
- */
-export async function applyOrderDesk(params: {
-  orderId: string;
-  input: z.infer<typeof deskSchema>;
+interface Actor {
   actorId: string;
+  role: UserRole;
   ip?: string | null;
   source: "pos" | "admin";
-}): Promise<DeskResult> {
+}
+
+export async function applyOrderDesk(params: { orderId: string; input: DeskInput } & Actor): Promise<DeskResult> {
   const order = await prisma.order.findUnique({
     where: { id: params.orderId },
     include: { items: true, session: { select: { id: true, status: true } } },
   });
   if (!order) return { ok: false, status: 404, message: "That order no longer exists." };
-  if (order.status === OrderStatus.CANCELLED) {
-    return { ok: false, status: 409, message: "That order was voided." };
-  }
-  if (order.paymentStatus === PaymentStatus.REFUNDED) {
-    return { ok: false, status: 409, message: "That order was refunded." };
+
+  const verdict = editVerdict(
+    {
+      status: order.status,
+      paymentStatus: order.paymentStatus,
+      paymentMethod: order.paymentMethod,
+      shiftStatus: order.session ? (order.session.status as "OPEN" | "CLOSED") : null,
+    },
+    canEditPaidOrders(params.role),
+  );
+  if (!verdict.ok) {
+    return { ok: false, status: verdict.reason.startsWith("Only a manager") ? 403 : 409, message: verdict.reason };
   }
 
-  const open = await prisma.posSession.findFirst({ where: { status: SessionStatus.OPEN } });
-  if (!open) {
-    return { ok: false, status: 409, message: "No shift is open." };
+  if (params.input.action === "payment") {
+    if (!verdict.paid) {
+      return { ok: false, status: 409, message: "That order has not been paid yet. Take payment instead." };
+    }
+    return correctPayment(order, params.input, params);
   }
-  if (order.session && order.session.status === SessionStatus.CLOSED) {
-    return { ok: false, status: 409, message: "That shift is already closed." };
-  }
-  if (order.sessionId && order.sessionId !== open.id) {
-    return { ok: false, status: 409, message: "That sale belongs to another shift." };
-  }
+  return editOrder(order, params.input, verdict.paid, params);
+}
 
-  if (params.input.action === "lines") {
-    return editUnpaidLines(order, params.input.lines, params);
+type LoadedOrder = NonNullable<Awaited<ReturnType<typeof loadShape>>>;
+// Only used for its type: the order as applyOrderDesk loads it.
+function loadShape(id: string) {
+  return prisma.order.findUnique({
+    where: { id },
+    include: { items: true, session: { select: { id: true, status: true } } },
+  });
+}
+
+function paymentFields(input: z.infer<typeof paymentSchema>, total: number) {
+  const next = settlementAfterCorrection(input.paymentMethod);
+  return {
+    paymentMethod: input.paymentMethod as PaymentMethod,
+    paymentStatus: next.paymentStatus as PaymentStatus,
+    paymentReference: input.paymentReference ?? null,
+    splitPayments: (input.paymentMethod === "SPLIT" ? input.splitPayments : null) as never,
+    tenderedAmount: input.paymentMethod === "CASH" && input.tenderedAmount !== undefined ? input.tenderedAmount : null,
+    changeAmount:
+      input.paymentMethod === "CASH" && input.tenderedAmount !== undefined
+        ? roundMoney(input.tenderedAmount - total)
+        : null,
+    nextStatus: next.orderStatus as OrderStatus,
+  };
+}
+
+function checkPayment(input: z.infer<typeof paymentSchema>, total: number): string | null {
+  if (input.paymentMethod === "SPLIT") {
+    const check = splitAddsUp(total, input.splitPayments ?? []);
+    if (!check.ok) return check.reason;
   }
-  return correctPayment(order, params.input, params, open.id);
+  if (input.paymentMethod === "CASH" && input.tenderedAmount !== undefined && input.tenderedAmount + 0.01 < total) {
+    return "The cash given is less than the total.";
+  }
+  return null;
 }
 
 async function correctPayment(
-  order: {
-    id: string;
-    orderNumber: string;
-    sessionId: string | null;
-    total: { toString(): string } | number;
-    paymentMethod: string;
-    status: OrderStatus;
-  },
-  input: Extract<z.infer<typeof deskSchema>, { action: "payment" }>,
-  params: { actorId: string; ip?: string | null; source: "pos" | "admin" },
-  sessionId: string,
+  order: LoadedOrder,
+  input: Extract<DeskInput, { action: "payment" }>,
+  actor: Actor,
 ): Promise<DeskResult> {
   const total = toMoney(order.total);
-  if (input.paymentMethod === "SPLIT") {
-    const check = splitAddsUp(total, input.splitPayments ?? []);
-    if (!check.ok) return { ok: false, status: 400, message: check.reason };
-  }
+  const problem = checkPayment(input, total);
+  if (problem) return { ok: false, status: 400, message: problem };
 
-  const next = settlementAfterCorrection(input.paymentMethod);
+  const fields = paymentFields(input, total);
   const updated = await prisma.$transaction(async (tx) => {
     const saved = await tx.order.update({
       where: { id: order.id },
       data: {
-        paymentMethod: input.paymentMethod as PaymentMethod,
-        paymentStatus: next.paymentStatus as PaymentStatus,
-        paymentReference: input.paymentReference,
-        splitPayments: (input.paymentMethod === "SPLIT" ? input.splitPayments : null) as never,
-        sessionId,
-        status:
-          order.status === OrderStatus.COMPLETED && next.paymentStatus === "PAID"
-            ? OrderStatus.COMPLETED
-            : (next.orderStatus as OrderStatus),
+        paymentMethod: fields.paymentMethod,
+        paymentStatus: fields.paymentStatus,
+        paymentReference: fields.paymentReference,
+        splitPayments: fields.splitPayments,
+        tenderedAmount: fields.tenderedAmount,
+        changeAmount: fields.changeAmount,
+        status: order.status === OrderStatus.COMPLETED && fields.paymentStatus === "PAID" ? OrderStatus.COMPLETED : fields.nextStatus,
+        editedAt: new Date(),
+        editCount: { increment: 1 },
       },
       include: { items: true },
     });
     await tx.orderEvent.create({
       data: {
         orderId: order.id,
-        type: OrderEventType.STATUS_CHANGED,
-        actorId: params.actorId,
+        type: OrderEventType.EDITED,
+        actorId: actor.actorId,
         detail: {
-          action: "payment_corrected",
-          from: order.paymentMethod,
-          to: input.paymentMethod,
-          source: params.source,
+          change: "payment",
+          source: actor.source,
+          reason: input.reason ?? null,
+          payment: { from: order.paymentMethod, to: input.paymentMethod },
         } as never,
       },
     });
@@ -142,102 +187,172 @@ async function correctPayment(
   });
 
   await logAudit({
-    actorId: params.actorId,
+    actorId: actor.actorId,
     action: "order.payment.correct",
     resource: "Order",
     resourceId: order.id,
-    detail: {
-      orderNumber: order.orderNumber,
-      from: order.paymentMethod,
-      to: input.paymentMethod,
-      source: params.source,
-    },
-    ip: params.ip ?? undefined,
+    detail: { orderNumber: order.orderNumber, from: order.paymentMethod, to: input.paymentMethod, source: actor.source },
+    ip: actor.ip ?? undefined,
   });
-
   return { ok: true, order: serialiseOrder(updated) };
 }
 
-async function editUnpaidLines(
-  order: {
-    id: string;
-    orderNumber: string;
-    paymentStatus: string;
-    paymentMethod: string;
-    status: string;
-    discountAmount: { toString(): string } | number;
-    items: { id: string; unitPrice: { toString(): string } | number; name: string; notes: string | null }[];
-    transactionSnapshot: unknown;
-  },
-  lines: { id: string; quantity: number }[],
-  params: { actorId: string; ip?: string | null; source: "pos" | "admin" },
+async function editOrder(
+  order: LoadedOrder,
+  input: Extract<DeskInput, { action: "edit" }>,
+  paid: boolean,
+  actor: Actor,
 ): Promise<DeskResult> {
-  if (!isUnpaidTicket(order)) {
-    return {
-      ok: false,
-      status: 409,
-      message: "Paid orders are not edited. Void the sale and ring it again.",
-    };
+  // ---- The lines as they should now be -------------------------------------
+  const byId = new Map(order.items.map((item) => [item.id, item]));
+  const kept: {
+    id: string;
+    name: string;
+    sizeLabel: string | null;
+    unitPrice: number;
+    quantity: number;
+    notes: string | null;
+  }[] = [];
+  const additions: { menuItemId: string; sizeId?: string | null; quantity: number; notes?: string | null }[] = [];
+
+  for (const line of input.lines) {
+    if (line.id) {
+      const item = byId.get(line.id);
+      if (!item) return { ok: false, status: 400, message: "One of those lines is not on this order." };
+      kept.push({
+        id: item.id,
+        name: item.name,
+        sizeLabel: item.sizeLabel,
+        unitPrice: toMoney(item.unitPrice),
+        quantity: line.quantity,
+        notes: line.notes === undefined ? item.notes : line.notes?.trim() || null,
+      });
+    } else if (line.menuItemId) {
+      additions.push({ menuItemId: line.menuItemId, sizeId: line.sizeId, quantity: line.quantity, notes: line.notes });
+    } else {
+      return { ok: false, status: 400, message: "Each new line needs a dish." };
+    }
   }
 
-  const known = new Set(order.items.map((item) => item.id));
-  if (lines.length !== known.size || lines.some((line) => !known.has(line.id))) {
-    return { ok: false, status: 400, message: "Send every line on the ticket." };
-  }
-  if (lines.every((line) => line.quantity === 0)) {
-    return { ok: false, status: 400, message: "Void the ticket instead of clearing every line." };
+  let added: Awaited<ReturnType<typeof priceLines>> & { ok: true } = { ok: true, lines: [] };
+  if (additions.length > 0) {
+    const priced = await priceLines(additions);
+    if (!priced.ok) return { ok: false, status: 400, message: priced.error };
+    added = priced;
   }
 
+  const removed = order.items.filter((item) => !kept.some((line) => line.id === item.id));
+
+  // ---- New totals -----------------------------------------------------------
   const settings = await getSettings();
   const taxConfig = getTaxConfig(settings);
+  const allLines = [
+    ...kept.map((line) => ({ unitPrice: line.unitPrice, quantity: line.quantity })),
+    ...added.lines.map((line) => ({ unitPrice: line.unitPrice, quantity: line.quantity })),
+  ];
+  const totals = computeOrderTotals({
+    lines: allLines,
+    discountAmount: input.discountAmount ?? toMoney(order.discountAmount),
+  });
+  const tax = taxBreakdown(totals.total, taxConfig);
+  const newTotal = taxConfig.enabled && !taxConfig.inclusive ? tax.gross : totals.total;
+  const oldTotal = toMoney(order.total);
+
+  // ---- How it is paid now (paid orders only) --------------------------------
+  let payment: ReturnType<typeof paymentFields> | null = null;
+  if (paid) {
+    const paymentInput =
+      input.payment ??
+      (order.paymentMethod === "SPLIT"
+        ? null
+        : { paymentMethod: order.paymentMethod as z.infer<typeof paymentSchema>["paymentMethod"] });
+    if (!paymentInput) {
+      if (Math.abs(newTotal - oldTotal) > 0.009) {
+        return { ok: false, status: 400, message: "This was a split payment. Say how the new total is split." };
+      }
+    } else {
+      const problem = checkPayment(paymentInput, newTotal);
+      if (problem) return { ok: false, status: 400, message: problem };
+      payment = paymentFields(paymentInput, newTotal);
+    }
+  } else if (input.payment) {
+    return { ok: false, status: 400, message: "Take payment for an unpaid order with Take payment." };
+  }
+
+  const unchangedItems =
+    removed.length === 0 &&
+    added.lines.length === 0 &&
+    kept.every((line) => {
+      const item = byId.get(line.id)!;
+      return item.quantity === line.quantity && (item.notes ?? null) === line.notes;
+    });
+  if (unchangedItems && Math.abs(newTotal - oldTotal) < 0.009 && (!payment || payment.paymentMethod === order.paymentMethod)) {
+    return { ok: false, status: 400, message: "Nothing was changed." };
+  }
+
+  const describe = (rows: { name: string; sizeLabel: string | null; quantity: number }[]) =>
+    rows.map((row) => ({ name: row.name, size: row.sizeLabel, quantity: row.quantity }));
 
   const updated = await prisma.$transaction(async (tx) => {
-    for (const line of lines) {
-      const item = order.items.find((entry) => entry.id === line.id)!;
-      if (line.quantity === 0) {
-        await tx.orderItem.delete({ where: { id: line.id } });
-        continue;
-      }
+    for (const item of removed) await tx.orderItem.delete({ where: { id: item.id } });
+    for (const line of kept) {
       await tx.orderItem.update({
         where: { id: line.id },
-        data: {
+        data: { quantity: line.quantity, lineTotal: roundMoney(line.unitPrice * line.quantity), notes: line.notes },
+      });
+    }
+    if (added.lines.length > 0) {
+      await tx.orderItem.createMany({
+        data: added.lines.map((line) => ({
+          orderId: order.id,
+          menuItemId: line.menuItemId,
+          sizeId: line.sizeId,
+          sizeLabel: line.sizeLabel,
+          name: line.name,
+          unitPrice: line.unitPrice,
+          unitCost: line.unitCost,
           quantity: line.quantity,
-          lineTotal: roundMoney(toMoney(item.unitPrice) * line.quantity),
-        },
+          lineTotal: line.lineTotal,
+          notes: line.notes,
+        })),
       });
     }
 
-    const kept = lines
-      .filter((line) => line.quantity > 0)
-      .map((line) => {
-        const item = order.items.find((entry) => entry.id === line.id)!;
-        return { unitPrice: toMoney(item.unitPrice), quantity: line.quantity, name: item.name };
-      });
-    const totals = computeOrderTotals({
-      lines: kept.map((line) => ({ unitPrice: line.unitPrice, quantity: line.quantity })),
-      discountAmount: toMoney(order.discountAmount),
-    });
-    const tax = taxBreakdown(totals.total, taxConfig);
-    const orderTotal = taxConfig.enabled && !taxConfig.inclusive ? tax.gross : totals.total;
+    const allNamed = [
+      ...kept.map((line) => ({ ...line, lineTotal: roundMoney(line.unitPrice * line.quantity) })),
+      ...added.lines,
+    ];
     const previous = (order.transactionSnapshot ?? {}) as Record<string, unknown>;
-
     const saved = await tx.order.update({
       where: { id: order.id },
       data: {
         subtotal: totals.subtotal,
         discountAmount: totals.discountAmount,
         taxAmount: tax.taxTotal,
-        total: orderTotal,
+        total: newTotal,
+        ...(payment && {
+          paymentMethod: payment.paymentMethod,
+          paymentStatus: payment.paymentStatus,
+          paymentReference: payment.paymentReference,
+          splitPayments: payment.splitPayments,
+          tenderedAmount: payment.tenderedAmount,
+          changeAmount: payment.changeAmount,
+        }),
+        editedAt: new Date(),
+        editCount: { increment: 1 },
+        // New dishes have to be cooked: put the ticket back on the kitchen board.
+        ...(added.lines.length > 0 && { kitchenStatus: "QUEUED", kitchenUpdatedAt: new Date() }),
         transactionSnapshot: {
           ...previous,
-          lines: kept.map((line) => ({
+          lines: allNamed.map((line) => ({
             name: line.name,
+            size: line.sizeLabel,
             quantity: line.quantity,
             unitPrice: line.unitPrice,
-            lineTotal: roundMoney(line.unitPrice * line.quantity),
+            lineTotal: line.lineTotal,
           })),
           totals,
-          chargedTotal: orderTotal,
+          chargedTotal: newTotal,
           tax: taxConfig.enabled
             ? { inclusive: taxConfig.inclusive, net: tax.net, lines: tax.lines, taxTotal: tax.taxTotal }
             : null,
@@ -249,12 +364,16 @@ async function editUnpaidLines(
     await tx.orderEvent.create({
       data: {
         orderId: order.id,
-        type: OrderEventType.STATUS_CHANGED,
-        actorId: params.actorId,
+        type: OrderEventType.EDITED,
+        actorId: actor.actorId,
         detail: {
-          action: "lines_edited",
-          source: params.source,
-          lines: lines.map((line) => ({ id: line.id, quantity: line.quantity })),
+          change: "items",
+          source: actor.source,
+          reason: input.reason ?? null,
+          before: { lines: describe(order.items), total: oldTotal, payment: order.paymentMethod },
+          after: { lines: describe(allNamed), total: newTotal, payment: payment?.paymentMethod ?? order.paymentMethod },
+          added: describe(added.lines),
+          removed: describe(removed),
         } as never,
       },
     });
@@ -262,12 +381,12 @@ async function editUnpaidLines(
   });
 
   await logAudit({
-    actorId: params.actorId,
-    action: "order.lines.edit",
+    actorId: actor.actorId,
+    action: "order.edit",
     resource: "Order",
     resourceId: order.id,
-    detail: { orderNumber: order.orderNumber, source: params.source },
-    ip: params.ip ?? undefined,
+    detail: { orderNumber: order.orderNumber, before: oldTotal, after: newTotal, paid, source: actor.source },
+    ip: actor.ip ?? undefined,
   });
 
   return { ok: true, order: serialiseOrder(updated) };

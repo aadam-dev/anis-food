@@ -480,7 +480,9 @@ export function Field({
 }
 
 export const inputStyle: React.CSSProperties = {
-  background: "var(--s-panel-alt)",
+  // backgroundColor, not `background`: the shorthand would wipe any chevron
+  // or icon a field sets with background-image.
+  backgroundColor: "var(--s-panel-alt)",
   borderColor: "var(--s-border)",
   color: "var(--s-ink)",
 };

@@ -34,10 +34,12 @@ export async function GET() {
         orderNumber: true,
         tableLabel: true,
         deliveryType: true,
+        source: true,
+        customerName: true,
         kitchenStatus: true,
         createdAt: true,
         notes: true,
-        items: { select: { name: true, quantity: true, notes: true } },
+        items: { select: { name: true, sizeLabel: true, quantity: true, notes: true } },
       },
       take: 100,
     });
@@ -48,6 +50,9 @@ export async function GET() {
         orderNumber: order.orderNumber,
         tableLabel: order.tableLabel,
         deliveryType: order.deliveryType,
+        // Online orders are called by name at the pass, so the kitchen sees it.
+        online: order.source === "ONLINE",
+        guest: order.customerName?.trim().split(/\s+/)[0] ?? null,
         kitchenStatus: order.kitchenStatus,
         createdAt: order.createdAt.toISOString(),
         notes: order.notes,

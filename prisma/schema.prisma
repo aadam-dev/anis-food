@@ -5,8 +5,8 @@
 // All arithmetic goes through src/lib/money.ts and src/lib/cash.ts.
 
 generator client {
-  provider = "prisma-client-js"
-  output   = "../src/generated/prisma"
+  provider      = "prisma-client-js"
+  output        = "../src/generated/prisma"
   // "native" for local dev; the rhel target is what Vercel's serverless runtime
   // needs. Without it the client builds fine and then fails at runtime on Vercel
   // with a missing-query-engine error.
@@ -147,19 +147,19 @@ enum DepositDestination {
 /// bank. The reason is required: an unexplained movement is the exact thing
 /// this table exists to prevent. A spend always links the expense it filed.
 model CashMovement {
-  id          String               @id @default(cuid())
+  id          String              @id @default(cuid())
   sessionId   String
-  session     PosSession           @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  session     PosSession          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   direction   CashDirection
-  kind        CashMovementKind     @default(IN)
+  kind        CashMovementKind    @default(IN)
   destination DepositDestination?
-  amount      Decimal              @db.Decimal(10, 2)
+  amount      Decimal             @db.Decimal(10, 2)
   reason      String
-  expenseId   String?              @unique
-  expense     Expense?             @relation(fields: [expenseId], references: [id])
+  expenseId   String?             @unique
+  expense     Expense?            @relation(fields: [expenseId], references: [id])
   createdById String
-  createdBy   User                 @relation(fields: [createdById], references: [id])
-  createdAt   DateTime             @default(now())
+  createdBy   User                @relation(fields: [createdById], references: [id])
+  createdAt   DateTime            @default(now())
 
   @@index([sessionId, createdAt])
   @@index([kind])
@@ -204,9 +204,32 @@ model MenuItem {
   updatedAt   DateTime     @updatedAt
 
   orderItems OrderItem[]
+  /// Small / Medium / Large. When a dish has sizes, each size carries its own
+  /// price and cost and the dish's own price is just the "from" price.
+  sizes      MenuItemSize[]
 
   @@index([categoryId, sortOrder])
   @@index([isAvailable, isPopular])
+}
+
+/// One size of a dish. The same plate in a different portion is a size, not a
+/// separate menu item, so it sells, costs and reports as one dish.
+model MenuItemSize {
+  id          String   @id @default(cuid())
+  menuItemId  String
+  menuItem    MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  label       String
+  price       Decimal  @db.Decimal(10, 2)
+  costPrice   Decimal? @db.Decimal(10, 2)
+  sortOrder   Int      @default(0)
+  isAvailable Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orderItems OrderItem[]
+
+  @@unique([menuItemId, label])
+  @@index([menuItemId, sortOrder])
 }
 
 // ---------------------------------------------------------------------------
@@ -346,6 +369,11 @@ model Order {
   voidNote   String?
   voidedAt   DateTime?
 
+  /// Set every time the order is changed after it was rung (items, discount or
+  /// payment). The history itself lives in OrderEvent (type EDITED).
+  editedAt  DateTime?
+  editCount Int       @default(0)
+
   notes     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -405,12 +433,12 @@ enum InventoryMovementType {
 /// One change to a stock level, kept forever for the audit trail. `quantity` is
 /// the signed delta actually applied to the item's stock.
 model InventoryMovement {
-  id       String                @id @default(cuid())
-  itemId   String
-  item     InventoryItem         @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  type     InventoryMovementType
-  quantity Decimal               @db.Decimal(12, 3)
-  reason   String?
+  id        String                @id @default(cuid())
+  itemId    String
+  item      InventoryItem         @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  type      InventoryMovementType
+  quantity  Decimal               @db.Decimal(12, 3)
+  reason    String?
   createdBy String?
 
   createdAt DateTime @default(now())
@@ -446,6 +474,12 @@ model OrderItem {
   menuItemId String?
   menuItem   MenuItem? @relation(fields: [menuItemId], references: [id])
 
+  /// The size sold, if the dish has sizes. The label is snapshotted like the
+  /// name, so renaming a size never rewrites an old receipt.
+  sizeId    String?
+  size      MenuItemSize? @relation(fields: [sizeId], references: [id], onDelete: SetNull)
+  sizeLabel String?
+
   /// Name, price and cost are snapshotted. A price rise next month must not
   /// rewrite what last month's customer actually paid.
   name      String
@@ -466,6 +500,7 @@ enum OrderEventType {
   VOIDED
   REFUNDED
   NOTE_ADDED
+  EDITED
 }
 
 /// Append-only timeline. Orders are never deleted; a void is an event.

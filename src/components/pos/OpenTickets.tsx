@@ -39,7 +39,7 @@ export function waitTone(minutes: number) {
   return "var(--s-ink-muted)";
 }
 
-type SettleMethod = Exclude<PaymentChoice, "UNPAID" | "BOLT_FOOD" | "BANK_TRANSFER">;
+type SettleMethod = Exclude<PaymentChoice, "UNPAID" | "BOLT_FOOD">;
 
 const SETTLE_METHODS: { value: SettleMethod; label: string }[] = [
   { value: "CASH", label: "Cash" },

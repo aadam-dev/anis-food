@@ -10,14 +10,13 @@ import { FieldInput, FieldSelect } from "./ui/Field";
 import MethodMark from "./MethodMark";
 import { posRequest, usePosAction } from "./usePosAction";
 
-const METHODS = ["CASH", "MOMO", "CARD", "BANK_TRANSFER", "BOLT_FOOD", "SPLIT"] as const;
-const SPLIT_METHODS = ["CASH", "MOMO", "CARD", "BANK_TRANSFER"] as const;
+const METHODS = ["CASH", "MOMO", "CARD", "BOLT_FOOD", "SPLIT"] as const;
+const SPLIT_METHODS = ["CASH", "MOMO", "CARD"] as const;
 
 const LABELS: Record<string, string> = {
   CASH: "Cash",
   MOMO: "MoMo",
   CARD: "Card",
-  BANK_TRANSFER: "Transfer",
   BOLT_FOOD: "Bolt",
   SPLIT: "Split",
 };

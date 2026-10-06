@@ -66,6 +66,20 @@ export function canVoidAtTill(role: UserRole | undefined | null): boolean {
   return canAccess(role, "orders") && canAccess(role, "pos");
 }
 
+/**
+ * Changing a paid order moves money (extra collected or change given back), so
+ * it is for the people who answer for the drawer, not every cashier.
+ */
+export const PAID_ORDER_EDIT_ROLES: readonly UserRole[] = [
+  UserRole.OWNER,
+  UserRole.SUPER_ADMIN,
+  UserRole.MANAGER,
+];
+
+export function canEditPaidOrders(role: UserRole | undefined | null): boolean {
+  return !!role && PAID_ORDER_EDIT_ROLES.includes(role);
+}
+
 export function canSeeCosts(role: UserRole | undefined | null): boolean {
   return !!role && COST_VISIBLE_ROLES.includes(role);
 }

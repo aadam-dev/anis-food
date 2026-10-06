@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { cartReducer, emptyCart, cartCount, type CartState } from "./cartReducer";
+import { cartReducer, emptyCart, cartCount, lineKey, type CartState } from "./cartReducer";
 import type { PosMenuItem } from "./types";
 
 const jollof: PosMenuItem = {
@@ -37,20 +37,20 @@ describe("cart", () => {
 
   it("removes the line when the quantity reaches zero", () => {
     let state = cartReducer(emptyCart, { type: "add", item: jollof });
-    state = cartReducer(state, { type: "decrement", menuItemId: jollof.id });
+    state = cartReducer(state, { type: "decrement", key: jollof.id });
     assert.equal(state.lines.length, 0);
   });
 
   it("never goes negative", () => {
     let state = cartReducer(emptyCart, { type: "add", item: jollof });
-    state = cartReducer(state, { type: "decrement", menuItemId: jollof.id });
-    state = cartReducer(state, { type: "decrement", menuItemId: jollof.id });
+    state = cartReducer(state, { type: "decrement", key: jollof.id });
+    state = cartReducer(state, { type: "decrement", key: jollof.id });
     assert.equal(state.lines.length, 0);
   });
 
   it("caps a fat-fingered quantity", () => {
     let state = cartReducer(emptyCart, { type: "add", item: jollof });
-    state = cartReducer(state, { type: "setQuantity", menuItemId: jollof.id, quantity: 5000 });
+    state = cartReducer(state, { type: "setQuantity", key: jollof.id, quantity: 5000 });
     assert.equal(state.lines[0].quantity, 999);
   });
 
@@ -83,8 +83,36 @@ describe("cart", () => {
   it("attaches a note to the right line", () => {
     let state = cartReducer(emptyCart, { type: "add", item: jollof });
     state = cartReducer(state, { type: "add", item: waakye });
-    state = cartReducer(state, { type: "setNotes", menuItemId: waakye.id, notes: "No pepper" });
+    state = cartReducer(state, { type: "setNotes", key: waakye.id, notes: "No pepper" });
     assert.equal(state.lines.find((l) => l.menuItemId === waakye.id)?.notes, "No pepper");
     assert.equal(state.lines.find((l) => l.menuItemId === jollof.id)?.notes, undefined);
+  });
+
+  it("keeps two sizes of one dish on separate lines at their own prices", () => {
+    const sized: PosMenuItem = {
+      ...jollof,
+      sizes: [
+        { id: "s", label: "Small", price: 50 },
+        { id: "l", label: "Large", price: 60 },
+      ],
+    };
+    let state = cartReducer(emptyCart, { type: "add", item: sized, size: sized.sizes![0] });
+    state = cartReducer(state, { type: "add", item: sized, size: sized.sizes![1] });
+    state = cartReducer(state, { type: "add", item: sized, size: sized.sizes![1] });
+    assert.equal(state.lines.length, 2);
+    const large = state.lines.find((line) => line.key === lineKey(sized.id, "l"))!;
+    assert.equal(large.quantity, 2);
+    assert.equal(large.unitPrice, 60);
+    assert.equal(large.sizeLabel, "Large");
+    state = cartReducer(state, { type: "remove", key: lineKey(sized.id, "s") });
+    assert.equal(state.lines.length, 1);
+  });
+
+  it("restores a cart saved before sizes existed", () => {
+    const state = cartReducer(emptyCart, {
+      type: "replace",
+      lines: [{ menuItemId: "item-1", name: "Jollof", unitPrice: 50, quantity: 2 } as never],
+    });
+    assert.equal(state.lines[0].key, "item-1");
   });
 });

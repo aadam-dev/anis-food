@@ -36,6 +36,11 @@ export default async function PosPage() {
         categoryId: true,
         imageUrl: true,
         isPopular: true,
+          sizes: {
+            where: { isAvailable: true },
+            orderBy: { sortOrder: "asc" },
+            select: { id: true, label: true, price: true },
+          },
       },
     }),
     prisma.order.findMany({
@@ -58,7 +63,9 @@ export default async function PosPage() {
     id: item.id,
     slug: item.slug,
     name: item.name,
-    price: toMoney(item.price),
+    // A dish with sizes sells from its cheapest size.
+    price: item.sizes.length ? Math.min(...item.sizes.map((size) => toMoney(size.price))) : toMoney(item.price),
+    sizes: item.sizes.map((size) => ({ id: size.id, label: size.label, price: toMoney(size.price) })),
     categoryId: item.categoryId,
     imageUrl: menuImage(item.imageUrl, item.categoryId, item.name),
     isPopular: item.isPopular,

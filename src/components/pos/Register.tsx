@@ -35,7 +35,8 @@ import {
   getQueueCount,
   getServerQueueCount,
 } from "@/lib/offlineQueue";
-import { cartReducer, emptyCart, cartCount } from "./cartReducer";
+import { cartReducer, emptyCart, cartCount, lineKey } from "./cartReducer";
+import SizePickerSheet from "./SizePickerSheet";
 import MenuGrid from "./MenuGrid";
 import CartPanel from "./CartPanel";
 import MobileCartSheet from "./MobileCartSheet";
@@ -56,6 +57,7 @@ import { fetchWithTimeout } from "@/lib/fetch-timeout";
 import type { FulfillmentType } from "./CustomerFields";
 import Button from "./ui/Button";
 import type {
+  PosMenuSize,
   CartLine,
   OrderView,
   PosCategory,
@@ -149,6 +151,7 @@ export default function Register({
   const [movingCash, setMovingCash] = useState(false);
   const [focusedMenuItemId, setFocusedMenuItemId] = useState<string | null>(null);
   const [qtyTarget, setQtyTarget] = useState<CartLine | null>(null);
+  const [sizeFor, setSizeFor] = useState<PosMenuItem | null>(null);
   const [tableId, setTableId] = useState("");
   const [tables, setTables] = useState<
     { id: string; label: string; area: string; seats: number; occupied: boolean }[]
@@ -173,7 +176,7 @@ export default function Register({
   const chargingLines = useMemo(() => {
     if (!chargeIds) return cart.lines;
     const keep = new Set(chargeIds);
-    return cart.lines.filter((line) => keep.has(line.menuItemId));
+    return cart.lines.filter((line) => keep.has(line.key));
   }, [cart.lines, chargeIds]);
 
   const chargingTotals = useMemo(() => {
@@ -189,7 +192,7 @@ export default function Register({
     const keep = new Set(selectedIds);
     return computeOrderTotals({
       lines: cart.lines
-        .filter((line) => keep.has(line.menuItemId))
+        .filter((line) => keep.has(line.key))
         .map((line) => ({ unitPrice: line.unitPrice, quantity: line.quantity })),
     }).total;
   }, [selectedIds, cart.lines]);
@@ -261,7 +264,8 @@ export default function Register({
         if (Array.isArray(parsed.lines) && parsed.lines.length > 0) {
           dispatch({ type: "replace", lines: parsed.lines, discount: parsed.discount ?? 0 });
           const last = parsed.lines[parsed.lines.length - 1];
-          if (last?.menuItemId) setFocusedMenuItemId(last.menuItemId);
+          const lastKey = last?.key ?? last?.menuItemId;
+          if (lastKey) setFocusedMenuItemId(lastKey);
         }
         if (typeof parsed.customerName === "string") setCustomerName(parsed.customerName);
         if (typeof parsed.customerPhone === "string") setCustomerPhone(parsed.customerPhone);
@@ -417,6 +421,7 @@ export default function Register({
       clientRef,
       lines: chargingLines.map((line) => ({
         menuItemId: line.menuItemId,
+        sizeId: line.sizeId ?? undefined,
         quantity: line.quantity,
         notes: line.notes,
       })),
@@ -474,7 +479,7 @@ export default function Register({
 
     const partial = Boolean(chargeIds && chargingLines.length > 0 && chargingLines.length < cart.lines.length);
     if (partial && chargeIds) {
-      dispatch({ type: "removeMany", menuItemIds: chargeIds });
+      dispatch({ type: "removeMany", keys: chargeIds });
       setSelectedIds((current) => current.filter((id) => !chargeIds.includes(id)));
     } else {
       clearOrder();
@@ -530,12 +535,23 @@ export default function Register({
 
   function addItem(item: PosMenuItem) {
     if (locked) return;
+    // A dish with sizes asks which one before it reaches the cart.
+    if (item.sizes && item.sizes.length > 0) {
+      setSizeFor(item);
+      return;
+    }
     dispatch({ type: "add", item });
-    setFocusedMenuItemId(item.id);
+    setFocusedMenuItemId(lineKey(item.id));
+  }
+
+  function addSized(item: PosMenuItem, size: PosMenuSize) {
+    dispatch({ type: "add", item, size });
+    setFocusedMenuItemId(lineKey(item.id, size.id));
+    setSizeFor(null);
   }
 
   function editQty(line: CartLine) {
-    setFocusedMenuItemId(line.menuItemId);
+    setFocusedMenuItemId(line.key);
     setQtyTarget(line);
   }
 
@@ -924,6 +940,10 @@ export default function Register({
         />
       )}
 
+      {sizeFor && (
+        <SizePickerSheet item={sizeFor} onPick={(size) => addSized(sizeFor, size)} onClose={() => setSizeFor(null)} />
+      )}
+
       {qtyTarget && (
         <QuantityEntrySheet
           productName={qtyTarget.name}
@@ -932,12 +952,12 @@ export default function Register({
           onConfirm={(quantity) => {
             dispatch({
               type: "setQuantity",
-              menuItemId: qtyTarget.menuItemId,
+              key: qtyTarget.key,
               quantity,
             });
             if (quantity === 0) {
-              const remaining = cart.lines.filter((line) => line.menuItemId !== qtyTarget.menuItemId);
-              setFocusedMenuItemId(remaining[remaining.length - 1]?.menuItemId ?? null);
+              const remaining = cart.lines.filter((line) => line.key !== qtyTarget.key);
+              setFocusedMenuItemId(remaining[remaining.length - 1]?.key ?? null);
             }
           }}
           onClose={() => setQtyTarget(null)}

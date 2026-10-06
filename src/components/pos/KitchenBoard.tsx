@@ -11,10 +11,12 @@ interface KitchenOrder {
   orderNumber: string;
   tableLabel: string | null;
   deliveryType: string;
+  online?: boolean;
+  guest?: string | null;
   kitchenStatus: Status | "SERVED";
   createdAt: string;
   notes: string | null;
-  items: { name: string; quantity: number; notes: string | null }[];
+  items: { name: string; sizeLabel?: string | null; quantity: number; notes: string | null }[];
 }
 
 const COLUMNS: { status: Status; title: string; next: Status | "SERVED"; cta: string }[] = [
@@ -166,13 +168,20 @@ export default function KitchenBoard() {
                         </span>
                       </div>
                       <p className="mt-0.5 text-xs" style={{ color: "var(--s-ink-faint)" }}>
+                        {order.online && (
+                          <span className="mr-1.5 rounded-md px-1.5 py-0.5 font-extrabold" style={{ background: "color-mix(in srgb, var(--s-accent) 18%, transparent)", color: "var(--s-accent)" }}>
+                            ONLINE
+                          </span>
+                        )}
                         {DELIVERY_LABEL[order.deliveryType] ?? order.deliveryType}
+                        {order.guest && ` · ${order.guest}`}
                       </p>
 
                       <ul className="mt-2 space-y-1">
                         {order.items.map((item, i) => (
                           <li key={i} className="text-sm leading-tight">
                             <span className="font-bold">{item.quantity}×</span> {item.name}
+                            {item.sizeLabel && <span className="font-extrabold"> · {item.sizeLabel}</span>}
                             {item.notes && (
                               <span className="block text-xs" style={{ color: "var(--s-warn)" }}>
                                 — {item.notes}
