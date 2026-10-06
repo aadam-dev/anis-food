@@ -129,7 +129,7 @@ export default async function AdminOverviewPage({
       icon: <UtensilsCrossed />,
       title: costing.costed === 0 ? "No dish has a cost yet" : `${costing.dishes - costing.costed} dishes still need a cost`,
       detail: "Profit stays unknown until it does.",
-      href: "/admin/menu",
+      href: "/admin/menu?view=costing",
     });
   }
   if (data.lowStock.length > 0) {
@@ -265,7 +265,7 @@ export default async function AdminOverviewPage({
           tint="var(--s-good)"
           meter={costing.dishes > 0 ? costing.costed / costing.dishes : 0}
           meterLabel={`${costing.costed}/${costing.dishes} dishes costed`}
-          href={current.profitKnown ? `/admin/reports?tab=pl&${periodQuery}` : "/admin/menu"}
+          href={current.profitKnown ? `/admin/reports?tab=pl&${periodQuery}` : "/admin/menu?view=costing"}
         />
         <Signal
           label="Cash in the drawer"
@@ -423,7 +423,7 @@ export default async function AdminOverviewPage({
           className="xl:col-span-2"
           title="Dish costing"
           explainer="Profit needs to know what each dish costs to make. Start with the ones that sell most."
-          action={<PanelLink href="/admin/menu">Open Menu</PanelLink>}
+          action={<PanelLink href="/admin/menu?view=costing">Cost dishes</PanelLink>}
           padded
         >
           <div className="flex items-baseline justify-between gap-3">

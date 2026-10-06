@@ -21,6 +21,7 @@ import {
   Panel,
   EmptyState,
   Chip,
+  Table,
   inputClass,
   inputStyle,
 } from "@/components/admin/ui";
@@ -43,21 +44,30 @@ export interface AdminMenuItem {
   imageUrl: string | null;
   isPopular: boolean;
   isAvailable: boolean;
+  /** Plates sold and money taken in the last 30 days. */
+  sold30: number;
+  revenue30: number;
 }
 
 interface Props {
   categories: AdminMenuCategory[];
   items: AdminMenuItem[];
   canSeeCosts: boolean;
+  initialView?: "grid" | "costing";
 }
 
 type SaveState = { id: string; status: "saving" | "saved" | "error"; message?: string };
 
-export default function MenuManagerClient({ categories, items, canSeeCosts }: Props) {
+export default function MenuManagerClient({ categories, items, canSeeCosts, initialView = "grid" }: Props) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<string>(categories[0]?.id ?? "all");
+  const [view, setView] = useState<"grid" | "costing">(initialView);
+  const [needsCost, setNeedsCost] = useState(false);
+  // Costing starts across the whole menu; the grid starts on the first category.
+  const [categoryFilter, setCategoryFilter] = useState<string>(
+    initialView === "costing" ? "all" : (categories[0]?.id ?? "all"),
+  );
   const [adding, setAdding] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [draftPrice, setDraftPrice] = useState("");
@@ -77,13 +87,14 @@ export default function MenuManagerClient({ categories, items, canSeeCosts }: Pr
     const needle = search.trim().toLowerCase();
     return merged.filter((item) => {
       if (categoryFilter !== "all" && item.categoryId !== categoryFilter) return false;
+      if (needsCost && item.costPrice !== null) return false;
       if (!needle) return true;
       return (
         item.name.toLowerCase().includes(needle) ||
         item.description.toLowerCase().includes(needle)
       );
     });
-  }, [merged, search, categoryFilter]);
+  }, [merged, search, categoryFilter, needsCost]);
 
   const unavailableCount = merged.filter((item) => !item.isAvailable).length;
   const costCoverage = canSeeCosts
@@ -187,6 +198,7 @@ export default function MenuManagerClient({ categories, items, canSeeCosts }: Pr
   return (
     <>
       <PageHeader
+        eyebrow="Menu & stock"
         title="Manage dishes"
         description="What you change here is what the website shows and what the till charges."
         actions={
@@ -274,22 +286,57 @@ export default function MenuManagerClient({ categories, items, canSeeCosts }: Pr
                 aria-label="Search menu items"
               />
             </div>
-            <div className="hidden sm:flex rounded-xl p-1" style={{ background: "var(--s-panel)" }}>
-              <button type="button" className="grid h-10 w-10 place-items-center rounded-lg" style={{ color: "var(--s-brand)", background: "color-mix(in srgb, var(--s-brand) 10%, white)" }} aria-label="Grid view">
-                <LayoutGrid className="h-4 w-4" />
+            {canSeeCosts && (
+              <div className="flex rounded-2xl p-1" style={{ background: "var(--s-sunk)" }} role="tablist" aria-label="View">
+                {(
+                  [
+                    ["grid", "Dishes", <LayoutGrid key="g" className="h-4 w-4" />],
+                    ["costing", "Costing", <List key="l" className="h-4 w-4" />],
+                  ] as const
+                ).map(([value, label, icon]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="tab"
+                    aria-selected={view === value}
+                    onClick={() => setView(value)}
+                    className="inline-flex items-center gap-1.5 rounded-xl px-3 text-sm font-bold"
+                    style={
+                      view === value
+                        ? { background: "var(--s-panel)", color: "var(--s-ink)", boxShadow: "var(--s-shadow)" }
+                        : { color: "var(--s-ink-muted)" }
+                    }
+                  >
+                    {icon}
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {canSeeCosts && (
+              <button
+                type="button"
+                onClick={() => setNeedsCost((value) => !value)}
+                aria-pressed={needsCost}
+                className="inline-flex min-h-12 items-center gap-2 rounded-2xl px-3 text-sm font-bold"
+                style={
+                  needsCost
+                    ? { background: "var(--s-warn-soft)", color: "var(--s-warn)" }
+                    : { background: "var(--s-panel)", color: "var(--s-ink)", boxShadow: "var(--s-shadow)" }
+                }
+              >
+                <SlidersHorizontal className="h-4 w-4" /> Needs a cost
+                <span className="money text-xs">{merged.length - costCoverage}</span>
               </button>
-              <button type="button" className="grid h-10 w-10 place-items-center rounded-lg" style={{ color: "var(--s-ink-faint)" }} aria-label="List view">
-                <List className="h-4 w-4" />
-              </button>
-            </div>
-            <button type="button" className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-white px-3 text-sm font-bold shadow-sm">
-              <SlidersHorizontal className="h-4 w-4" /> Filter
-            </button>
+            )}
             <button type="button" onClick={() => setAdding(true)} className="inline-flex min-h-12 items-center gap-2 rounded-xl px-4 text-sm font-bold text-white" style={{ background: "var(--s-brand)" }}>
               <Plus className="h-4 w-4" /> Add New Dish
             </button>
           </div>
 
+          {view === "costing" ? (
+            <CostingTable items={visible} save={save} saves={saves} />
+          ) : (
           <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
             <button
               type="button"
@@ -309,7 +356,6 @@ export default function MenuManagerClient({ categories, items, canSeeCosts }: Pr
             </button>
             {visible.map((item) => (
               <article key={item.id} className="s-card relative min-h-56 overflow-hidden p-3">
-                <input type="checkbox" aria-label={`Select ${item.name}`} className="absolute left-3 top-3 z-10 h-4 w-4 rounded" />
                 <button type="button" onClick={() => setEditing(item)} className="absolute right-2 top-2 z-10 grid h-9 w-9 place-items-center rounded-full" style={{ color: "var(--s-ink-muted)" }} aria-label={`Edit ${item.name}`}>
                   <MoreHorizontal className="h-4 w-4" />
                 </button>
@@ -324,15 +370,20 @@ export default function MenuManagerClient({ categories, items, canSeeCosts }: Pr
                     {formatGHS(item.price)}
                   </p>
                   {!item.isAvailable && <Chip tone="warn">Sold out</Chip>}
+                  {canSeeCosts && item.costPrice === null && <Chip tone="neutral">No cost</Chip>}
                 </div>
                 </button>
               </article>
             ))}
           </div>
+          )}
 
           {visible.length === 0 && (
             <Panel className="mt-4">
-              <EmptyState title="Nothing in this category" hint="Add a dish, or pick another category." />
+              <EmptyState
+                title={needsCost ? "Every dish here has a cost" : "Nothing in this category"}
+                hint={needsCost ? "Turn off “Needs a cost” to see them all." : "Add a dish, or pick another category."}
+              />
             </Panel>
           )}
         </section>
@@ -659,5 +710,163 @@ function ImageControl({
         </p>
       )}
     </div>
+  );
+}
+
+/** Food cost as a share of price. Most kitchens aim for 28–35%. */
+function foodCostTone(share: number): "good" | "warn" | "bad" {
+  if (share <= 35) return "good";
+  if (share <= 45) return "warn";
+  return "bad";
+}
+
+/**
+ * Every dish in one sheet, best sellers first, with price and cost editable in
+ * place. Built for an afternoon of costing: tab down the Cost column, and each
+ * figure saves as you leave the field.
+ */
+function CostingTable({
+  items,
+  save,
+  saves,
+}: {
+  items: AdminMenuItem[];
+  save: (id: string, patch: Partial<AdminMenuItem>) => void;
+  saves: Record<string, SaveState>;
+}) {
+  const sorted = [...items].sort((a, b) => b.revenue30 - a.revenue30 || a.name.localeCompare(b.name));
+  const totalRevenue = items.reduce((sum, item) => sum + item.revenue30, 0);
+  const covered = items.filter((item) => item.costPrice !== null).reduce((sum, item) => sum + item.revenue30, 0);
+
+  return (
+    <Panel
+      title="Dish costing"
+      explainer="What each plate costs to make: ingredients, packaging, gas. Best sellers first. Each figure saves when you leave the box."
+      action={
+        <Chip tone={totalRevenue > 0 && covered / totalRevenue >= 0.9 ? "good" : "warn"}>
+          {totalRevenue > 0 ? Math.round((covered / totalRevenue) * 100) : 0}% of sales costed
+        </Chip>
+      }
+    >
+      {sorted.length === 0 ? (
+        <EmptyState title="No dishes to show" />
+      ) : (
+        <Table>
+          <thead>
+            <tr>
+              <th>Dish</th>
+              <th className="num">Sold · 30 days</th>
+              <th className="num">Price</th>
+              <th className="num">Cost</th>
+              <th className="num">Food cost</th>
+              <th className="num">Kept per plate</th>
+              <th aria-label="Save status" />
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((item) => (
+              <CostingRow key={item.id} item={item} save={save} state={saves[item.id]} />
+            ))}
+          </tbody>
+        </Table>
+      )}
+    </Panel>
+  );
+}
+
+function CostingRow({
+  item,
+  save,
+  state,
+}: {
+  item: AdminMenuItem;
+  save: (id: string, patch: Partial<AdminMenuItem>) => void;
+  state?: SaveState;
+}) {
+  const [priceText, setPriceText] = useState(item.price.toFixed(2));
+  const [costText, setCostText] = useState(item.costPrice?.toFixed(2) ?? "");
+
+  function commit(text: string, current: number | null, field: "price" | "costPrice", reset: (value: string) => void) {
+    const trimmed = text.trim();
+    if (trimmed === "") {
+      if (field === "costPrice" && current !== null) save(item.id, { costPrice: null });
+      if (field === "price") reset(item.price.toFixed(2));
+      return;
+    }
+    const parsed = Number(trimmed);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      reset(current?.toFixed(2) ?? "");
+      return;
+    }
+    const rounded = roundMoney(parsed);
+    reset(rounded.toFixed(2));
+    if (rounded !== current) save(item.id, { [field]: rounded });
+  }
+
+  // Live from what is typed, so the margin answers "what if" before saving.
+  const price = Number(priceText) || 0;
+  const cost = costText.trim() === "" ? null : Number(costText);
+  const share = cost !== null && Number.isFinite(cost) && price > 0 ? (cost / price) * 100 : null;
+  const kept = share !== null ? price - (cost ?? 0) : null;
+
+  const field =
+    "money w-24 rounded-xl border px-2.5 py-1.5 text-right outline-none focus:ring-2 !min-h-10";
+
+  return (
+    <tr>
+      <td>
+        <span className="block font-semibold">{item.name}</span>
+        <span className="block text-xs" style={{ color: "var(--s-ink-faint)" }}>
+          {item.categoryName}
+          {!item.isAvailable && " · sold out"}
+        </span>
+      </td>
+      <td className="num muted">
+        {item.sold30 > 0 ? (
+          <>
+            {item.sold30}
+            <span className="block text-xs">{formatGHS(item.revenue30)}</span>
+          </>
+        ) : (
+          "—"
+        )}
+      </td>
+      <td className="num">
+        <input
+          inputMode="decimal"
+          value={priceText}
+          onChange={(event) => setPriceText(event.target.value)}
+          onBlur={() => commit(priceText, item.price, "price", setPriceText)}
+          onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
+          className={field}
+          style={inputStyle}
+          aria-label={`Price of ${item.name}`}
+        />
+      </td>
+      <td className="num">
+        <input
+          inputMode="decimal"
+          value={costText}
+          placeholder="Add"
+          onChange={(event) => setCostText(event.target.value)}
+          onBlur={() => commit(costText, item.costPrice, "costPrice", setCostText)}
+          onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
+          className={field}
+          style={{ ...inputStyle, ...(item.costPrice === null ? { borderColor: "var(--s-warn)" } : {}) }}
+          aria-label={`Cost of ${item.name}`}
+        />
+      </td>
+      <td className="num">{share === null ? "—" : <Chip tone={foodCostTone(share)}>{Math.round(share)}%</Chip>}</td>
+      <td className="num">{kept === null ? "—" : formatGHS(kept)}</td>
+      <td className="w-20 text-xs" aria-live="polite">
+        {state?.status === "saving" && <Loader2 className="h-3.5 w-3.5 animate-spin" style={{ color: "var(--s-ink-faint)" }} />}
+        {state?.status === "saved" && <Check className="h-3.5 w-3.5" style={{ color: "var(--s-good)" }} />}
+        {state?.status === "error" && (
+          <span className="inline-flex items-center gap-1" style={{ color: "var(--s-bad)" }}>
+            <AlertCircle className="h-3.5 w-3.5" /> {state.message}
+          </span>
+        )}
+      </td>
+    </tr>
   );
 }

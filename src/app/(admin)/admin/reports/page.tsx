@@ -277,7 +277,7 @@ function ProfitAndLoss({ ledger, previous, showTax }: { ledger: Ledger; previous
             {!ledger.profitKnown && ledger.netSales > 0 && (
               <>
                 Profit shows once dishes have a cost price in{" "}
-                <a href="/admin/menu" className="font-semibold underline">
+                <a href="/admin/menu?view=costing" className="font-semibold underline">
                   Menu
                 </a>
                 .{" "}
