@@ -75,7 +75,7 @@ export default function TablesClient({ initialTables }: { initialTables: TableRo
 
   return (
     <>
-      <PageHeader title="Tables" description="The dining room, as it appears on the till floor." />
+      <PageHeader eyebrow="Shop" title="Tables" description="The dining room, as it appears on the till floor." />
 
       <Panel title="Add a table" className="p-5 mb-4">
         <div className="grid gap-3 sm:grid-cols-[1fr_1fr_6rem_auto] sm:items-end">

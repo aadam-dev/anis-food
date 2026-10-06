@@ -127,7 +127,7 @@ export default function AdminShell({ user, shift, children }: AdminShellProps) {
                     aria-current={current ? "page" : undefined}
                     className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-semibold transition-colors"
                     style={{
-                      background: current ? "color-mix(in srgb, var(--s-brand) 10%, white)" : "transparent",
+                      background: current ? "var(--s-brand-soft)" : "transparent",
                       color: current ? "var(--s-brand)" : "var(--s-ink-muted)",
                     }}
                   >

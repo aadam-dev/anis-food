@@ -9,7 +9,7 @@ export default async function SettingsPage() {
   const settings = await getSettings();
   return (
     <>
-      <PageHeader title="Settings" description="Business details, the receipt, and how the app looks." />
+      <PageHeader eyebrow="Manage" title="Settings" description="Business details, the receipt, and how the app looks." />
       <SettingsClient settings={settings} />
     </>
   );

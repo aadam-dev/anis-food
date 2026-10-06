@@ -94,6 +94,7 @@ export default function InventoryClient({ initialItems }: { initialItems: InvRow
   return (
     <>
       <PageHeader
+        eyebrow="Shop"
         title="Inventory"
         description="Stock levels, receipts and counts — with low-stock alerts."
       />

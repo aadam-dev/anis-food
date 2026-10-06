@@ -198,7 +198,7 @@ export default function MenuManagerClient({ categories, items, canSeeCosts, init
   return (
     <>
       <PageHeader
-        eyebrow="Menu & stock"
+        eyebrow="Shop"
         title="Manage dishes"
         description="What you change here is what the website shows and what the till charges."
         actions={
@@ -221,7 +221,7 @@ export default function MenuManagerClient({ categories, items, canSeeCosts, init
             onClick={() => setCategoryFilter("all")}
             className="mb-1 flex items-center justify-between rounded-2xl px-3 py-2.5 text-left text-sm font-semibold"
             style={{
-              background: categoryFilter === "all" ? "color-mix(in srgb, var(--s-brand) 10%, white)" : "transparent",
+              background: categoryFilter === "all" ? "var(--s-brand-soft)" : "transparent",
               color: categoryFilter === "all" ? "var(--s-brand)" : "var(--s-ink)",
               boxShadow: categoryFilter === "all" ? "inset 0 0 0 1.5px var(--s-brand)" : undefined,
             }}
@@ -240,7 +240,7 @@ export default function MenuManagerClient({ categories, items, canSeeCosts, init
                 }}
                 className="mb-1 flex items-center justify-between rounded-2xl px-3 py-2.5 text-left text-sm font-semibold"
                 style={{
-                  background: active ? "color-mix(in srgb, var(--s-brand) 10%, white)" : "transparent",
+                  background: active ? "var(--s-brand-soft)" : "transparent",
                   color: active ? "var(--s-brand)" : "var(--s-ink)",
                   boxShadow: active ? "inset 0 0 0 1.5px var(--s-brand)" : undefined,
                 }}

@@ -25,7 +25,7 @@ export default function ManualPage() {
   return (
     <div data-print-page>
       <PageHeader
-        eyebrow="Help"
+        eyebrow="Manage"
         title="The Anis manual"
         description="How to run the till and the back office, step by step. Print it and keep a copy by the counter."
         actions={

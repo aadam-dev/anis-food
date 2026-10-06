@@ -74,7 +74,7 @@ export default async function CustomersPage({
 
   return (
     <>
-      <PageHeader title="Customers" description="Everyone who has given a name or number at the till." />
+      <PageHeader eyebrow="Shop" title="Customers" description="Everyone who has given a name or number at the till." />
       <CustomerSearch initial={query} />
 
       <Panel>
