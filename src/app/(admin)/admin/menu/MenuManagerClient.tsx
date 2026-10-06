@@ -741,7 +741,15 @@ function CostingTable({
   return (
     <Panel
       title="Dish costing"
-      explainer="What each plate costs to make: ingredients, packaging, gas. Best sellers first. Each figure saves when you leave the box."
+      explainer={
+        <>
+          What each plate costs to make: ingredients, packaging, gas. Best sellers first. Each figure saves when you
+          leave the box.{" "}
+          <a href="/admin/help#costing" className="font-semibold underline" style={{ color: "var(--s-brand)" }}>
+            How to cost a dish
+          </a>
+        </>
+      }
       action={
         <Chip tone={totalRevenue > 0 && covered / totalRevenue >= 0.9 ? "good" : "warn"}>
           {totalRevenue > 0 ? Math.round((covered / totalRevenue) * 100) : 0}% of sales costed

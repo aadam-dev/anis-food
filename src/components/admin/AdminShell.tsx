@@ -19,6 +19,7 @@ import {
   Store,
   Boxes,
   Coins,
+  BookOpen,
 } from "lucide-react";
 import type { UserRole } from "@/generated/prisma";
 import { canAccess, type Resource } from "@/lib/permissions";
@@ -68,6 +69,7 @@ const SECTIONS: { title: string; items: NavItem[] }[] = [
     items: [
       { href: "/admin/staff", label: "Staff", icon: Users, resource: "staff" },
       { href: "/admin/settings", label: "Settings", icon: Settings, resource: "settings" },
+      { href: "/admin/help", label: "Manual", icon: BookOpen, resource: "admin" },
     ],
   },
 ];

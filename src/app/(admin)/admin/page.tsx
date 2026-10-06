@@ -302,6 +302,9 @@ export default async function AdminOverviewPage({
             staff={current.payroll}
             expenses={spend}
           />
+          {current.profitKnown && current.netSales > 0 && (
+            <PrimeCost sales={current.netSales} food={current.cogs} staff={current.payroll} />
+          )}
           {!current.profitKnown && current.netSales > 0 && (
             <p className="mt-4 rounded-2xl px-3 py-2 text-xs" style={{ background: "var(--s-warn-soft)", color: "var(--s-warn)" }}>
               Food cost is unknown until dishes are costed, so &ldquo;left&rdquo; is not profit yet.
@@ -529,6 +532,28 @@ export default async function AdminOverviewPage({
         </Panel>
       </div>
     </>
+  );
+}
+
+/**
+ * Food plus staff as a share of sales: the number restaurant owners watch most.
+ * Under about 60–65% leaves room for rent, bills and profit.
+ */
+function PrimeCost({ sales, food, staff }: { sales: number; food: number; staff: number }) {
+  const share = ((food + staff) / sales) * 100;
+  const tone = share <= 60 ? "var(--s-good)" : share <= 65 ? "var(--s-warn)" : "var(--s-bad)";
+  return (
+    <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2 rounded-2xl px-3 py-2.5" style={{ background: "var(--s-sunk)" }}>
+      <span className="text-sm font-bold">
+        Prime cost <span className="font-medium" style={{ color: "var(--s-ink-muted)" }}>(food + staff)</span>
+      </span>
+      <span className="text-sm">
+        <span className="money font-extrabold" style={{ color: tone }}>
+          {Math.round(share)}%
+        </span>{" "}
+        <span style={{ color: "var(--s-ink-faint)" }}>of sales · aim for under 60–65%</span>
+      </span>
+    </div>
   );
 }
 
