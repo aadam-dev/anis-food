@@ -3,7 +3,6 @@ import { cache } from "react";
 import { prisma } from "@/lib/db";
 import { toMoney, roundMoney } from "@/lib/money";
 import { businessDay, businessDayRange, BUSINESS_TIMEZONE } from "@/lib/session-utils";
-import { currentSession } from "@/lib/pos-session";
 import { tillBooksReady } from "@/lib/till-books";
 import { addDays, daysIn, previousPeriod } from "@/lib/period";
 import { isBoltAwaiting, isRefund, isVoid, type MoneyCount } from "@/lib/x-report";
@@ -13,7 +12,6 @@ import {
   OrderStatus,
   PayrollStatus,
   CashMovementKind,
-  KitchenStatus,
 } from "@/generated/prisma";
 
 /**
@@ -50,10 +48,6 @@ function range(from: string, to: string) {
 /** Net of tax: the revenue a sale actually earned the business. */
 function netOf(order: { total: unknown; taxAmount: unknown }): number {
   return toMoney(order.total) - toMoney(order.taxAmount);
-}
-
-function sumNet(orders: { total: unknown; taxAmount: unknown }[]): number {
-  return roundMoney(orders.reduce((sum, order) => sum + netOf(order), 0));
 }
 
 function splitByMethod(
@@ -124,6 +118,12 @@ export interface Ledger {
   cogs: number;
   /** % of item sales that carry a cost price. Below 100 means COGS is partial. */
   cogsCoverage: number;
+  /** Part of `cogs` taken from today's menu cost because the sale itself was
+   *  rung before the dish was costed. A real cost, just not the one at the time. */
+  cogsFromMenu: number;
+  /** False until at least one sold dish has a cost. Profit and margin are
+   *  meaningless before then (they would read 100%), so screens show "—". */
+  profitKnown: boolean;
   grossProfit: number;
   grossMargin: number | null;
   expenses: {
@@ -169,7 +169,13 @@ export async function getLedger(from: string, to: string): Promise<Ledger> {
     }),
     prisma.orderItem.findMany({
       where: { order: { ...REVENUE_WHERE, createdAt: window } },
-      select: { name: true, quantity: true, lineTotal: true, unitCost: true },
+      select: {
+        name: true,
+        quantity: true,
+        lineTotal: true,
+        unitCost: true,
+        menuItem: { select: { costPrice: true } },
+      },
     }),
     prisma.expense.findMany({
       // incurredOn is a DATE column: compare against UTC midnights.
@@ -256,14 +262,21 @@ export async function getLedger(from: string, to: string): Promise<Ledger> {
   // the sales actually has a cost behind it, so a partial figure is never
   // mistaken for the whole picture.
   let cogs = 0;
+  let cogsFromMenu = 0;
   let coveredRevenue = 0;
   let itemRevenue = 0;
   const itemTotals = new Map<string, { quantity: number; revenue: number }>();
   for (const item of items) {
     const lineTotal = toMoney(item.lineTotal);
     itemRevenue += lineTotal;
-    if (item.unitCost !== null) {
-      cogs += toMoney(item.unitCost) * item.quantity;
+    // The cost snapshotted at the sale wins. A sale rung before the dish was
+    // costed falls back to the dish's cost now, so entering costs in Menu
+    // corrects profit for the past as well as the future.
+    const unitCost = item.unitCost ?? item.menuItem?.costPrice ?? null;
+    if (unitCost !== null) {
+      const lineCost = toMoney(unitCost) * item.quantity;
+      cogs += lineCost;
+      if (item.unitCost === null) cogsFromMenu += lineCost;
       coveredRevenue += lineTotal;
     }
     const existing = itemTotals.get(item.name) ?? { quantity: 0, revenue: 0 };
@@ -272,6 +285,7 @@ export async function getLedger(from: string, to: string): Promise<Ledger> {
     itemTotals.set(item.name, existing);
   }
   cogs = roundMoney(cogs);
+  cogsFromMenu = roundMoney(cogsFromMenu);
   const cogsCoverage = itemRevenue > 0 ? roundMoney((coveredRevenue / itemRevenue) * 100) : 0;
   const grossProfit = roundMoney(netSales - cogs);
 
@@ -331,6 +345,8 @@ export async function getLedger(from: string, to: string): Promise<Ledger> {
     averageTicket: orders.length ? roundMoney(netSales / orders.length) : 0,
     cogs,
     cogsCoverage,
+    cogsFromMenu,
+    profitKnown: coveredRevenue > 0,
     grossProfit,
     grossMargin: pct(grossProfit, netSales),
     expenses: {
@@ -373,191 +389,6 @@ export async function getLedgerWithComparison(from: string, to: string) {
   const prior = previousPeriod({ from, to });
   const [current, previous] = await Promise.all([getLedger(from, to), getLedger(prior.from, prior.to)]);
   return { current, previous };
-}
-
-// ---------------------------------------------------------------------------
-// Dashboard — "how is today going, and what needs me?"
-// ---------------------------------------------------------------------------
-
-export interface PeriodRevenue {
-  revenue: number;
-  orders: number;
-  /** Change against the same span of the prior week/month, as a fraction. */
-  delta: number | null;
-}
-
-export interface DashboardData {
-  booksReady: boolean;
-  /** Today's money, every way: net sales, margin, voids, deposits… */
-  today: Ledger;
-  /** Same weekday last week — restaurants are weekly-cyclical, so this is the
-   *  honest comparison, not yesterday. */
-  lastWeek: { revenue: number; orders: number };
-  weekToDate: PeriodRevenue;
-  monthToDate: PeriodRevenue;
-  openTickets: { count: number; value: number; oldestMinutes: number | null; stale: number };
-  kitchenQueue: number;
-  lowStock: { id: string; name: string; stock: number; unit: string }[];
-  lastClosedShift: { day: string; difference: number | null; closedBy: string | null } | null;
-  openShift: {
-    openedBy: string;
-    expectedCash: number;
-    expectedMomo: number | null;
-    since: string;
-    isStale: boolean;
-    businessDay: string;
-  } | null;
-  /** 14 days of net sales, each beside the same day two weeks earlier. */
-  trend: { day: string; revenue: number; previous: number; orders: number }[];
-}
-
-/** Minutes after which an unpaid ticket is flagged on the dashboard. */
-const STALE_TICKET_MINUTES = 30;
-
-export async function getDashboard(now = new Date()): Promise<DashboardData> {
-  const todayKey = businessDay(now);
-  const lastWeekKey = addDays(todayKey, -7);
-
-  // Week: Monday → today, against the same Monday → weekday span last week.
-  const weekday = (new Date(`${todayKey}T12:00:00Z`).getUTCDay() + 6) % 7;
-  const weekStart = addDays(todayKey, -weekday);
-  // Month: 1st → today, against the prior month through the same day (capped).
-  const monthStart = `${todayKey.slice(0, 7)}-01`;
-  const priorMonthEnd = addDays(monthStart, -1);
-  const priorMonthStart = `${priorMonthEnd.slice(0, 7)}-01`;
-  const priorMtdTo =
-    Number(todayKey.slice(8, 10)) <= Number(priorMonthEnd.slice(8, 10))
-      ? `${priorMonthEnd.slice(0, 7)}-${todayKey.slice(8, 10)}`
-      : priorMonthEnd;
-
-  const trendFrom = addDays(todayKey, -13);
-  const sales = { total: true, taxAmount: true } as const;
-
-  const [
-    today,
-    lastWeek,
-    week,
-    priorWeek,
-    month,
-    priorMonth,
-    trendOrders,
-    openTickets,
-    kitchenQueue,
-    inventory,
-    lastShift,
-  ] = await Promise.all([
-    getLedger(todayKey, todayKey),
-    prisma.order.findMany({ where: { ...REVENUE_WHERE, createdAt: range(lastWeekKey, lastWeekKey) }, select: sales }),
-    prisma.order.findMany({ where: { ...REVENUE_WHERE, createdAt: range(weekStart, todayKey) }, select: sales }),
-    prisma.order.findMany({
-      where: { ...REVENUE_WHERE, createdAt: range(addDays(weekStart, -7), lastWeekKey) },
-      select: sales,
-    }),
-    prisma.order.findMany({ where: { ...REVENUE_WHERE, createdAt: range(monthStart, todayKey) }, select: sales }),
-    prisma.order.findMany({
-      where: { ...REVENUE_WHERE, createdAt: range(priorMonthStart, priorMtdTo) },
-      select: sales,
-    }),
-    prisma.order.findMany({
-      where: { ...REVENUE_WHERE, createdAt: range(addDays(trendFrom, -14), todayKey) },
-      select: { ...sales, createdAt: true },
-    }),
-    prisma.order.findMany({
-      where: {
-        paymentStatus: PaymentStatus.PENDING,
-        status: { not: OrderStatus.CANCELLED },
-        paymentMethod: { not: PaymentMethod.BOLT_FOOD },
-        isDemo: false,
-      },
-      select: { total: true, createdAt: true },
-    }),
-    prisma.order.count({
-      where: {
-        isDemo: false,
-        status: { not: OrderStatus.CANCELLED },
-        kitchenStatus: { in: [KitchenStatus.QUEUED, KitchenStatus.COOKING] },
-        createdAt: range(todayKey, todayKey),
-      },
-    }),
-    prisma.inventoryItem.findMany({
-      where: { isActive: true },
-      select: { id: true, name: true, stock: true, unit: true, lowStock: true },
-    }),
-    prisma.posSession.findFirst({
-      where: { status: "CLOSED" },
-      orderBy: { closedAt: "desc" },
-      select: {
-        openedAt: true,
-        expectedCash: true,
-        closingCash: true,
-        closedBy: { select: { name: true } },
-      },
-    }),
-  ]);
-
-  const shift = today.booksReady ? await currentSession() : null;
-
-  const byDay = new Map<string, { revenue: number; orders: number }>();
-  for (const order of trendOrders) {
-    const day = businessDay(order.createdAt);
-    const bucket = byDay.get(day) ?? { revenue: 0, orders: 0 };
-    bucket.revenue = roundMoney(bucket.revenue + netOf(order));
-    bucket.orders += 1;
-    byDay.set(day, bucket);
-  }
-
-  const oldest = openTickets.reduce<Date | null>(
-    (min, ticket) => (!min || ticket.createdAt < min ? ticket.createdAt : min),
-    null,
-  );
-  const staleCutoff = now.getTime() - STALE_TICKET_MINUTES * 60_000;
-
-  const expected = lastShift?.expectedCash == null ? null : toMoney(lastShift.expectedCash);
-  const counted = lastShift?.closingCash == null ? null : toMoney(lastShift.closingCash);
-
-  const weekRevenue = sumNet(week);
-  const monthRevenue = sumNet(month);
-
-  return {
-    booksReady: today.booksReady,
-    today,
-    lastWeek: { revenue: sumNet(lastWeek), orders: lastWeek.length },
-    weekToDate: { revenue: weekRevenue, orders: week.length, delta: change(weekRevenue, sumNet(priorWeek)) },
-    monthToDate: { revenue: monthRevenue, orders: month.length, delta: change(monthRevenue, sumNet(priorMonth)) },
-    openTickets: {
-      count: openTickets.length,
-      value: roundMoney(openTickets.reduce((sum, ticket) => sum + toMoney(ticket.total), 0)),
-      oldestMinutes: oldest ? Math.floor((now.getTime() - oldest.getTime()) / 60_000) : null,
-      stale: openTickets.filter((ticket) => ticket.createdAt.getTime() < staleCutoff).length,
-    },
-    kitchenQueue,
-    lowStock: inventory
-      .filter((item) => Number(item.lowStock) > 0 && Number(item.stock) <= Number(item.lowStock))
-      .map((item) => ({ id: item.id, name: item.name, stock: Number(item.stock), unit: item.unit })),
-    lastClosedShift: lastShift
-      ? {
-          day: businessDay(lastShift.openedAt),
-          difference: expected === null || counted === null ? null : roundMoney(counted - expected),
-          closedBy: lastShift.closedBy?.name ?? null,
-        }
-      : null,
-    openShift: shift
-      ? {
-          openedBy: shift.openedBy.name,
-          expectedCash: shift.expectedCash,
-          expectedMomo: shift.expectedMomo,
-          since: shift.openedAt,
-          isStale: shift.isStale,
-          businessDay: shift.businessDay,
-        }
-      : null,
-    trend: daysIn(trendFrom, todayKey).map((day) => ({
-      day,
-      revenue: byDay.get(day)?.revenue ?? 0,
-      orders: byDay.get(day)?.orders ?? 0,
-      previous: byDay.get(addDays(day, -14))?.revenue ?? 0,
-    })),
-  };
 }
 
 // ---------------------------------------------------------------------------

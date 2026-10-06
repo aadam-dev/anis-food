@@ -132,11 +132,11 @@ function ProfitAndLoss({ ledger, previous, showTax }: { ledger: Ledger; previous
         />
         <Stat
           label="Gross margin"
-          value={ledger.grossMargin === null || ledger.cogsCoverage === 0 ? "—" : `${Math.round(ledger.grossMargin)}%`}
+          value={ledger.grossMargin === null || !ledger.profitKnown ? "—" : `${Math.round(ledger.grossMargin)}%`}
           icon={<Percent />}
           tint="accent"
           detail={
-            ledger.netSales > 0 && ledger.cogsCoverage === 0
+            ledger.netSales > 0 && !ledger.profitKnown
               ? "Add cost prices in Menu to see this"
               : `${money(ledger.grossProfit)} after ingredients`
           }
@@ -152,10 +152,16 @@ function ProfitAndLoss({ ledger, previous, showTax }: { ledger: Ledger; previous
         />
         <Stat
           label="Net profit"
-          value={money(ledger.netProfit)}
+          value={ledger.profitKnown ? money(ledger.netProfit) : "—"}
           icon={<Scale />}
-          tint={ledger.netProfit < 0 ? "bad" : "brand"}
-          detail={ledger.netMargin === null ? "No sales yet" : `${Math.round(ledger.netMargin)}% of net sales`}
+          tint={ledger.profitKnown && ledger.netProfit < 0 ? "bad" : "brand"}
+          detail={
+            ledger.netMargin === null
+              ? "No sales yet"
+              : !ledger.profitKnown
+                ? "Unknown until dishes are costed"
+                : `${Math.round(ledger.netMargin)}% of sales`
+          }
         />
       </div>
 
@@ -201,15 +207,15 @@ function ProfitAndLoss({ ledger, previous, showTax }: { ledger: Ledger; previous
                 )}
               </Term>
             }
-            value={minus(ledger.cogs)}
+            value={ledger.profitKnown ? minus(ledger.cogs) : "Not costed"}
             compare={minus(previous.cogs)}
           />
           <StatementRow
             strong
             border
             label={<Term name="grossProfit">Gross profit</Term>}
-            value={money(ledger.grossProfit)}
-            compare={money(previous.grossProfit)}
+            value={ledger.profitKnown ? money(ledger.grossProfit) : "—"}
+            compare={previous.profitKnown ? money(previous.grossProfit) : "—"}
           />
 
           <p
@@ -262,12 +268,22 @@ function ProfitAndLoss({ ledger, previous, showTax }: { ledger: Ledger; previous
             <StatementRow
               strong
               label={<Term name="netProfit">Net profit</Term>}
-              value={money(ledger.netProfit)}
-              compare={money(previous.netProfit)}
-              tone={ledger.netProfit < 0 ? "bad" : "good"}
+              value={ledger.profitKnown ? money(ledger.netProfit) : "—"}
+              compare={previous.profitKnown ? money(previous.netProfit) : "—"}
+              tone={!ledger.profitKnown ? undefined : ledger.netProfit < 0 ? "bad" : "good"}
             />
           </div>
           <p className="border-t px-4 py-3 text-xs sm:px-5" style={{ borderColor: "var(--s-border)", color: "var(--s-ink-faint)" }}>
+            {!ledger.profitKnown && ledger.netSales > 0 && (
+              <>
+                Profit shows once dishes have a cost price in{" "}
+                <a href="/admin/menu" className="font-semibold underline">
+                  Menu
+                </a>
+                .{" "}
+              </>
+            )}
+            {ledger.cogsFromMenu > 0 && "Sales rung before a dish was costed use its cost price today. "}
             Payroll counts on the day it was paid. Voids, refunds and discounts are already out of takings, so they are
             not deducted again.
           </p>

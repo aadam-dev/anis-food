@@ -7,6 +7,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  ComposedChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -270,6 +271,71 @@ export function ColumnChart({
             ))}
           </Bar>
         </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+/**
+ * This period against the last: the previous period as soft bars behind, the
+ * current one as a line on top. Null points (hours still ahead) leave a gap so
+ * the line stops at "now" instead of diving to zero.
+ */
+export function ComparisonChart({
+  data,
+  height = 230,
+  currentLabel,
+  previousLabel,
+}: {
+  data: { label: string; current: number | null; previous: number }[];
+  height?: number;
+  currentLabel: string;
+  previousLabel: string;
+}) {
+  return (
+    <div style={{ height }} className="w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={data} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+          <defs>
+            <linearGradient id="heroFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={BRAND} stopOpacity={0.25} />
+              <stop offset="100%" stopColor={BRAND} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid vertical={false} stroke={GRID} strokeDasharray="3 3" />
+          <XAxis dataKey="label" tick={{ fill: AXIS, fontSize: 11 }} axisLine={false} tickLine={false} minTickGap={16} />
+          <YAxis tickFormatter={compact} tick={{ fill: AXIS, fontSize: 11 }} axisLine={false} tickLine={false} width={44} />
+          <Tooltip
+            cursor={{ fill: "var(--s-hover)" }}
+            content={({ active, payload }) => {
+              if (!active || !payload?.length) return null;
+              const point = payload[0].payload as { label: string; current: number | null; previous: number };
+              return (
+                <TooltipCard
+                  title={point.label}
+                  rows={[
+                    ...(point.current !== null
+                      ? [{ label: currentLabel, value: formatGHS(point.current), color: BRAND }]
+                      : []),
+                    { label: previousLabel, value: formatGHS(point.previous), color: "var(--s-border-strong)" },
+                  ]}
+                />
+              );
+            }}
+          />
+          <Bar dataKey="previous" fill="var(--s-border)" radius={[6, 6, 0, 0]} maxBarSize={22} isAnimationActive={false} />
+          <Area
+            type="monotone"
+            dataKey="current"
+            stroke={BRAND}
+            strokeWidth={2.5}
+            fill="url(#heroFill)"
+            connectNulls={false}
+            dot={false}
+            activeDot={{ r: 4, fill: BRAND, stroke: "var(--s-panel)", strokeWidth: 2 }}
+            isAnimationActive={false}
+          />
+        </ComposedChart>
       </ResponsiveContainer>
     </div>
   );
