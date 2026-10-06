@@ -36,7 +36,11 @@ function bucket(): string {
  * Resizes, re-encodes and uploads an image. Returns its public URL.
  * Throws with a readable message the route can surface to the admin.
  */
-export async function uploadMenuImage(input: ArrayBuffer): Promise<UploadResult> {
+export async function uploadMenuImage(
+  input: ArrayBuffer,
+  /** Folder inside the bucket: menu photos in items/, expense receipts in receipts/. */
+  folder: "items" | "receipts" = "items",
+): Promise<UploadResult> {
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !serviceKey) {
@@ -60,7 +64,7 @@ export async function uploadMenuImage(input: ArrayBuffer): Promise<UploadResult>
   // the URL changes whenever the picture actually changes (so caches never serve
   // a stale photo under the same name).
   const hash = createHash("sha256").update(webp).digest("hex").slice(0, 16);
-  const path = `items/${hash}.webp`;
+  const path = `${folder}/${hash}.webp`;
 
   const endpoint = `${supabaseUrl}/storage/v1/object/${bucket()}/${path}`;
   const response = await fetch(endpoint, {

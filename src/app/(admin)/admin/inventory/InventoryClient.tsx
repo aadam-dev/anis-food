@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2, Loader2, AlertTriangle } from "lucide-react";
-import { PageHeader, Panel, AdminButton, Field, inputClass, inputStyle } from "@/components/admin/ui";
+import { PageHeader, Panel, AdminButton, Field, ConfirmDialog, inputClass, inputStyle } from "@/components/admin/ui";
 
 export interface InvRow {
   id: string;
@@ -23,9 +23,11 @@ export default function InventoryClient({ initialItems }: { initialItems: InvRow
   const [unit, setUnit] = useState("pcs");
   const [stock, setStock] = useState("0");
   const [low, setLow] = useState("0");
+  const [cost, setCost] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [qty, setQty] = useState<Record<string, string>>({});
+  const [removing, setRemoving] = useState<InvRow | null>(null);
 
   const lowCount = items.filter((i) => i.low && i.isActive).length;
 
@@ -42,6 +44,7 @@ export default function InventoryClient({ initialItems }: { initialItems: InvRow
           unit: unit.trim() || "unit",
           stock: Number(stock) || 0,
           lowStock: Number(low) || 0,
+          ...(cost.trim() !== "" && { costPerUnit: Number(cost) || 0 }),
         }),
       });
       const data = await res.json();
@@ -53,6 +56,7 @@ export default function InventoryClient({ initialItems }: { initialItems: InvRow
       setName("");
       setStock("0");
       setLow("0");
+      setCost("");
       router.refresh();
     } catch {
       setError("No connection. Try again.");
@@ -80,7 +84,7 @@ export default function InventoryClient({ initialItems }: { initialItems: InvRow
   }
 
   async function remove(item: InvRow) {
-    if (!confirm(`Remove ${item.name} and its stock history?`)) return;
+    setRemoving(null);
     const res = await fetch(`/api/admin/inventory/${item.id}`, { method: "DELETE" });
     if (!res.ok) return;
     setItems((list) => list.filter((x) => x.id !== item.id));
@@ -105,7 +109,7 @@ export default function InventoryClient({ initialItems }: { initialItems: InvRow
       )}
 
       <Panel title="Add a stock item" className="p-5 mb-4">
-        <div className="grid gap-3 sm:grid-cols-[1.5fr_0.8fr_0.8fr_0.8fr_auto] sm:items-end">
+        <div className="grid gap-3 sm:grid-cols-[1.5fr_0.8fr_0.8fr_0.8fr_0.9fr_auto] sm:items-end">
           <Field label="Name">
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Rice (bag)" className={inputClass} style={inputStyle} />
           </Field>
@@ -117,6 +121,9 @@ export default function InventoryClient({ initialItems }: { initialItems: InvRow
           </Field>
           <Field label="Low at">
             <input inputMode="decimal" value={low} onChange={(e) => setLow(e.target.value.replace(/[^\d.]/g, ""))} className={`${inputClass} money`} style={inputStyle} />
+          </Field>
+          <Field label="Cost / unit">
+            <input inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value.replace(/[^\d.]/g, ""))} placeholder="Optional" className={`${inputClass} money`} style={inputStyle} />
           </Field>
           <AdminButton variant="primary" onClick={add} disabled={busy || !name.trim()}>
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
@@ -172,7 +179,7 @@ export default function InventoryClient({ initialItems }: { initialItems: InvRow
                   <AdminButton onClick={() => move(item, "RECEIVE")}>Receive</AdminButton>
                   <AdminButton onClick={() => move(item, "COUNT")}>Set count</AdminButton>
                   <button
-                    onClick={() => remove(item)}
+                    onClick={() => setRemoving(item)}
                     aria-label={`Remove ${item.name}`}
                     className="h-9 w-9 grid place-items-center rounded-lg"
                     style={{ color: "var(--s-ink-faint)" }}
@@ -185,6 +192,15 @@ export default function InventoryClient({ initialItems }: { initialItems: InvRow
           </ul>
         )}
       </Panel>
+
+      <ConfirmDialog
+        open={removing !== null}
+        title={`Remove ${removing?.name ?? "this item"}?`}
+        message="Its stock level and full movement history will be deleted. This cannot be undone."
+        confirmLabel="Remove"
+        onConfirm={() => removing && remove(removing)}
+        onCancel={() => setRemoving(null)}
+      />
     </>
   );
 }

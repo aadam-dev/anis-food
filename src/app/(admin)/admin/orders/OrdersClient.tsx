@@ -80,25 +80,31 @@ function asOrderView(order: AdminOrder): OrderView {
 
 const VOID_REASONS = Object.entries(VOID_REASON_LABELS);
 
-type OrderFilter = "all" | "online" | "unpaid" | "paid" | "voided";
+export type OrderFilter = "all" | "online" | "unpaid" | "paid" | "voided";
 
 const FILTERS: { id: OrderFilter; label: string }[] = [
   { id: "all", label: "All" },
   { id: "online", label: "Online" },
   { id: "unpaid", label: "Unpaid" },
   { id: "paid", label: "Paid" },
-  { id: "voided", label: "Voided" },
+  { id: "voided", label: "Voided & refunded" },
 ];
 
 export default function OrdersClient({
   orders,
   cashiers,
-  day,
+  multiDay,
+  truncated,
+  initialFilter = "all",
   business,
 }: {
   orders: AdminOrder[];
   cashiers: { id: string; name: string }[];
-  day: string;
+  /** The list spans more than one day, so rows show the date too. */
+  multiDay: boolean;
+  /** The query hit its row limit; say so rather than imply this is everything. */
+  truncated: boolean;
+  initialFilter?: OrderFilter;
   business: {
     header: string;
     address: string;
@@ -115,7 +121,7 @@ export default function OrdersClient({
   const [slipKind, setSlipKind] = useState<"receipt" | "invoice">("receipt");
   const [correcting, setCorrecting] = useState<AdminOrder | null>(null);
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<OrderFilter>("all");
+  const [filter, setFilter] = useState<OrderFilter>(initialFilter);
   const [cashierId, setCashierId] = useState<string>("all");
 
   const active = orders.filter((order) => order.status !== "CANCELLED");
@@ -149,14 +155,6 @@ export default function OrdersClient({
     <>
       <div className="mb-4 flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <input
-            type="date"
-            value={day}
-            onChange={(event) => router.push(`/admin/orders?day=${event.target.value}`)}
-            className={`${inputClass} w-auto`}
-            style={inputStyle}
-            aria-label="Day"
-          />
           <select
             value={cashierId}
             onChange={(event) => setCashierId(event.target.value)}
@@ -173,6 +171,7 @@ export default function OrdersClient({
           </select>
           <Chip>{active.length} orders</Chip>
           <Chip tone="good">{formatGHS(total)}</Chip>
+          {truncated && <Chip tone="warn">Latest 500 only. Narrow the dates to see all.</Chip>}
         </div>
 
         <div className="relative">
@@ -215,7 +214,7 @@ export default function OrdersClient({
 
       <Panel>
         {orders.length === 0 ? (
-          <EmptyState title="No orders on this day" hint="Pick another date above." />
+          <EmptyState title="No orders here" hint="Try another period or filter above." />
         ) : visible.length === 0 ? (
           <EmptyState title="Nothing matches" hint="Try another search or filter." />
         ) : (
@@ -223,8 +222,9 @@ export default function OrdersClient({
             {visible.map((order) => {
               const voided = order.status === "CANCELLED";
               const isOpen = open === order.id;
-              const when = new Date(order.createdAt).toLocaleTimeString("en-GB", {
+              const when = new Date(order.createdAt).toLocaleString("en-GB", {
                 timeZone: "Africa/Accra",
+                ...(multiDay ? { day: "numeric", month: "short" } : {}),
                 hour: "2-digit",
                 minute: "2-digit",
               });

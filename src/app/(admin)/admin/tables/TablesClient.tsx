@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2, Loader2 } from "lucide-react";
-import { PageHeader, Panel, AdminButton, Field, inputClass, inputStyle } from "@/components/admin/ui";
+import { PageHeader, Panel, AdminButton, Field, ConfirmDialog, inputClass, inputStyle } from "@/components/admin/ui";
 
 export interface TableRow {
   id: string;
@@ -22,6 +22,7 @@ export default function TablesClient({ initialTables }: { initialTables: TableRo
   const [seats, setSeats] = useState("4");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<TableRow | null>(null);
 
   const zones = [...new Set(tables.map((t) => t.zone))];
 
@@ -61,11 +62,11 @@ export default function TablesClient({ initialTables }: { initialTables: TableRo
   }
 
   async function remove(row: TableRow) {
-    if (!confirm(`Remove ${row.label}? Past orders keep their record.`)) return;
+    setRemoving(null);
     const res = await fetch(`/api/admin/tables/${row.id}`, { method: "DELETE" });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      alert(data.error ?? "Could not remove the table.");
+      setError(data.error ?? "Could not remove the table.");
       return;
     }
     setTables((t) => t.filter((x) => x.id !== row.id));
@@ -140,7 +141,7 @@ export default function TablesClient({ initialTables }: { initialTables: TableRo
                       {row.isActive ? "Active" : "Hidden"}
                     </button>
                     <button
-                      onClick={() => remove(row)}
+                      onClick={() => setRemoving(row)}
                       aria-label={`Remove ${row.label}`}
                       className="h-9 w-9 grid place-items-center rounded-lg"
                       style={{ color: "var(--s-ink-faint)" }}
@@ -159,6 +160,14 @@ export default function TablesClient({ initialTables }: { initialTables: TableRo
           No tables yet. Add your first above.
         </p>
       )}
+      <ConfirmDialog
+        open={removing !== null}
+        title={`Remove ${removing?.label ?? "this table"}?`}
+        message="It disappears from the till floor. Past orders keep their record of it."
+        confirmLabel="Remove"
+        onConfirm={() => removing && remove(removing)}
+        onCancel={() => setRemoving(null)}
+      />
     </>
   );
 }

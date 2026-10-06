@@ -42,14 +42,9 @@ export default function PayrollClient({
   const router = useRouter();
   const [adding, setAdding] = useState(false);
 
-  const paidTotal = records
-    .filter((r) => r.status === "PAID")
-    .reduce((sum, r) => sum + r.netAmount, 0);
-
   return (
     <>
       <div className="mb-4 flex items-center gap-3">
-        <Chip tone="good">{formatGHS(paidTotal)} paid all-time</Chip>
         <AdminButton variant="primary" onClick={() => setAdding(true)} className="ml-auto">
           <Plus className="w-4 h-4" /> New payroll
         </AdminButton>
@@ -57,7 +52,7 @@ export default function PayrollClient({
 
       <Panel>
         {records.length === 0 ? (
-          <EmptyState title="No payroll yet" hint="Create one with the button above." />
+          <EmptyState title="No pay runs in this period" hint="Create one with the button above, or pick another period." />
         ) : (
           <ul className="divide-y" style={{ borderColor: "var(--s-border)" }}>
             {records.map((record) => (

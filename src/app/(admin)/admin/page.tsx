@@ -1,24 +1,44 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Clock, ReceiptText, Table2, TrendingUp, CalendarDays, CalendarRange } from "lucide-react";
-import { getDashboard } from "@/lib/reports";
-import { formatGHS } from "@/lib/money";
-import { callNumber } from "@/lib/session-utils";
-import { PageHeader, Panel, Chip, Stat } from "@/components/admin/ui";
-import { ORDER_SOURCE_LABELS, ORDER_STATUS_LABELS, PAYMENT_LABELS } from "@/components/admin/labels";
-import InstallPrompt from "@/components/pwa/InstallPrompt";
-import TrendBars from "@/components/admin/TrendBars";
+import {
+  AlertTriangle,
+  Boxes,
+  CalendarDays,
+  CalendarRange,
+  ChefHat,
+  ChevronRight,
+  CircleCheck,
+  Clock,
+  Coins,
+  ReceiptText,
+  TrendingUp,
+} from "lucide-react";
+import { getDashboard, change } from "@/lib/reports";
+import { formatGHS, toMoney } from "@/lib/money";
+import { callNumber, businessDay } from "@/lib/session-utils";
+import { formatRange } from "@/lib/period";
 import { prisma } from "@/lib/db";
 import { menuImage } from "@/lib/menu-image";
-import { toMoney } from "@/lib/money";
+import { PageHeader, Panel, PanelLink, Chip, Stat, ShareBar } from "@/components/admin/ui";
+import { DonutChart, SERIES, TrendChart } from "@/components/admin/charts";
+import { ORDER_SOURCE_LABELS, ORDER_STATUS_LABELS, PAYMENT_LABELS } from "@/components/admin/labels";
 
 export const metadata = { title: "Overview" };
 export const dynamic = "force-dynamic";
 
+interface Attention {
+  key: string;
+  tone: "bad" | "warn" | "neutral";
+  icon: React.ReactNode;
+  title: string;
+  detail: string;
+  href: string;
+}
+
 export default async function AdminOverviewPage() {
-  const [data, customers, tableTotal, occupied, recent] = await Promise.all([
-    getDashboard(),
-    prisma.customer.count(),
+  const now = new Date();
+  const [data, tableTotal, occupied, recent] = await Promise.all([
+    getDashboard(now),
     prisma.restaurantTable.count({ where: { isActive: true } }),
     prisma.order.count({
       where: {
@@ -42,31 +62,80 @@ export default async function AdminOverviewPage() {
     }),
   ]);
 
+  const { today } = data;
+  const todayKey = businessDay(now);
+  const weekdayName = new Date().toLocaleDateString("en-GB", { weekday: "long", timeZone: "Africa/Accra" });
+  const shift = data.openShift;
+
+  // ---- What needs a person, most urgent first ------------------------------
+  const attention: Attention[] = [];
+  if (shift?.isStale) {
+    attention.push({
+      key: "stale-shift",
+      tone: "bad",
+      icon: <AlertTriangle />,
+      title: "An old shift was never closed",
+      detail: `Opened by ${shift.openedBy} on ${shift.businessDay}. Close it at the till.`,
+      href: "/pos",
+    });
+  }
+  if (data.openTickets.stale > 0) {
+    attention.push({
+      key: "tickets",
+      tone: "warn",
+      icon: <Clock />,
+      title: `${data.openTickets.stale} unpaid ticket${data.openTickets.stale === 1 ? "" : "s"} over 30 min`,
+      detail: `${formatGHS(data.openTickets.value)} waiting across ${data.openTickets.count} open ticket${data.openTickets.count === 1 ? "" : "s"}.`,
+      href: "/admin/orders?status=open&period=today",
+    });
+  }
+  const lastDiff = data.lastClosedShift?.difference;
+  if (data.lastClosedShift && lastDiff !== null && lastDiff !== undefined && lastDiff !== 0) {
+    attention.push({
+      key: "variance",
+      tone: lastDiff < 0 ? "bad" : "warn",
+      icon: <Coins />,
+      title: `Last shift was ${lastDiff < 0 ? "short" : "over"} by ${formatGHS(Math.abs(lastDiff))}`,
+      detail: `${formatRange(data.lastClosedShift.day, data.lastClosedShift.day)}${
+        data.lastClosedShift.closedBy ? ` · closed by ${data.lastClosedShift.closedBy}` : ""
+      }`,
+      href: `/admin/cash-up?day=${data.lastClosedShift.day}`,
+    });
+  }
+  if (data.lowStock.length > 0) {
+    attention.push({
+      key: "stock",
+      tone: "warn",
+      icon: <Boxes />,
+      title: `${data.lowStock.length} stock item${data.lowStock.length === 1 ? "" : "s"} running low`,
+      detail: data.lowStock
+        .slice(0, 3)
+        .map((item) => item.name)
+        .join(", "),
+      href: "/admin/inventory",
+    });
+  }
+  if (today.boltAwaiting.count > 0) {
+    attention.push({
+      key: "bolt",
+      tone: "neutral",
+      icon: <ReceiptText />,
+      title: `${today.boltAwaiting.count} Bolt order${today.boltAwaiting.count === 1 ? "" : "s"} awaiting payout`,
+      detail: `${formatGHS(today.boltAwaiting.amount)} not in the drawer until Bolt pays.`,
+      href: "/admin/orders?period=today",
+    });
+  }
+
+  const paymentTotal = today.paymentMix.reduce((sum, row) => sum + row.amount, 0);
   const availableTables = Math.max(0, tableTotal - occupied);
-  const depositTotal = data.depositsToday.momo + data.depositsToday.bank;
-  const weekdayName = new Date().toLocaleDateString("en-GB", {
-    weekday: "long",
-    timeZone: "Africa/Accra",
-  });
-  const todayDetail =
-    data.revenueDelta === null
-      ? "No paid sales this weekday last week"
-      : `${data.revenueDelta > 0 ? "+" : ""}${data.revenueDelta}% vs last ${weekdayName}`;
-  const settledToday = data.today.orders;
-  const openWork = data.openTickets.count;
-  const settledDenom = settledToday + openWork;
-  const settledPct = settledDenom > 0 ? Math.round((settledToday / settledDenom) * 100) : 0;
 
   return (
     <>
       <PageHeader
-        title="Today's data"
-        description="Paid takings, the floor, and what still needs attention."
+        eyebrow={formatRange(todayKey, todayKey)}
+        title="Today"
+        description={`Paid sales against last ${weekdayName}, and anything that needs you.`}
       />
-
-      <div className="mb-4 max-w-xl">
-        <InstallPrompt />
-      </div>
 
       {!data.booksReady && (
         <p className="mb-4 text-sm" style={{ color: "var(--s-warn)" }}>
@@ -74,178 +143,206 @@ export default async function AdminOverviewPage() {
         </p>
       )}
 
-      {/* Row A — revenue strip */}
-      <div className="grid gap-3 md:grid-cols-3">
+      {/* ---- Headline numbers -------------------------------------------- */}
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <Stat
-          label="Revenue today"
-          value={formatGHS(data.today.revenue)}
-          detail={todayDetail}
+          label="Sales today"
+          value={formatGHS(today.netSales)}
+          delta={change(today.netSales, data.lastWeek.revenue)}
+          detail={`${formatGHS(data.lastWeek.revenue)} last ${weekdayName}`}
           tint="good"
-          icon={<TrendingUp className="h-5 w-5" />}
+          icon={<TrendingUp />}
+          href="/admin/reports?tab=sales&period=today"
+        />
+        <Stat
+          label="Paid orders"
+          value={today.orderCount}
+          delta={change(today.orderCount, data.lastWeek.orders)}
+          detail={today.orderCount ? `Avg ${formatGHS(today.averageTicket)}` : "None yet today"}
+          tint="accent"
+          icon={<ReceiptText />}
+          href="/admin/orders?period=today"
         />
         <Stat
           label="This week"
           value={formatGHS(data.weekToDate.revenue)}
-          detail={deltaLabel(data.weekToDate.delta, "prior week")}
+          delta={data.weekToDate.delta}
+          detail="Mon to today, vs the same days last week"
           tint="brand"
-          icon={<CalendarDays className="h-5 w-5" />}
+          icon={<CalendarDays />}
+          href="/admin/reports?tab=sales&period=week"
         />
         <Stat
           label="This month"
           value={formatGHS(data.monthToDate.revenue)}
-          detail={deltaLabel(data.monthToDate.delta, "prior month")}
-          tint="accent"
-          icon={<CalendarRange className="h-5 w-5" />}
+          delta={data.monthToDate.delta}
+          detail="To date, vs the same days last month"
+          tint="neutral"
+          icon={<CalendarRange />}
+          href="/admin/reports?period=month"
         />
       </div>
 
-      {/* Row B — operations, reference asymmetric */}
-      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_2.2fr]">
-        <MetricTile
-          icon={<Clock className="h-5 w-5" />}
-          tone="yellow"
-          label="Unpaid tickets"
-          value={data.openTickets.count}
-          detail={formatGHS(data.openTickets.value)}
-        />
-        <MetricTile
-          icon={<ReceiptText className="h-5 w-5" />}
-          tone="green"
-          label="Paid orders today"
-          value={data.today.orders}
-          detail={`Avg ${formatGHS(data.today.averageTicket)}`}
-        />
-        <MetricTile
-          icon={<Table2 className="h-5 w-5" />}
-          tone="orange"
-          label="Tables free"
-          value={`${availableTables}/${tableTotal}`}
-          detail={`${customers} customers on file`}
-        />
-        <Panel className="p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="font-bold">Settled today</p>
-              <p className="mt-1 text-xs" style={{ color: "var(--s-ink-faint)" }}>
-                Paid orders against unpaid tickets still open
+      {/* ---- Trend + attention ------------------------------------------- */}
+      <div className="mt-4 grid gap-4 xl:grid-cols-[1.6fr_1fr]">
+        <Panel
+          title="Last 14 days"
+          explainer="Sales each day. Dashed: the fortnight before."
+          action={<PanelLink href="/admin/reports?tab=sales&period=month">Sales report</PanelLink>}
+        >
+          <div className="px-2 pb-4 sm:px-3">
+            <TrendChart data={data.trend} currentLabel="Sales" previousLabel="2 weeks earlier" />
+          </div>
+        </Panel>
+
+        <Panel
+          title="Needs attention"
+          action={attention.length > 0 ? <Chip tone="warn">{attention.length}</Chip> : undefined}
+        >
+          {attention.length === 0 ? (
+            <div className="flex flex-col items-center px-5 pb-8 pt-2 text-center">
+              <span
+                className="mb-2 grid h-11 w-11 place-items-center rounded-2xl"
+                style={{ background: "var(--s-good-soft)", color: "var(--s-good)" }}
+              >
+                <CircleCheck className="h-5 w-5" />
+              </span>
+              <p className="font-bold">All clear</p>
+              <p className="mt-0.5 text-sm" style={{ color: "var(--s-ink-muted)" }}>
+                No stale tickets, cash differences or low stock.
               </p>
             </div>
-            <p className="money text-3xl font-extrabold">
-              {settledToday}
-              <span className="text-base font-medium" style={{ color: "var(--s-ink-faint)" }}>
-                /{settledDenom}
-              </span>
-            </p>
-          </div>
-          <div className="mt-5 flex justify-between text-[10px] font-bold" style={{ color: "var(--s-ink-faint)" }}>
-            <span>{settledPct}%</span>
-            <span>100%</span>
-          </div>
-          <div className="mt-1 h-3 overflow-hidden rounded-full" style={{ background: "var(--s-panel-alt)" }}>
-            <span
-              className="block h-full rounded-full"
-              style={{
-                width: `${settledPct}%`,
-                background: "linear-gradient(90deg, color-mix(in srgb, var(--s-warn) 70%, white), var(--s-brand))",
-              }}
+          ) : (
+            <ul className="px-2 pb-2">
+              {attention.map((item) => (
+                <li key={item.key}>
+                  <Link
+                    href={item.href}
+                    className="flex items-start gap-3 rounded-2xl px-3 py-2.5 transition-colors hover:bg-[var(--s-hover)]"
+                  >
+                    <span
+                      className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl [&>svg]:h-4 [&>svg]:w-4"
+                      style={{
+                        background:
+                          item.tone === "bad" ? "var(--s-bad-soft)" : item.tone === "warn" ? "var(--s-warn-soft)" : "var(--s-sunk)",
+                        color:
+                          item.tone === "bad" ? "var(--s-bad)" : item.tone === "warn" ? "var(--s-warn)" : "var(--s-ink-muted)",
+                      }}
+                    >
+                      {item.icon}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-bold">{item.title}</span>
+                      <span className="block truncate text-xs" style={{ color: "var(--s-ink-muted)" }}>
+                        {item.detail}
+                      </span>
+                    </span>
+                    <ChevronRight className="mt-2 h-4 w-4 shrink-0" style={{ color: "var(--s-ink-faint)" }} />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+      </div>
+
+      {/* ---- The till right now, payments, best sellers ------------------ */}
+      <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <Panel title="The till right now" action={<PanelLink href="/admin/cash-up?period=today">Cash-up</PanelLink>}>
+          <dl className="space-y-2.5 px-4 pb-5 text-sm sm:px-5">
+            <Line
+              label="Drawer should hold"
+              value={shift && !shift.isStale ? formatGHS(shift.expectedCash) : "—"}
+              hint={shift && !shift.isStale ? `Opened by ${shift.openedBy}` : "No shift open"}
+              strong
             />
+            <Line
+              label="MoMo should be"
+              value={
+                !shift || shift.isStale
+                  ? "—"
+                  : shift.expectedMomo === null
+                    ? "—"
+                    : formatGHS(shift.expectedMomo)
+              }
+              hint={shift && !shift.isStale && shift.expectedMomo === null ? "Opening MoMo not recorded" : undefined}
+            />
+            <Line label="Spent today" value={formatGHS(today.expenses.total + today.tillSpends.amount)} />
+            <Line
+              label="Deposited today"
+              value={formatGHS(today.deposits.momo + today.deposits.bank)}
+              hint="A transfer, not a cost"
+            />
+            <div className="grid grid-cols-3 gap-2 border-t pt-3" style={{ borderColor: "var(--s-border)" }}>
+              <MiniFigure label="Unpaid" value={String(data.openTickets.count)} href="/admin/orders?status=open&period=today" />
+              <MiniFigure label="In kitchen" value={String(data.kitchenQueue)} href="/pos/kitchen" icon={<ChefHat className="h-3.5 w-3.5" />} />
+              <MiniFigure label="Tables free" value={`${availableTables}/${tableTotal}`} href="/admin/tables" />
+            </div>
+          </dl>
+        </Panel>
+
+        <Panel title="How they paid" explainer="Paid sales today, by method">
+          <div className="flex flex-col items-center gap-4 px-4 pb-5 sm:flex-row sm:px-5">
+            <DonutChart
+              size={132}
+              data={today.paymentMix.map((row) => ({ label: PAYMENT_LABELS[row.method] ?? row.method, value: row.amount }))}
+              centerLabel="Taken"
+              centerValue={formatGHS(paymentTotal)}
+            />
+            {today.paymentMix.length === 0 ? (
+              <p className="text-sm" style={{ color: "var(--s-ink-faint)" }}>
+                No paid sales yet today.
+              </p>
+            ) : (
+              <ul className="w-full space-y-2 text-sm">
+                {today.paymentMix.map((row, index) => (
+                  <li key={row.method} className="flex items-center justify-between gap-3">
+                    <span className="flex items-center gap-2" style={{ color: "var(--s-ink-muted)" }}>
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ background: SERIES[index % SERIES.length] }} />
+                      {PAYMENT_LABELS[row.method] ?? row.method}
+                    </span>
+                    <span className="money font-semibold">{formatGHS(row.amount)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </Panel>
-      </div>
 
-      {/* Row C — books + mix */}
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat
-          label="Drawer should hold"
-          value={data.openShift ? formatGHS(data.openShift.expectedCash) : "—"}
-          detail={data.openShift ? `Opened by ${data.openShift.openedBy}` : "No shift open"}
-          tint="brand"
-        />
-        <Stat
-          label="MoMo should be"
-          value={
-            !data.openShift || data.openShift.expectedMomo === null
-              ? "—"
-              : formatGHS(data.openShift.expectedMomo)
-          }
-          detail={
-            !data.openShift
-              ? "No shift open"
-              : data.openShift.expectedMomo === null
-                ? "Opening MoMo was not recorded"
-                : "Includes cash deposited into MoMo"
-          }
-        />
-        <Stat
-          label="Expenses today"
-          value={formatGHS(data.expensesToday)}
-          detail="Real costs only"
-          tint="warn"
-        />
-        <Stat
-          label="Deposits today"
-          value={formatGHS(depositTotal)}
-          detail={`MoMo ${formatGHS(data.depositsToday.momo)} · Bank ${formatGHS(data.depositsToday.bank)}. Not a cost.`}
-        />
-      </div>
-
-      <div className="mt-4 grid gap-4 xl:grid-cols-[1.35fr_1fr]">
-        <Panel title="Last 14 days" explainer="Paid sales by business day" className="p-5">
-          <TrendBars data={data.last14Days} />
+        <Panel
+          className="md:col-span-2 xl:col-span-1"
+          title="Best sellers today"
+          action={<PanelLink href="/admin/reports?tab=sales&period=today">All items</PanelLink>}
+        >
+          {today.topItems.length === 0 ? (
+            <p className="px-5 pb-5 text-sm" style={{ color: "var(--s-ink-faint)" }}>
+              Dishes appear here once they sell.
+            </p>
+          ) : (
+            <div className="space-y-3 px-4 pb-5 sm:px-5">
+              {today.topItems.slice(0, 5).map((item) => (
+                <ShareBar
+                  key={item.name}
+                  label={item.name}
+                  sub={`× ${item.quantity}`}
+                  value={formatGHS(item.revenue)}
+                  share={item.revenue / (today.topItems[0]?.revenue || 1)}
+                  tone="accent"
+                />
+              ))}
+            </div>
+          )}
         </Panel>
-        <div className="space-y-4">
-          <Panel title="How they paid" explainer="Paid sales today" className="p-5">
-            {data.paymentMix.length === 0 ? (
-              <p className="text-sm" style={{ color: "var(--s-ink-faint)" }}>No paid sales yet today.</p>
-            ) : (
-              <ul className="space-y-2">
-                {data.paymentMix.map((entry) => (
-                  <li key={entry.method} className="flex justify-between text-sm">
-                    <span style={{ color: "var(--s-ink-muted)" }}>
-                      {PAYMENT_LABELS[entry.method] ?? entry.method}
-                    </span>
-                    <span className="money font-medium">{formatGHS(entry.amount)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Panel>
-          <Panel title="Not in today's takings" className="p-5">
-            <dl className="space-y-2.5 text-sm">
-              <Memo label="Voids" count={data.voids.count} amount={data.voids.amount} />
-              <Memo label="Refunds" count={data.refunds.count} amount={data.refunds.amount} />
-              <Memo
-                label="Bolt awaiting payout"
-                count={data.boltAwaiting.count}
-                amount={data.boltAwaiting.amount}
-              />
-            </dl>
-          </Panel>
-          <Panel title="Best sellers today" className="p-5">
-            {data.topItems.length === 0 ? (
-              <p className="text-sm" style={{ color: "var(--s-ink-faint)" }}>Dishes appear here once they sell.</p>
-            ) : (
-              <ul className="space-y-2">
-                {data.topItems.map((item) => (
-                  <li key={item.name} className="flex items-center justify-between gap-3 text-sm">
-                    <span className="min-w-0 truncate">
-                      <span className="money" style={{ color: "var(--s-ink-faint)" }}>
-                        {item.quantity}×
-                      </span>{" "}
-                      {item.name}
-                    </span>
-                    <span className="money font-medium">{formatGHS(item.revenue)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Panel>
-        </div>
       </div>
 
-      {/* Row D — recent orders */}
-      <div className="mt-4">
-        <Panel title="Recent orders" explainer="Latest tickets across the store" className="overflow-hidden">
+      {/* ---- Recent orders + what is not in takings ---------------------- */}
+      <div className="mt-4 grid gap-4 xl:grid-cols-[1.6fr_1fr]">
+        <Panel
+          title="Recent orders"
+          explainer="Latest tickets across the store"
+          action={<PanelLink href="/admin/orders?period=today">All orders</PanelLink>}
+          className="overflow-hidden"
+        >
           {recent.length === 0 ? (
             <p className="px-5 py-10 text-center text-sm" style={{ color: "var(--s-ink-faint)" }}>
               The latest orders will appear here.
@@ -268,9 +365,9 @@ export default async function AdminOverviewPage() {
                       ? ORDER_SOURCE_LABELS.WALK_IN
                       : "Counter");
                 return (
-                  <li key={order.id}>
+                  <li key={order.id} style={{ borderColor: "var(--s-border)" }}>
                     <Link
-                      href="/admin/orders"
+                      href="/admin/orders?period=today"
                       className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-[var(--s-hover)]"
                     >
                       <Image
@@ -284,7 +381,7 @@ export default async function AdminOverviewPage() {
                         <p className="truncate font-bold">{first?.name || "Order"}</p>
                         <p className="text-xs" style={{ color: "var(--s-ink-faint)" }}>
                           #{callNumber(order.orderNumber)} · {place} · {when}
-                          {more > 0 ? ` · +${more} more` : order._count.items === 1 ? " · 1 line" : ""}
+                          {more > 0 ? ` · +${more} more` : ""}
                         </p>
                       </div>
                       <div className="shrink-0 text-right">
@@ -292,6 +389,8 @@ export default async function AdminOverviewPage() {
                         <div className="mt-1 flex justify-end gap-1">
                           {order.paymentStatus === "PENDING" && order.status !== "CANCELLED" ? (
                             <Chip tone="warn">Unpaid</Chip>
+                          ) : order.paymentStatus === "REFUNDED" ? (
+                            <Chip tone="bad">Refunded</Chip>
                           ) : (
                             <Chip tone={order.status === "COMPLETED" ? "good" : order.status === "CANCELLED" ? "bad" : "neutral"}>
                               {ORDER_STATUS_LABELS[order.status] ?? order.status.toLowerCase()}
@@ -306,65 +405,49 @@ export default async function AdminOverviewPage() {
             </ul>
           )}
         </Panel>
+
+        <Panel
+          title="Not in today's sales"
+          explainer="Money that moved but is not revenue"
+          action={<PanelLink href="/admin/reports?tab=adjustments&period=today">Details</PanelLink>}
+        >
+          <dl className="space-y-2.5 px-4 pb-5 text-sm sm:px-5">
+            <Line label={`Voids · ${today.voids.count}`} value={formatGHS(today.voids.amount)} />
+            <Line label={`Refunds · ${today.refunds.count}`} value={formatGHS(today.refunds.amount)} />
+            <Line label={`Discounts · ${today.discountedOrders}`} value={formatGHS(today.discounts)} />
+            <Line label={`Bolt awaiting · ${today.boltAwaiting.count}`} value={formatGHS(today.boltAwaiting.amount)} />
+            {today.tax > 0 && <Line label="VAT & levies collected" value={formatGHS(today.tax)} hint="Held for GRA" />}
+          </dl>
+        </Panel>
       </div>
     </>
   );
 }
 
-function deltaLabel(delta: number | null, prior: string) {
-  if (delta === null) return `No paid sales in the ${prior}`;
-  return `${delta > 0 ? "+" : ""}${delta}% vs ${prior}`;
-}
-
-function Memo({ label, count, amount }: { label: string; count: number; amount: number }) {
+function Line({ label, value, hint, strong }: { label: string; value: string; hint?: string; strong?: boolean }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
-      <dt style={{ color: "var(--s-ink-muted)" }}>
+      <dt style={{ color: strong ? "var(--s-ink)" : "var(--s-ink-muted)" }} className={strong ? "font-bold" : undefined}>
         {label}
-        <span className="money"> · {count}</span>
+        {hint && (
+          <span className="block text-xs" style={{ color: "var(--s-ink-faint)" }}>
+            {hint}
+          </span>
+        )}
       </dt>
-      <dd className="money font-medium">{formatGHS(amount)}</dd>
+      <dd className={`money whitespace-nowrap ${strong ? "text-base font-extrabold" : "font-semibold"}`}>{value}</dd>
     </div>
   );
 }
 
-function MetricTile({
-  icon,
-  tone,
-  label,
-  value,
-  detail,
-}: {
-  icon: React.ReactNode;
-  tone: "yellow" | "green" | "orange";
-  label: string;
-  value: React.ReactNode;
-  detail?: string;
-}) {
-  const colors = {
-    yellow: "color-mix(in srgb, var(--s-warn) 35%, white)",
-    green: "color-mix(in srgb, var(--s-good) 28%, white)",
-    orange: "color-mix(in srgb, var(--s-brand) 22%, white)",
-  };
+function MiniFigure({ label, value, href, icon }: { label: string; value: string; href: string; icon?: React.ReactNode }) {
   return (
-    <Panel className="p-5">
-      <div className="flex items-center gap-3">
-        <span
-          className="grid h-11 w-11 place-items-center rounded-full [&>svg]:h-5 [&>svg]:w-5"
-          style={{ background: colors[tone], color: "var(--s-ink)" }}
-        >
-          {icon}
-        </span>
-        <p className="money text-3xl font-extrabold">{value}</p>
-      </div>
-      <p className="mt-4 text-xs font-medium" style={{ color: "var(--s-ink-muted)" }}>
+    <Link href={href} className="rounded-xl px-2 py-2 text-center hover:bg-[var(--s-hover)]">
+      <p className="money text-lg font-extrabold">{value}</p>
+      <p className="flex items-center justify-center gap-1 text-[11px]" style={{ color: "var(--s-ink-faint)" }}>
+        {icon}
         {label}
       </p>
-      {detail && (
-        <p className="mt-1 text-xs" style={{ color: "var(--s-ink-faint)" }}>
-          {detail}
-        </p>
-      )}
-    </Panel>
+    </Link>
   );
 }

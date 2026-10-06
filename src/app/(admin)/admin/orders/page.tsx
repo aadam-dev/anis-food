@@ -1,9 +1,23 @@
 import { prisma } from "@/lib/db";
 import { toMoney } from "@/lib/money";
-import { businessDay, businessDayRange } from "@/lib/session-utils";
 import { getSettings } from "@/lib/settings";
+import { resolvePeriod } from "@/lib/period";
+import { periodBounds } from "@/lib/reports";
 import { PageHeader } from "@/components/admin/ui";
-import OrdersClient, { type AdminOrder } from "./OrdersClient";
+import PeriodPicker from "@/components/admin/PeriodPicker";
+import OrdersClient, { type AdminOrder, type OrderFilter } from "./OrdersClient";
+
+/** The most orders one screen loads; the list says so when it is cut short. */
+const ORDER_LIMIT = 500;
+
+/** Links from the dashboard and reports preselect a filter with `?status=`. */
+const STATUS_FILTERS: Record<string, OrderFilter> = {
+  open: "unpaid",
+  unpaid: "unpaid",
+  paid: "paid",
+  voided: "voided",
+  online: "online",
+};
 
 export const metadata = { title: "Orders" };
 export const dynamic = "force-dynamic";
@@ -11,11 +25,12 @@ export const dynamic = "force-dynamic";
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ day?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const day = params.day && /^\d{4}-\d{2}-\d{2}$/.test(params.day) ? params.day : businessDay();
-  const { start, end } = businessDayRange(day);
+  const period = resolvePeriod(params, "today");
+  const { start, end } = periodBounds(period.from, period.to);
+  const status = Array.isArray(params.status) ? params.status[0] : params.status;
   const settings = await getSettings();
 
   const [orders, cashiers] = await Promise.all([
@@ -26,7 +41,7 @@ export default async function OrdersPage({
         items: { select: { id: true, name: true, quantity: true, unitPrice: true, lineTotal: true, notes: true } },
         staff: { select: { id: true, name: true } },
       },
-      take: 300,
+      take: ORDER_LIMIT,
     }),
     prisma.user.findMany({
       where: {
@@ -79,11 +94,19 @@ export default async function OrdersPage({
 
   return (
     <>
-      <PageHeader title="Orders" description="Till sales and online orders for the chosen day." />
+      <PageHeader
+        eyebrow={`Sales · ${period.label}`}
+        title="Orders"
+        description="Till sales and online orders. Tap one for its items, receipt and void."
+        actions={<PeriodPicker period={period} presets={["today", "yesterday", "week", "month"]} />}
+      />
       <OrdersClient
+        key={`${period.from}-${period.to}-${status ?? ""}`}
         orders={serialized}
         cashiers={cashiers}
-        day={day}
+        multiDay={period.from !== period.to}
+        truncated={orders.length === ORDER_LIMIT}
+        initialFilter={(status && STATUS_FILTERS[status]) || "all"}
         business={{
           header: settings.receipt_header,
           address: settings.business_address,

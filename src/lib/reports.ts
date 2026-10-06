@@ -1,9 +1,11 @@
 import "server-only";
+import { cache } from "react";
 import { prisma } from "@/lib/db";
 import { toMoney, roundMoney } from "@/lib/money";
-import { businessDay, businessDayRange } from "@/lib/session-utils";
+import { businessDay, businessDayRange, BUSINESS_TIMEZONE } from "@/lib/session-utils";
 import { currentSession } from "@/lib/pos-session";
 import { tillBooksReady } from "@/lib/till-books";
+import { addDays, daysIn, previousPeriod } from "@/lib/period";
 import { isBoltAwaiting, isRefund, isVoid, type MoneyCount } from "@/lib/x-report";
 import {
   PaymentMethod,
@@ -11,6 +13,7 @@ import {
   OrderStatus,
   PayrollStatus,
   CashMovementKind,
+  KitchenStatus,
 } from "@/generated/prisma";
 
 /**
@@ -21,6 +24,10 @@ import {
  * the drawer can never tell two different stories. Demo orders and voided orders
  * are excluded from revenue everywhere; that rule lives in the `where` clauses
  * below and nowhere else.
+ *
+ * Revenue means NET sales: what customers paid minus the VAT and levies inside
+ * it. Tax is held for GRA, not income, so it sits on its own line and never
+ * inflates profit once the tax engine is switched on.
  */
 
 /** Orders that count as real revenue: completed, paid, not a void, not a demo. */
@@ -29,6 +36,25 @@ const REVENUE_WHERE = {
   paymentStatus: PaymentStatus.PAID,
   status: { not: OrderStatus.CANCELLED },
 } as const;
+
+/** Instants spanning inclusive business days `from`..`to`. */
+export function periodBounds(from: string, to: string): { start: Date; end: Date } {
+  return { start: businessDayRange(from).start, end: businessDayRange(to).end };
+}
+
+function range(from: string, to: string) {
+  const { start, end } = periodBounds(from, to);
+  return { gte: start, lt: end };
+}
+
+/** Net of tax: the revenue a sale actually earned the business. */
+function netOf(order: { total: unknown; taxAmount: unknown }): number {
+  return toMoney(order.total) - toMoney(order.taxAmount);
+}
+
+function sumNet(orders: { total: unknown; taxAmount: unknown }[]): number {
+  return roundMoney(orders.reduce((sum, order) => sum + netOf(order), 0));
+}
 
 function splitByMethod(
   orders: { paymentMethod: PaymentMethod; total: unknown; splitPayments: unknown }[],
@@ -50,313 +76,6 @@ function splitByMethod(
   return byMethod;
 }
 
-// ---------------------------------------------------------------------------
-// Dashboard — "how is today going?"
-// ---------------------------------------------------------------------------
-
-export interface PeriodRevenue {
-  revenue: number;
-  orders: number;
-  delta: number | null;
-}
-
-export interface DashboardData {
-  booksReady: boolean;
-  today: { revenue: number; orders: number; averageTicket: number };
-  /** Same weekday last week — restaurants are weekly-cyclical, so this is the
-   *  honest comparison, not yesterday. */
-  lastWeek: { revenue: number; orders: number };
-  revenueDelta: number | null;
-  weekToDate: PeriodRevenue;
-  monthToDate: PeriodRevenue;
-  paymentMix: { method: string; amount: number }[];
-  openTickets: { count: number; value: number; oldestMinutes: number | null };
-  boltAwaiting: MoneyCount;
-  voids: MoneyCount;
-  refunds: MoneyCount;
-  expensesToday: number;
-  depositsToday: { momo: number; bank: number };
-  openShift: {
-    openedBy: string;
-    expectedCash: number;
-    expectedMomo: number | null;
-    since: string;
-  } | null;
-  last14Days: { day: string; revenue: number }[];
-  topItems: { name: string; quantity: number; revenue: number }[];
-}
-
-/** Monday of the Accra business week that contains `day` (YYYY-MM-DD). */
-function weekStartDay(day: string): string {
-  const [year, month, date] = day.split("-").map(Number);
-  const noon = new Date(Date.UTC(year, month - 1, date, 12));
-  const weekday = noon.getUTCDay(); // 0 Sun … 6 Sat
-  const mondayOffset = weekday === 0 ? -6 : 1 - weekday;
-  noon.setUTCDate(noon.getUTCDate() + mondayOffset);
-  return noon.toISOString().slice(0, 10);
-}
-
-function addDays(day: string, days: number): string {
-  const [year, month, date] = day.split("-").map(Number);
-  const noon = new Date(Date.UTC(year, month - 1, date, 12));
-  noon.setUTCDate(noon.getUTCDate() + days);
-  return noon.toISOString().slice(0, 10);
-}
-
-function periodDelta(current: number, previous: number): number | null {
-  if (previous <= 0) return null;
-  return roundMoney(((current - previous) / previous) * 100);
-}
-
-export async function getDashboard(now = new Date()): Promise<DashboardData> {
-  const todayKey = businessDay(now);
-  const today = businessDayRange(todayKey);
-
-  const lastWeekDate = new Date(now);
-  lastWeekDate.setDate(lastWeekDate.getDate() - 7);
-  const lastWeek = businessDayRange(businessDay(lastWeekDate));
-
-  const fortnightAgo = new Date(now);
-  fortnightAgo.setDate(fortnightAgo.getDate() - 13);
-
-  const weekStart = weekStartDay(todayKey);
-  const weekEndExclusive = addDays(todayKey, 1);
-  const priorWeekStart = addDays(weekStart, -7);
-  // Same Mon→weekday span last week, not the whole prior calendar week.
-  const priorWeekEndExclusive = addDays(todayKey, -6);
-  const monthKey = todayKey.slice(0, 7);
-  const [year, month] = monthKey.split("-").map(Number);
-  const priorMonthKey =
-    month === 1 ? `${year - 1}-12` : `${year}-${String(month - 1).padStart(2, "0")}`;
-  const monthBounds = monthRange(monthKey);
-  const priorMonthBounds = monthRange(priorMonthKey);
-  // Month-to-date ends at the start of tomorrow, not the end of the calendar month.
-  const monthToDateEnd = today.end;
-  // Prior month through the same calendar day (capped to that month's last day).
-  const dayOfMonth = Number(todayKey.slice(8, 10));
-  const priorMonthLastDay = Number(
-    new Date(Date.UTC(year, month === 1 ? 0 : month - 1, 0)).toISOString().slice(8, 10),
-  );
-  const priorMtdDay = Math.min(dayOfMonth, priorMonthLastDay);
-  const priorMonthToDateEnd = businessDayRange(
-    `${priorMonthKey}-${String(priorMtdDay).padStart(2, "0")}`,
-  ).end;
-
-  const books = await tillBooksReady();
-
-  const [
-    todayOrders,
-    lastWeekOrders,
-    openTickets,
-    trendOrders,
-    todayItems,
-    boltOrders,
-    adjustments,
-    todayExpenses,
-    todayDeposits,
-    shift,
-    weekOrders,
-    priorWeekOrders,
-    monthOrders,
-    priorMonthOrders,
-  ] = await Promise.all([
-      prisma.order.findMany({
-        where: { ...REVENUE_WHERE, createdAt: { gte: today.start, lt: today.end } },
-        select: { paymentMethod: true, total: true, splitPayments: true },
-      }),
-      prisma.order.findMany({
-        where: { ...REVENUE_WHERE, createdAt: { gte: lastWeek.start, lt: lastWeek.end } },
-        select: { total: true },
-      }),
-      prisma.order.findMany({
-        where: {
-          paymentStatus: PaymentStatus.PENDING,
-          status: { not: OrderStatus.CANCELLED },
-          paymentMethod: { not: PaymentMethod.BOLT_FOOD },
-          isDemo: false,
-        },
-        select: { total: true, createdAt: true },
-      }),
-      prisma.order.findMany({
-        where: { ...REVENUE_WHERE, createdAt: { gte: businessDayRange(businessDay(fortnightAgo)).start } },
-        select: { total: true, createdAt: true },
-      }),
-      prisma.orderItem.findMany({
-        where: {
-          order: { ...REVENUE_WHERE, createdAt: { gte: today.start, lt: today.end } },
-        },
-        select: { name: true, quantity: true, lineTotal: true },
-      }),
-      prisma.order.findMany({
-        where: {
-          isDemo: false,
-          paymentMethod: PaymentMethod.BOLT_FOOD,
-          paymentStatus: PaymentStatus.PENDING,
-          status: { not: OrderStatus.CANCELLED },
-        },
-        select: { total: true, paymentMethod: true, paymentStatus: true, status: true },
-      }),
-      prisma.order.findMany({
-        where: {
-          isDemo: false,
-          updatedAt: { gte: today.start, lt: today.end },
-          OR: [{ status: OrderStatus.CANCELLED }, { paymentStatus: PaymentStatus.REFUNDED }],
-        },
-        select: { total: true, paymentMethod: true, paymentStatus: true, status: true },
-      }),
-      prisma.expense.findMany({
-        where: { incurredOn: { gte: today.start, lt: today.end } },
-        select: { amount: true },
-      }),
-      books.ok
-        ? prisma.cashMovement.findMany({
-            where: { kind: CashMovementKind.DEPOSIT, createdAt: { gte: today.start, lt: today.end } },
-            select: { amount: true, destination: true },
-          })
-        : Promise.resolve([]),
-      books.ok ? currentSession() : Promise.resolve(null),
-      prisma.order.findMany({
-        where: {
-          ...REVENUE_WHERE,
-          createdAt: { gte: businessDayRange(weekStart).start, lt: businessDayRange(weekEndExclusive).start },
-        },
-        select: { total: true },
-      }),
-      prisma.order.findMany({
-        where: {
-          ...REVENUE_WHERE,
-          createdAt: {
-            gte: businessDayRange(priorWeekStart).start,
-            lt: businessDayRange(priorWeekEndExclusive).start,
-          },
-        },
-        select: { total: true },
-      }),
-      prisma.order.findMany({
-        where: { ...REVENUE_WHERE, createdAt: { gte: monthBounds.start, lt: monthToDateEnd } },
-        select: { total: true },
-      }),
-      prisma.order.findMany({
-        where: {
-          ...REVENUE_WHERE,
-          createdAt: { gte: priorMonthBounds.start, lt: priorMonthToDateEnd },
-        },
-        select: { total: true },
-      }),
-    ]);
-
-  const todayRevenue = roundMoney(
-    todayOrders.reduce((sum, order) => sum + toMoney(order.total), 0),
-  );
-  const lastWeekRevenue = roundMoney(
-    lastWeekOrders.reduce((sum, order) => sum + toMoney(order.total), 0),
-  );
-  const weekRevenue = roundMoney(weekOrders.reduce((sum, order) => sum + toMoney(order.total), 0));
-  const priorWeekRevenue = roundMoney(
-    priorWeekOrders.reduce((sum, order) => sum + toMoney(order.total), 0),
-  );
-  const monthRevenue = roundMoney(monthOrders.reduce((sum, order) => sum + toMoney(order.total), 0));
-  const priorMonthRevenue = roundMoney(
-    priorMonthOrders.reduce((sum, order) => sum + toMoney(order.total), 0),
-  );
-
-  const paymentMix = Object.entries(splitByMethod(todayOrders))
-    .map(([method, amount]) => ({ method, amount }))
-    .sort((a, b) => b.amount - a.amount);
-
-  const oldestTicket = openTickets.reduce<Date | null>(
-    (oldest, ticket) => (!oldest || ticket.createdAt < oldest ? ticket.createdAt : oldest),
-    null,
-  );
-
-  // Bucket the 14-day trend by business day.
-  const trendByDay = new Map<string, number>();
-  for (const order of trendOrders) {
-    const day = businessDay(order.createdAt);
-    trendByDay.set(day, roundMoney((trendByDay.get(day) ?? 0) + toMoney(order.total)));
-  }
-  const last14Days: { day: string; revenue: number }[] = [];
-  for (let i = 13; i >= 0; i--) {
-    const date = new Date(now);
-    date.setDate(date.getDate() - i);
-    const key = businessDay(date);
-    last14Days.push({ day: key, revenue: trendByDay.get(key) ?? 0 });
-  }
-
-  // Top sellers today.
-  const itemTotals = new Map<string, { quantity: number; revenue: number }>();
-  for (const item of todayItems) {
-    const existing = itemTotals.get(item.name) ?? { quantity: 0, revenue: 0 };
-    existing.quantity += item.quantity;
-    existing.revenue = roundMoney(existing.revenue + toMoney(item.lineTotal));
-    itemTotals.set(item.name, existing);
-  }
-  const topItems = [...itemTotals.entries()]
-    .map(([name, totals]) => ({ name, ...totals }))
-    .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, 5);
-
-  return {
-    today: {
-      revenue: todayRevenue,
-      orders: todayOrders.length,
-      averageTicket: todayOrders.length
-        ? roundMoney(todayRevenue / todayOrders.length)
-        : 0,
-    },
-    lastWeek: { revenue: lastWeekRevenue, orders: lastWeekOrders.length },
-    revenueDelta:
-      lastWeekRevenue > 0
-        ? roundMoney(((todayRevenue - lastWeekRevenue) / lastWeekRevenue) * 100)
-        : null,
-    weekToDate: {
-      revenue: weekRevenue,
-      orders: weekOrders.length,
-      delta: periodDelta(weekRevenue, priorWeekRevenue),
-    },
-    monthToDate: {
-      revenue: monthRevenue,
-      orders: monthOrders.length,
-      delta: periodDelta(monthRevenue, priorMonthRevenue),
-    },
-    paymentMix,
-    openTickets: {
-      count: openTickets.length,
-      value: roundMoney(openTickets.reduce((sum, t) => sum + toMoney(t.total), 0)),
-      oldestMinutes: oldestTicket
-        ? Math.floor((now.getTime() - oldestTicket.getTime()) / 60000)
-        : null,
-    },
-    boltAwaiting: countOrders(boltOrders.filter(isBoltAwaiting)),
-    voids: countOrders(adjustments.filter(isVoid)),
-    refunds: countOrders(adjustments.filter(isRefund)),
-    expensesToday: roundMoney(todayExpenses.reduce((sum, expense) => sum + toMoney(expense.amount), 0)),
-    depositsToday: {
-      momo: roundMoney(
-        todayDeposits
-          .filter((row) => row.destination === "MOMO")
-          .reduce((sum, row) => sum + toMoney(row.amount), 0),
-      ),
-      bank: roundMoney(
-        todayDeposits
-          .filter((row) => row.destination === "BANK")
-          .reduce((sum, row) => sum + toMoney(row.amount), 0),
-      ),
-    },
-    openShift: shift
-      ? {
-          openedBy: shift.openedBy.name,
-          expectedCash: shift.expectedCash,
-          expectedMomo: shift.expectedMomo,
-          since: shift.openedAt,
-        }
-      : null,
-    last14Days,
-    topItems,
-    booksReady: books.ok,
-  };
-}
-
 function countOrders(orders: { total: unknown }[]): MoneyCount {
   return {
     count: orders.length,
@@ -364,68 +83,117 @@ function countOrders(orders: { total: unknown }[]): MoneyCount {
   };
 }
 
+/** Relative change as a fraction (0.12 = +12%). Null when there is no base. */
+export function change(current: number, previous: number): number | null {
+  return previous > 0 ? (current - previous) / previous : null;
+}
+
+function pct(part: number, whole: number): number | null {
+  return whole > 0 ? roundMoney((part / whole) * 100) : null;
+}
+
+/** One books check per request, however many ledgers a page asks for — the
+ *  check can spawn the migrator, which is far too slow to repeat. */
+const booksReady = cache(tillBooksReady);
+
+const hourFormatter = new Intl.DateTimeFormat("en-GB", {
+  timeZone: BUSINESS_TIMEZONE,
+  hour: "2-digit",
+  hourCycle: "h23",
+});
+
 // ---------------------------------------------------------------------------
-// Monthly report — P&L, daily sales, payment breakdown, top items
+// The ledger — one period's money, every way the back office slices it
 // ---------------------------------------------------------------------------
 
-export interface MonthlyReport {
-  month: string; // YYYY-MM
-  revenue: number;
+export interface Ledger {
+  from: string;
+  to: string;
+  booksReady: boolean;
+  orderCount: number;
+  /** What customers handed over for paid sales: Σ order totals, tax included. */
+  takings: number;
+  /** VAT + levies inside those takings. Owed to GRA, not income. */
+  tax: number;
+  /** Takings minus tax — the revenue line of the P&L. */
+  netSales: number;
+  /** Discounts given at the till (already off takings). */
+  discounts: number;
+  discountedOrders: number;
+  averageTicket: number;
   cogs: number;
-  cogsCoverage: number; // % of revenue whose items carry a cost price
+  /** % of item sales that carry a cost price. Below 100 means COGS is partial. */
+  cogsCoverage: number;
   grossProfit: number;
   grossMargin: number | null;
-  expenses: number;
+  expenses: {
+    total: number;
+    fixed: number;
+    variable: number;
+    count: number;
+    byCategory: { category: string; amount: number; isFixed: boolean }[];
+  };
+  /** Cash spent from the drawer with no expense behind it (from before spends
+   *  had to be filed). Counted as a cost so it cannot fall out of the books. */
+  tillSpends: MoneyCount;
   payroll: number;
+  /** Expenses + unfiled till spends + payroll. */
+  overheads: number;
   netProfit: number;
-  orderCount: number;
-  dailySales: { day: string; revenue: number; orders: number }[];
-  paymentBreakdown: { method: string; amount: number }[];
-  topItems: { name: string; quantity: number; revenue: number }[];
-  expensesByCategory: { category: string; amount: number }[];
+  netMargin: number | null;
   voids: MoneyCount;
-  refunds: MoneyCount;
+  refunds: MoneyCount & { byReason: { reason: string; count: number; amount: number }[] };
   deposits: { momo: number; bank: number };
   boltAwaiting: MoneyCount;
+  paymentMix: { method: string; amount: number }[];
+  daily: { day: string; revenue: number; orders: number }[];
+  hourly: { hour: number; revenue: number; orders: number }[];
+  topItems: { name: string; quantity: number; revenue: number }[];
 }
 
-function monthRange(month: string): { start: Date; end: Date } {
-  const [year, m] = month.split("-").map(Number);
-  const firstDay = `${month}-01`;
-  const start = businessDayRange(firstDay).start;
-  const nextMonth = m === 12 ? `${year + 1}-01-01` : `${year}-${String(m + 1).padStart(2, "0")}-01`;
-  const end = businessDayRange(nextMonth).start;
-  return { start, end };
-}
+export async function getLedger(from: string, to: string): Promise<Ledger> {
+  const window = range(from, to);
+  const books = await booksReady();
 
-export async function getMonthlyReport(month: string): Promise<MonthlyReport> {
-  const { start, end } = monthRange(month);
-  const books = await tillBooksReady();
-
-  const [orders, items, expenses, payroll, adjustments, boltOrders, depositRows] = await Promise.all([
+  const [orders, items, expenses, payroll, adjustments, boltOrders, movements] = await Promise.all([
     prisma.order.findMany({
-      where: { ...REVENUE_WHERE, createdAt: { gte: start, lt: end } },
-      select: { paymentMethod: true, total: true, splitPayments: true, createdAt: true },
+      where: { ...REVENUE_WHERE, createdAt: window },
+      select: {
+        paymentMethod: true,
+        total: true,
+        taxAmount: true,
+        discountAmount: true,
+        splitPayments: true,
+        createdAt: true,
+      },
     }),
     prisma.orderItem.findMany({
-      where: { order: { ...REVENUE_WHERE, createdAt: { gte: start, lt: end } } },
+      where: { order: { ...REVENUE_WHERE, createdAt: window } },
       select: { name: true, quantity: true, lineTotal: true, unitCost: true },
     }),
     prisma.expense.findMany({
-      where: { incurredOn: { gte: start, lt: end } },
-      select: { amount: true, category: { select: { name: true } } },
+      // incurredOn is a DATE column: compare against UTC midnights.
+      where: {
+        incurredOn: {
+          gte: new Date(`${from}T00:00:00Z`),
+          lt: new Date(`${addDays(to, 1)}T00:00:00Z`),
+        },
+      },
+      select: { amount: true, category: { select: { name: true, isFixed: true } } },
     }),
     prisma.payrollRecord.findMany({
-      where: { status: PayrollStatus.PAID, periodStart: { gte: start, lt: end } },
+      // Counted when the money left, not by the period it was for — otherwise
+      // August's wages paid on 2 September land in the wrong month's cash.
+      where: { status: PayrollStatus.PAID, paidAt: window },
       select: { netAmount: true },
     }),
     prisma.order.findMany({
       where: {
         isDemo: false,
-        updatedAt: { gte: start, lt: end },
+        updatedAt: window,
         OR: [{ status: OrderStatus.CANCELLED }, { paymentStatus: PaymentStatus.REFUNDED }],
       },
-      select: { total: true, paymentMethod: true, paymentStatus: true, status: true },
+      select: { total: true, paymentMethod: true, paymentStatus: true, status: true, voidReason: true },
     }),
     prisma.order.findMany({
       where: {
@@ -433,127 +201,367 @@ export async function getMonthlyReport(month: string): Promise<MonthlyReport> {
         paymentMethod: PaymentMethod.BOLT_FOOD,
         paymentStatus: PaymentStatus.PENDING,
         status: { not: OrderStatus.CANCELLED },
-        createdAt: { gte: start, lt: end },
+        createdAt: window,
       },
       select: { total: true, paymentMethod: true, paymentStatus: true, status: true },
     }),
     books.ok
       ? prisma.cashMovement.findMany({
-          where: { kind: CashMovementKind.DEPOSIT, createdAt: { gte: start, lt: end } },
-          select: { amount: true, destination: true },
+          where: {
+            createdAt: window,
+            OR: [
+              { kind: CashMovementKind.DEPOSIT },
+              { kind: CashMovementKind.SPEND, expenseId: null },
+            ],
+          },
+          select: { amount: true, kind: true, destination: true },
         })
       : Promise.resolve([]),
   ]);
 
-  const revenue = roundMoney(orders.reduce((sum, o) => sum + toMoney(o.total), 0));
+  // ---- Sales --------------------------------------------------------------
+  let takings = 0;
+  let tax = 0;
+  let discounts = 0;
+  let discountedOrders = 0;
+  const dailyMap = new Map<string, { revenue: number; orders: number }>();
+  const hourly = Array.from({ length: 24 }, (_, hour) => ({ hour, revenue: 0, orders: 0 }));
 
-  // COGS from the cost snapshot on each line. Coverage tells the reader how much
-  // of the revenue actually has a cost behind it, so a partial figure is never
+  for (const order of orders) {
+    takings += toMoney(order.total);
+    tax += toMoney(order.taxAmount);
+    const discount = toMoney(order.discountAmount);
+    if (discount > 0) {
+      discounts += discount;
+      discountedOrders += 1;
+    }
+    const net = netOf(order);
+    const day = businessDay(order.createdAt);
+    const bucket = dailyMap.get(day) ?? { revenue: 0, orders: 0 };
+    bucket.revenue = roundMoney(bucket.revenue + net);
+    bucket.orders += 1;
+    dailyMap.set(day, bucket);
+
+    const hour = Number(hourFormatter.format(order.createdAt)) % 24;
+    hourly[hour].revenue = roundMoney(hourly[hour].revenue + net);
+    hourly[hour].orders += 1;
+  }
+  takings = roundMoney(takings);
+  tax = roundMoney(tax);
+  discounts = roundMoney(discounts);
+  const netSales = roundMoney(takings - tax);
+
+  // ---- Cost of items ------------------------------------------------------
+  // From the cost snapshot on each line. Coverage tells the reader how much of
+  // the sales actually has a cost behind it, so a partial figure is never
   // mistaken for the whole picture.
   let cogs = 0;
   let coveredRevenue = 0;
-  for (const item of items) {
-    if (item.unitCost !== null) {
-      cogs = roundMoney(cogs + toMoney(item.unitCost) * item.quantity);
-      coveredRevenue = roundMoney(coveredRevenue + toMoney(item.lineTotal));
-    }
-  }
-  const totalItemRevenue = roundMoney(items.reduce((s, i) => s + toMoney(i.lineTotal), 0));
-  const cogsCoverage = totalItemRevenue > 0
-    ? roundMoney((coveredRevenue / totalItemRevenue) * 100)
-    : 0;
-
-  const grossProfit = roundMoney(revenue - cogs);
-  const totalExpenses = roundMoney(expenses.reduce((s, e) => s + toMoney(e.amount), 0));
-  const totalPayroll = roundMoney(payroll.reduce((s, p) => s + toMoney(p.netAmount), 0));
-  const netProfit = roundMoney(grossProfit - totalExpenses - totalPayroll);
-
-  // Daily buckets across the whole month.
-  const dailyMap = new Map<string, { revenue: number; orders: number }>();
-  for (const order of orders) {
-    const day = businessDay(order.createdAt);
-    const existing = dailyMap.get(day) ?? { revenue: 0, orders: 0 };
-    existing.revenue = roundMoney(existing.revenue + toMoney(order.total));
-    existing.orders += 1;
-    dailyMap.set(day, existing);
-  }
-  const dailySales = [...dailyMap.entries()]
-    .map(([day, v]) => ({ day, ...v }))
-    .sort((a, b) => a.day.localeCompare(b.day));
-
+  let itemRevenue = 0;
   const itemTotals = new Map<string, { quantity: number; revenue: number }>();
   for (const item of items) {
+    const lineTotal = toMoney(item.lineTotal);
+    itemRevenue += lineTotal;
+    if (item.unitCost !== null) {
+      cogs += toMoney(item.unitCost) * item.quantity;
+      coveredRevenue += lineTotal;
+    }
     const existing = itemTotals.get(item.name) ?? { quantity: 0, revenue: 0 };
     existing.quantity += item.quantity;
-    existing.revenue = roundMoney(existing.revenue + toMoney(item.lineTotal));
+    existing.revenue = roundMoney(existing.revenue + lineTotal);
     itemTotals.set(item.name, existing);
   }
+  cogs = roundMoney(cogs);
+  const cogsCoverage = itemRevenue > 0 ? roundMoney((coveredRevenue / itemRevenue) * 100) : 0;
+  const grossProfit = roundMoney(netSales - cogs);
 
-  const expenseTotals = new Map<string, number>();
+  // ---- Overheads ----------------------------------------------------------
+  const categoryTotals = new Map<string, { amount: number; isFixed: boolean }>();
+  let fixed = 0;
+  let variable = 0;
   for (const expense of expenses) {
-    const name = expense.category.name;
-    expenseTotals.set(name, roundMoney((expenseTotals.get(name) ?? 0) + toMoney(expense.amount)));
+    const amount = toMoney(expense.amount);
+    if (expense.category.isFixed) fixed += amount;
+    else variable += amount;
+    const existing = categoryTotals.get(expense.category.name) ?? {
+      amount: 0,
+      isFixed: expense.category.isFixed,
+    };
+    existing.amount = roundMoney(existing.amount + amount);
+    categoryTotals.set(expense.category.name, existing);
   }
+  fixed = roundMoney(fixed);
+  variable = roundMoney(variable);
+  const expenseTotal = roundMoney(fixed + variable);
+
+  const spendRows = movements.filter((row) => row.kind === CashMovementKind.SPEND);
+  const depositRows = movements.filter((row) => row.kind === CashMovementKind.DEPOSIT);
+  const tillSpends = countOrders(spendRows.map((row) => ({ total: row.amount })));
+  const payrollTotal = roundMoney(payroll.reduce((sum, row) => sum + toMoney(row.netAmount), 0));
+  const overheads = roundMoney(expenseTotal + tillSpends.amount + payrollTotal);
+  const netProfit = roundMoney(grossProfit - overheads);
+
+  // ---- Voids, refunds, transfers -------------------------------------------
+  const refunded = adjustments.filter(isRefund);
+  const reasonTotals = new Map<string, { count: number; amount: number }>();
+  for (const row of refunded) {
+    const reason = row.voidReason ?? "OTHER";
+    const existing = reasonTotals.get(reason) ?? { count: 0, amount: 0 };
+    existing.count += 1;
+    existing.amount = roundMoney(existing.amount + toMoney(row.total));
+    reasonTotals.set(reason, existing);
+  }
+  const depositTo = (destination: string) =>
+    roundMoney(
+      depositRows
+        .filter((row) => row.destination === destination)
+        .reduce((sum, row) => sum + toMoney(row.amount), 0),
+    );
 
   return {
-    month,
-    revenue,
+    from,
+    to,
+    booksReady: books.ok,
+    orderCount: orders.length,
+    takings,
+    tax,
+    netSales,
+    discounts,
+    discountedOrders,
+    averageTicket: orders.length ? roundMoney(netSales / orders.length) : 0,
     cogs,
     cogsCoverage,
     grossProfit,
-    grossMargin: revenue > 0 ? roundMoney((grossProfit / revenue) * 100) : null,
-    expenses: totalExpenses,
-    payroll: totalPayroll,
+    grossMargin: pct(grossProfit, netSales),
+    expenses: {
+      total: expenseTotal,
+      fixed,
+      variable,
+      count: expenses.length,
+      byCategory: [...categoryTotals.entries()]
+        .map(([category, totals]) => ({ category, ...totals }))
+        .sort((a, b) => b.amount - a.amount),
+    },
+    tillSpends,
+    payroll: payrollTotal,
+    overheads,
     netProfit,
-    orderCount: orders.length,
-    dailySales,
-    paymentBreakdown: Object.entries(splitByMethod(orders))
+    netMargin: pct(netProfit, netSales),
+    voids: countOrders(adjustments.filter(isVoid)),
+    refunds: {
+      ...countOrders(refunded),
+      byReason: [...reasonTotals.entries()]
+        .map(([reason, totals]) => ({ reason, ...totals }))
+        .sort((a, b) => b.amount - a.amount),
+    },
+    deposits: { momo: depositTo("MOMO"), bank: depositTo("BANK") },
+    boltAwaiting: countOrders(boltOrders.filter(isBoltAwaiting)),
+    paymentMix: Object.entries(splitByMethod(orders))
       .map(([method, amount]) => ({ method, amount }))
       .sort((a, b) => b.amount - a.amount),
+    daily: daysIn(from, to).map((day) => ({ day, ...(dailyMap.get(day) ?? { revenue: 0, orders: 0 }) })),
+    hourly,
     topItems: [...itemTotals.entries()]
       .map(([name, totals]) => ({ name, ...totals }))
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 15),
-    expensesByCategory: [...expenseTotals.entries()]
-      .map(([category, amount]) => ({ category, amount }))
-      .sort((a, b) => b.amount - a.amount),
-    voids: countOrders(adjustments.filter(isVoid)),
-    refunds: countOrders(adjustments.filter(isRefund)),
-    deposits: {
-      momo: roundMoney(
-        depositRows.filter((row) => row.destination === "MOMO").reduce((sum, row) => sum + toMoney(row.amount), 0),
-      ),
-      bank: roundMoney(
-        depositRows.filter((row) => row.destination === "BANK").reduce((sum, row) => sum + toMoney(row.amount), 0),
-      ),
-    },
-    boltAwaiting: countOrders(boltOrders.filter(isBoltAwaiting)),
   };
 }
 
-/** The months that actually have orders, newest first, for the report picker. */
-export async function getReportableMonths(): Promise<string[]> {
-  const first = await prisma.order.findFirst({
-    where: REVENUE_WHERE,
-    orderBy: { createdAt: "asc" },
-    select: { createdAt: true },
-  });
-
-  const months = new Set<string>();
-  months.add(businessDay(new Date()).slice(0, 7));
-  if (first) {
-    const cursor = new Date(first.createdAt);
-    const now = new Date();
-    while (cursor <= now) {
-      months.add(businessDay(cursor).slice(0, 7));
-      cursor.setMonth(cursor.getMonth() + 1);
-    }
-  }
-  return [...months].sort().reverse();
+/** A period's ledger next to the same-length period immediately before it. */
+export async function getLedgerWithComparison(from: string, to: string) {
+  const prior = previousPeriod({ from, to });
+  const [current, previous] = await Promise.all([getLedger(from, to), getLedger(prior.from, prior.to)]);
+  return { current, previous };
 }
 
 // ---------------------------------------------------------------------------
-// VAT return — "what tax did we collect this month?"
+// Dashboard — "how is today going, and what needs me?"
+// ---------------------------------------------------------------------------
+
+export interface PeriodRevenue {
+  revenue: number;
+  orders: number;
+  /** Change against the same span of the prior week/month, as a fraction. */
+  delta: number | null;
+}
+
+export interface DashboardData {
+  booksReady: boolean;
+  /** Today's money, every way: net sales, margin, voids, deposits… */
+  today: Ledger;
+  /** Same weekday last week — restaurants are weekly-cyclical, so this is the
+   *  honest comparison, not yesterday. */
+  lastWeek: { revenue: number; orders: number };
+  weekToDate: PeriodRevenue;
+  monthToDate: PeriodRevenue;
+  openTickets: { count: number; value: number; oldestMinutes: number | null; stale: number };
+  kitchenQueue: number;
+  lowStock: { id: string; name: string; stock: number; unit: string }[];
+  lastClosedShift: { day: string; difference: number | null; closedBy: string | null } | null;
+  openShift: {
+    openedBy: string;
+    expectedCash: number;
+    expectedMomo: number | null;
+    since: string;
+    isStale: boolean;
+    businessDay: string;
+  } | null;
+  /** 14 days of net sales, each beside the same day two weeks earlier. */
+  trend: { day: string; revenue: number; previous: number; orders: number }[];
+}
+
+/** Minutes after which an unpaid ticket is flagged on the dashboard. */
+const STALE_TICKET_MINUTES = 30;
+
+export async function getDashboard(now = new Date()): Promise<DashboardData> {
+  const todayKey = businessDay(now);
+  const lastWeekKey = addDays(todayKey, -7);
+
+  // Week: Monday → today, against the same Monday → weekday span last week.
+  const weekday = (new Date(`${todayKey}T12:00:00Z`).getUTCDay() + 6) % 7;
+  const weekStart = addDays(todayKey, -weekday);
+  // Month: 1st → today, against the prior month through the same day (capped).
+  const monthStart = `${todayKey.slice(0, 7)}-01`;
+  const priorMonthEnd = addDays(monthStart, -1);
+  const priorMonthStart = `${priorMonthEnd.slice(0, 7)}-01`;
+  const priorMtdTo =
+    Number(todayKey.slice(8, 10)) <= Number(priorMonthEnd.slice(8, 10))
+      ? `${priorMonthEnd.slice(0, 7)}-${todayKey.slice(8, 10)}`
+      : priorMonthEnd;
+
+  const trendFrom = addDays(todayKey, -13);
+  const sales = { total: true, taxAmount: true } as const;
+
+  const [
+    today,
+    lastWeek,
+    week,
+    priorWeek,
+    month,
+    priorMonth,
+    trendOrders,
+    openTickets,
+    kitchenQueue,
+    inventory,
+    lastShift,
+  ] = await Promise.all([
+    getLedger(todayKey, todayKey),
+    prisma.order.findMany({ where: { ...REVENUE_WHERE, createdAt: range(lastWeekKey, lastWeekKey) }, select: sales }),
+    prisma.order.findMany({ where: { ...REVENUE_WHERE, createdAt: range(weekStart, todayKey) }, select: sales }),
+    prisma.order.findMany({
+      where: { ...REVENUE_WHERE, createdAt: range(addDays(weekStart, -7), lastWeekKey) },
+      select: sales,
+    }),
+    prisma.order.findMany({ where: { ...REVENUE_WHERE, createdAt: range(monthStart, todayKey) }, select: sales }),
+    prisma.order.findMany({
+      where: { ...REVENUE_WHERE, createdAt: range(priorMonthStart, priorMtdTo) },
+      select: sales,
+    }),
+    prisma.order.findMany({
+      where: { ...REVENUE_WHERE, createdAt: range(addDays(trendFrom, -14), todayKey) },
+      select: { ...sales, createdAt: true },
+    }),
+    prisma.order.findMany({
+      where: {
+        paymentStatus: PaymentStatus.PENDING,
+        status: { not: OrderStatus.CANCELLED },
+        paymentMethod: { not: PaymentMethod.BOLT_FOOD },
+        isDemo: false,
+      },
+      select: { total: true, createdAt: true },
+    }),
+    prisma.order.count({
+      where: {
+        isDemo: false,
+        status: { not: OrderStatus.CANCELLED },
+        kitchenStatus: { in: [KitchenStatus.QUEUED, KitchenStatus.COOKING] },
+        createdAt: range(todayKey, todayKey),
+      },
+    }),
+    prisma.inventoryItem.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, stock: true, unit: true, lowStock: true },
+    }),
+    prisma.posSession.findFirst({
+      where: { status: "CLOSED" },
+      orderBy: { closedAt: "desc" },
+      select: {
+        openedAt: true,
+        expectedCash: true,
+        closingCash: true,
+        closedBy: { select: { name: true } },
+      },
+    }),
+  ]);
+
+  const shift = today.booksReady ? await currentSession() : null;
+
+  const byDay = new Map<string, { revenue: number; orders: number }>();
+  for (const order of trendOrders) {
+    const day = businessDay(order.createdAt);
+    const bucket = byDay.get(day) ?? { revenue: 0, orders: 0 };
+    bucket.revenue = roundMoney(bucket.revenue + netOf(order));
+    bucket.orders += 1;
+    byDay.set(day, bucket);
+  }
+
+  const oldest = openTickets.reduce<Date | null>(
+    (min, ticket) => (!min || ticket.createdAt < min ? ticket.createdAt : min),
+    null,
+  );
+  const staleCutoff = now.getTime() - STALE_TICKET_MINUTES * 60_000;
+
+  const expected = lastShift?.expectedCash == null ? null : toMoney(lastShift.expectedCash);
+  const counted = lastShift?.closingCash == null ? null : toMoney(lastShift.closingCash);
+
+  const weekRevenue = sumNet(week);
+  const monthRevenue = sumNet(month);
+
+  return {
+    booksReady: today.booksReady,
+    today,
+    lastWeek: { revenue: sumNet(lastWeek), orders: lastWeek.length },
+    weekToDate: { revenue: weekRevenue, orders: week.length, delta: change(weekRevenue, sumNet(priorWeek)) },
+    monthToDate: { revenue: monthRevenue, orders: month.length, delta: change(monthRevenue, sumNet(priorMonth)) },
+    openTickets: {
+      count: openTickets.length,
+      value: roundMoney(openTickets.reduce((sum, ticket) => sum + toMoney(ticket.total), 0)),
+      oldestMinutes: oldest ? Math.floor((now.getTime() - oldest.getTime()) / 60_000) : null,
+      stale: openTickets.filter((ticket) => ticket.createdAt.getTime() < staleCutoff).length,
+    },
+    kitchenQueue,
+    lowStock: inventory
+      .filter((item) => Number(item.lowStock) > 0 && Number(item.stock) <= Number(item.lowStock))
+      .map((item) => ({ id: item.id, name: item.name, stock: Number(item.stock), unit: item.unit })),
+    lastClosedShift: lastShift
+      ? {
+          day: businessDay(lastShift.openedAt),
+          difference: expected === null || counted === null ? null : roundMoney(counted - expected),
+          closedBy: lastShift.closedBy?.name ?? null,
+        }
+      : null,
+    openShift: shift
+      ? {
+          openedBy: shift.openedBy.name,
+          expectedCash: shift.expectedCash,
+          expectedMomo: shift.expectedMomo,
+          since: shift.openedAt,
+          isStale: shift.isStale,
+          businessDay: shift.businessDay,
+        }
+      : null,
+    trend: daysIn(trendFrom, todayKey).map((day) => ({
+      day,
+      revenue: byDay.get(day)?.revenue ?? 0,
+      orders: byDay.get(day)?.orders ?? 0,
+      previous: byDay.get(addDays(day, -14))?.revenue ?? 0,
+    })),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// VAT return — "what tax did we collect?"
 // ---------------------------------------------------------------------------
 
 export interface VatReturn {
@@ -577,18 +585,16 @@ interface TaxSnapshotShape {
 }
 
 /**
- * Aggregates the VAT + levies actually charged over a month, straight from the
+ * Aggregates the VAT + levies actually charged over a period, straight from the
  * receipt snapshots — so the return reflects what customers were charged, not a
  * rate re-applied after the fact. Empty (active:false) whenever tax was off,
  * which is the default until Anis's VAT status is confirmed.
  */
-export async function getVatReturn(month: string): Promise<VatReturn> {
-  const { start, end } = monthRange(month);
-
+export async function getVatReturn(from: string, to: string): Promise<VatReturn> {
   const orders = await prisma.order.findMany({
     where: {
       ...REVENUE_WHERE,
-      createdAt: { gte: start, lt: end },
+      createdAt: range(from, to),
       taxAmount: { gt: 0 },
     },
     select: { taxAmount: true, transactionSnapshot: true },
