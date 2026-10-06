@@ -27,9 +27,9 @@ interface SeedUser {
 const USERS: SeedUser[] = [
   { email: "karim@anis.com", name: "Karim", role: UserRole.OWNER, pin: "5820" },
   {
-    email: "manage@anis.com",
+    email: "radiya@anis.com",
     name: "Radiya Alhassan",
-    role: UserRole.OWNER,
+    role: UserRole.MANAGER,
     pin: "9053",
   },
   { email: "it@anis.com", name: "IT Administrator", role: UserRole.SUPER_ADMIN, pin: "1642" },
@@ -52,7 +52,7 @@ const USERS: SeedUser[] = [
 ];
 
 /** Legacy placeholder cashiers — keep rows but take them off the till. */
-const DEACTIVATE_EMAILS = ["cashier1@anis.com", "cashier2@anis.com"];
+const DEACTIVATE_EMAILS = ["cashier1@anis.com", "cashier2@anis.com", "manage@anis.com"];
 
 const EXPENSE_CATEGORIES: { name: string; isFixed: boolean }[] = [
   { name: "Ingredients & Provisions", isFixed: false },

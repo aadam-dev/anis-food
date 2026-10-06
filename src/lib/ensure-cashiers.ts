@@ -13,7 +13,7 @@ import { hashPassword, hashPin } from "@/lib/auth/password";
 
 const SEED_PASSWORD = process.env.SEED_PASSWORD || "anis1234";
 /** Bump when a managed PIN or account in STAFF changes. */
-const STAFF_PINS_VERSION = "2026-10-06-radiya-manage";
+const STAFF_PINS_VERSION = "2026-10-06-radiya-manager";
 const STAFF_PINS_SETTING = "staff_pins_version";
 
 const STAFF: {
@@ -25,11 +25,10 @@ const STAFF: {
   salaryType?: SalaryType;
 }[] = [
   { email: "karim@anis.com", name: "Karim", role: UserRole.OWNER, pin: "5820" },
-  // Same owner-level admin as Karim. Login name is "manage" → manage@anis.com.
   {
-    email: "manage@anis.com",
+    email: "radiya@anis.com",
     name: "Radiya Alhassan",
-    role: UserRole.OWNER,
+    role: UserRole.MANAGER,
     pin: "9053",
   },
   { email: "it@anis.com", name: "IT Administrator", role: UserRole.SUPER_ADMIN, pin: "1642" },
@@ -51,7 +50,7 @@ const STAFF: {
   },
 ];
 
-const LEGACY = ["cashier1@anis.com", "cashier2@anis.com"];
+const LEGACY = ["cashier1@anis.com", "cashier2@anis.com", "manage@anis.com"];
 
 let started: Promise<void> | null = null;
 
