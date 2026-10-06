@@ -6,6 +6,7 @@ describe("staff avatar helpers", () => {
   it("builds two-letter initials from a full name", () => {
     assert.equal(staffInitials("Maxwell Kaku"), "MK");
     assert.equal(staffInitials("Maudallia Tetteh"), "MT");
+    assert.equal(staffInitials("Radiya Alhassan"), "RA");
   });
 
   it("picks a stable tint for the same name", () => {
@@ -29,5 +30,6 @@ describe("staff avatar helpers", () => {
   it("matches the first name key used at sign-in", () => {
     assert.equal(firstNameKey("Maxwell Kaku"), "maxwell");
     assert.equal(firstNameKey("  Maudallia  Tetteh "), "maudallia");
+    assert.equal(firstNameKey("Radiya Alhassan"), "radiya");
   });
 });
