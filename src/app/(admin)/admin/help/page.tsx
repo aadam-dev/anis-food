@@ -18,9 +18,13 @@ const SECTIONS = [
   { id: "dashboard", title: "Reading the dashboard" },
   { id: "sizes", title: "Dishes and sizes" },
   { id: "costing", title: "Costing a dish by hand" },
+  { id: "staff", title: "Staff and logins" },
   { id: "payroll", title: "Running payroll" },
   { id: "expenses", title: "Expenses and deposits" },
+  { id: "accounts", title: "Where the money is" },
   { id: "cash-up", title: "Cash-up and shift reports" },
+  { id: "exports", title: "Exporting to Excel" },
+  { id: "audit", title: "The audit trail" },
   { id: "month-end", title: "Month-end checklist" },
   { id: "words", title: "What the words mean" },
 ];
@@ -353,12 +357,32 @@ export default function ManualPage() {
             </Tip>
           </Section>
 
-          <Section id="payroll" n={8} title="Running payroll">
+          <Section id="staff" n={8} title="Staff and logins">
+            <p>
+              <b>Staff</b> are the people who work at Anis: cooks, servers, riders, cashiers. <b>Users</b> are logins
+              to the till and back office. They are kept apart on purpose: a cook may never sign in, and the IT login
+              is not a member of staff.
+            </p>
+            <ul className="mt-3 list-disc space-y-1.5 pl-5">
+              <li>
+                Manage → <b>Staff</b>: add each person with a photo, job, phone and pay. Tap someone to edit them. When
+                they leave, untick <i>Works here now</i>; their payslips stay on record.
+              </li>
+              <li>
+                Manage → <b>Users</b> (owner and IT only): create a login for anyone who uses the till, then link it to
+                their staff record (<i>Till login</i> on the staff form). Daily pay then picks up the days the till saw
+                them working.
+              </li>
+              <li>Pay details are only visible to the people who run payroll.</li>
+            </ul>
+          </Section>
+
+          <Section id="payroll" n={9} title="Running payroll">
             <Steps
               items={[
                 <>
-                  <b>Set pay rates once.</b> Payroll → <i>Pay rates</i>. For each person choose monthly, daily or
-                  hourly, the rate, and their MoMo number or bank account.
+                  <b>Set pay rates once.</b> On each person&apos;s Staff record, or Payroll → <i>Pay rates</i>. Choose
+                  monthly, daily or hourly, the rate, and their MoMo number or bank account.
                 </>,
                 <>
                   <b>Run payroll at month end.</b> Payroll → <i>Run payroll</i>. Everyone with a rate is listed.
@@ -366,25 +390,44 @@ export default function ManualPage() {
                 </>,
                 <>
                   <b>Add bonuses and deductions.</b> Use <i>Other deductions</i> for advances being repaid or
-                  shortages. Tick <i>Deduct SSNIT</i> only for staff registered with SSNIT: it takes 5.5% of basic pay
-                  from the wage. The business owes a further 13% to SSNIT itself.
+                  shortages. SSNIT is off for now. When the business registers staff, switch it on in Settings →
+                  Payroll and tick <i>SSNIT</i> on each registered person: payroll then takes 5.5% of their basic pay,
+                  and the business owes a further 13% to SSNIT itself.
                 </>,
                 <>
                   <b>Create drafts, then check them.</b> Drafts can still be edited or deleted.
                 </>,
                 <>
-                  <b>Approve</b> once checked, then <b>Mark paid</b> when the money has actually gone out. Only paid
-                  wages count against profit, on the day they were paid.
+                  <b>Approve</b> once checked, then <b>Mark paid</b> when the money has actually gone out, and say
+                  where it came from: <i>Cash (safe)</i> (the default), <i>MoMo</i>, <i>Bank transfer</i> or{" "}
+                  <i>From the till</i>. That account&apos;s balance goes down by the wage. Only paid wages count
+                  against profit, on the day they were paid.
                 </>,
                 <>
-                  <b>Print a payslip</b> for each person and have them sign it.
+                  <b>Print a payslip</b> for each person and have them sign it. It shows where the money came from.
                 </>,
               ]}
             />
+            <h3 className="mt-5 font-extrabold">Paying wages: what works best</h3>
+            <ul className="mt-1 list-disc space-y-1.5 pl-5">
+              <li>
+                <b>MoMo or bank transfer</b> where you can: there is a record on both sides and no cash to count or
+                lose.
+              </li>
+              <li>
+                <b>Cash from the safe</b> for anyone paid in cash: count it out after cash-up, not from a busy drawer,
+                and get the payslip signed.
+              </li>
+              <li>
+                <b>From the till</b> only when there is no other way. Do it while the shift is open and before
+                counting: it appears on the Z report as <i>Wages</i>, so the drawer still balances. It is not counted
+                as an expense again; payroll is the cost.
+              </li>
+            </ul>
             <Tip>A paid record can never be changed or deleted: it is part of the accounts. Fix mistakes before paying.</Tip>
           </Section>
 
-          <Section id="expenses" n={9} title="Expenses and deposits">
+          <Section id="expenses" n={10} title="Expenses and deposits">
             <ul className="list-disc space-y-1.5 pl-5">
               <li>
                 <b>Cash spent from the till</b> becomes an expense automatically, filed under the category the cashier
@@ -399,12 +442,58 @@ export default function ManualPage() {
                 see fixed and variable costs apart.
               </li>
               <li>
-                <b>Deposits</b> (cash moved to MoMo or the bank) are transfers, not costs, and are listed separately.
+                <b>Deposits</b> (cash moved from the till to MoMo, the bank or the safe) are transfers, not costs, and
+                are listed separately.
+              </li>
+              <li>
+                Say how a back-office expense was paid (cash, MoMo, bank transfer, card): cash comes out of the safe,
+                MoMo out of MoMo, and transfers or card out of the bank.
               </li>
             </ul>
           </Section>
 
-          <Section id="cash-up" n={10} title="Cash-up and shift reports">
+          <Section id="accounts" n={11} title="Where the money is">
+            <p>
+              Money → <b>Accounts</b> shows four places money is kept: the <b>till drawer</b> (during a shift), the{" "}
+              <b>cash safe</b> (office cash), the <b>MoMo wallet</b> and the <b>bank</b>. Each has a statement with a
+              running balance.
+            </p>
+            <h3 className="mt-5 font-extrabold">What moves them on its own</h3>
+            <ul className="mt-1 list-disc space-y-1.5 pl-5">
+              <li>MoMo sales go into MoMo; card sales into the bank.</li>
+              <li>
+                At the till, <i>Move money → Deposit</i> to MoMo, the bank or the safe takes it out of the drawer and adds
+                it to that account.
+              </li>
+              <li>Expenses come out of the account they were paid from; wages out of the account chosen when paying.</li>
+            </ul>
+            <h3 className="mt-5 font-extrabold">What you record yourself (Record movement)</h3>
+            <ul className="mt-1 list-disc space-y-1.5 pl-5">
+              <li>
+                <b>Opening balance</b>: do this once per account, with what it really holds today. Earlier history is
+                not counted.
+              </li>
+              <li>
+                <b>Move money</b> between accounts, e.g. MoMo cashed out into the safe, or the safe banked.
+              </li>
+              <li>
+                <b>Bolt payout</b> when Bolt pays you (after its commission).
+              </li>
+              <li>
+                <b>Owner takes money out</b> or <b>puts money in</b>: not costs, but they change the balance.
+              </li>
+              <li>
+                <b>Correct a balance</b>: after counting the safe or checking the MoMo or bank statement, enter what it
+                really holds and why it was off.
+              </li>
+            </ul>
+            <Tip>
+              Check MoMo and the bank against their statements every week. If the numbers differ, find the missing
+              movement first; only use <i>Correct a balance</i> once you know why.
+            </Tip>
+          </Section>
+
+          <Section id="cash-up" n={12} title="Cash-up and shift reports">
             <p>
               Money → <b>Cash-up</b> shows every shift: what the till expected in the drawer, what was counted, and the
               difference. MoMo is checked the same way when the balance was entered at open and close.
@@ -423,12 +512,42 @@ export default function ManualPage() {
             </ul>
           </Section>
 
-          <Section id="month-end" n={11} title="Month-end checklist">
+          <Section id="exports" n={13} title="Exporting to Excel">
+            <p>
+              Every money screen has an <b>Export</b> button. Pick a day, this or last week, a month, or any dates, and
+              download a spreadsheet ready for your accountant: business name and period at the top, totals at the
+              bottom, set up to print.
+            </p>
+            <ul className="mt-3 list-disc space-y-1.5 pl-5">
+              <li>
+                <b>Orders → Export sales</b>: a summary, every order (including voids and unpaid), every item sold, and
+                sales by day, item and hour.
+              </li>
+              <li>
+                <b>Reports</b>: the profit &amp; loss with its breakdowns, and the sales file.
+              </li>
+              <li>
+                <b>Expenses</b>, <b>Payroll</b>, <b>Cash-up</b>, <b>Accounts</b> and the <b>Audit trail</b> export
+                their own lists.
+              </li>
+            </ul>
+          </Section>
+
+          <Section id="audit" n={14} title="The audit trail">
+            <p>
+              Manage → <b>Audit trail</b> (owner and IT) lists who did what and when: sales, voids, order edits,
+              money moved, wages paid, price changes, logins. Filter by period, area or person, and export it. Nothing
+              in it can be edited or deleted.
+            </p>
+          </Section>
+
+          <Section id="month-end" n={15} title="Month-end checklist">
             <Steps
               items={[
                 <>Make sure every shift for the month is closed (Cash-up shows none open).</>,
                 <>Add any bills not yet entered: rent, ECG, water, wifi, supplier invoices.</>,
-                <>Run payroll, approve and mark paid.</>,
+                <>Run payroll, approve and mark paid, saying where each wage came from.</>,
+                <>Check the MoMo and bank balances in Accounts against their statements.</>,
                 <>Re-cost your top ten dishes if prices moved.</>,
                 <>
                   Open Reports → <i>Last month</i>, check the profit &amp; loss, and download the Excel file for your
@@ -438,7 +557,7 @@ export default function ManualPage() {
             />
           </Section>
 
-          <Section id="words" n={12} title="What the words mean">
+          <Section id="words" n={16} title="What the words mean">
             <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
               <Word term="Sales">What customers paid for completed sales, after discounts.</Word>
               <Word term="Food cost">What the dishes sold cost to make: ingredients, packaging, gas.</Word>

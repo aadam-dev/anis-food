@@ -18,10 +18,13 @@ export const RESOURCE_ROLES = {
   expenses: [UserRole.OWNER, UserRole.SUPER_ADMIN, UserRole.MANAGER, UserRole.ACCOUNTANT],
   customers: [UserRole.OWNER, UserRole.SUPER_ADMIN, UserRole.MANAGER, UserRole.ACCOUNTANT],
   reports: [UserRole.OWNER, UserRole.SUPER_ADMIN, UserRole.MANAGER, UserRole.ACCOUNTANT],
-  staff: [UserRole.OWNER, UserRole.SUPER_ADMIN, UserRole.MANAGER],
+  /** The people who work here: details, photos, pay rates. */
+  staff: [UserRole.OWNER, UserRole.SUPER_ADMIN, UserRole.MANAGER, UserRole.ACCOUNTANT],
   payroll: [UserRole.OWNER, UserRole.SUPER_ADMIN, UserRole.ACCOUNTANT],
+  /** Balances of the cash safe, MoMo and bank, and the money moved between them. */
+  accounts: [UserRole.OWNER, UserRole.SUPER_ADMIN, UserRole.MANAGER, UserRole.ACCOUNTANT],
   settings: [UserRole.OWNER, UserRole.SUPER_ADMIN],
-  /** User creation, role changes, audit log. */
+  /** Login accounts, role changes and the audit trail. */
   users: [UserRole.OWNER, UserRole.SUPER_ADMIN],
 
   // Till
@@ -123,6 +126,9 @@ const PATH_RESOURCES: ReadonlyArray<readonly [string, Resource]> = [
   ["/admin/customers", "customers"],
   ["/admin/reports", "reports"],
   ["/admin/staff", "staff"],
+  ["/admin/users", "users"],
+  ["/admin/audit", "users"],
+  ["/admin/accounts", "accounts"],
   ["/admin/payroll", "payroll"],
   ["/admin/settings", "settings"],
   ["/admin", "admin"],
@@ -131,12 +137,17 @@ const PATH_RESOURCES: ReadonlyArray<readonly [string, Resource]> = [
   ["/api/admin/menu", "menu"],
   ["/api/admin/tables", "tables"],
   ["/api/admin/inventory", "inventory"],
-  ["/api/admin/upload", "menu"],
+  ["/api/admin/upload", "admin"],
   ["/api/admin/expenses", "expenses"],
   ["/api/admin/expense-categories", "expenses"],
   ["/api/admin/customers", "customers"],
   ["/api/admin/reports", "reports"],
   ["/api/admin/staff", "staff"],
+  ["/api/admin/users", "users"],
+  ["/api/admin/audit", "users"],
+  ["/api/admin/accounts", "accounts"],
+  ["/api/admin/sales", "reports"],
+  ["/api/admin/cash-up", "reports"],
   ["/api/admin/payroll", "payroll"],
   ["/api/admin/settings", "settings"],
   ["/api/admin", "admin"],

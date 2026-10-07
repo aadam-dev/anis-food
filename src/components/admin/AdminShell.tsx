@@ -20,6 +20,10 @@ import {
   Boxes,
   Coins,
   BookOpen,
+  Landmark,
+  Contact,
+  KeyRound,
+  History,
 } from "lucide-react";
 import type { UserRole } from "@/generated/prisma";
 import { canAccess, type Resource } from "@/lib/permissions";
@@ -59,6 +63,7 @@ const SECTIONS: { title: string; items: NavItem[] }[] = [
     title: "Money",
     items: [
       { href: "/admin/cash-up", label: "Cash-up", icon: Coins, resource: "reports" },
+      { href: "/admin/accounts", label: "Accounts", icon: Landmark, resource: "accounts" },
       { href: "/admin/expenses", label: "Expenses", icon: Wallet, resource: "expenses" },
       { href: "/admin/payroll", label: "Payroll", icon: BadgeCent, resource: "payroll" },
       { href: "/admin/reports", label: "Reports", icon: BarChart3, resource: "reports" },
@@ -67,7 +72,9 @@ const SECTIONS: { title: string; items: NavItem[] }[] = [
   {
     title: "Manage",
     items: [
-      { href: "/admin/staff", label: "Staff", icon: Users, resource: "staff" },
+      { href: "/admin/staff", label: "Staff", icon: Contact, resource: "staff" },
+      { href: "/admin/users", label: "Users", icon: KeyRound, resource: "users" },
+      { href: "/admin/audit", label: "Audit trail", icon: History, resource: "users" },
       { href: "/admin/settings", label: "Settings", icon: Settings, resource: "settings" },
       { href: "/admin/help", label: "Manual", icon: BookOpen, resource: "admin" },
     ],

@@ -10,7 +10,7 @@ import { FieldInput, FieldLabel, FieldSelect, SegmentedControl } from "./ui/Fiel
 import { posRequest, usePosAction } from "./usePosAction";
 
 type Kind = "IN" | "SPEND" | "DEPOSIT";
-type Destination = "MOMO" | "BANK";
+type Destination = "MOMO" | "BANK" | "SAFE";
 
 const SPEND_REASONS = ["Bought gas", "Bought ingredients", "Paid supplier", "Paid delivery rider"] as const;
 const IN_REASONS = ["Change from bank", "Float top-up", "Owner put in"] as const;
@@ -18,8 +18,8 @@ const IN_REASONS = ["Change from bank", "Float top-up", "Owner put in"] as const
 /**
  * Money in or out of the drawer that is not a sale.
  *
- * A spend always files an expense. A deposit moves cash into MoMo or the bank
- * and is not a cost. Put-in is float or change.
+ * A spend always files an expense. A deposit moves cash into MoMo, the bank
+ * or the safe (office cash) and is not a cost. Put-in is float or change.
  */
 export default function CashMovementDialog({
   expenseCategories,
@@ -111,6 +111,7 @@ export default function CashMovementDialog({
             options={[
               { value: "BANK", label: "Bank" },
               { value: "MOMO", label: "MoMo" },
+              { value: "SAFE", label: "Safe" },
             ]}
           />
         )}

@@ -10,6 +10,7 @@ import { serialiseOrder } from "@/lib/serialise-order";
 import { menuImage } from "@/lib/menu-image";
 import { PageHeader } from "@/components/admin/ui";
 import PeriodPicker from "@/components/admin/PeriodPicker";
+import ExportMenu from "@/components/admin/ExportMenu";
 import { PAYMENT_LABELS, VOID_REASON_LABELS } from "@/components/admin/labels";
 import type { OrderView, PosCategory, PosMenuItem } from "@/components/pos/types";
 import OrdersClient, { type AdminOrder, type OrderFilter } from "./OrdersClient";
@@ -187,7 +188,12 @@ export default async function OrdersPage({
         eyebrow={`Sales · ${period.label}`}
         title="Orders"
         description="Till sales and online orders. Open one for its details, history, receipt, edit and void."
-        actions={<PeriodPicker period={period} presets={["today", "yesterday", "week", "month"]} />}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <PeriodPicker period={period} presets={["today", "yesterday", "week", "month"]} />
+            <ExportMenu endpoint="/api/admin/sales/export" from={period.from} to={period.to} title="Export sales" csv />
+          </div>
+        }
       />
       <OrdersClient
         key={`${period.from}-${period.to}-${status ?? ""}-${q ?? ""}`}

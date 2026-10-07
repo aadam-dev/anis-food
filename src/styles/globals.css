@@ -586,3 +586,13 @@ body:has([data-surface][data-theme="light"]) {
     break-inside: avoid;
   }
 }
+
+/* Sign-in: the PIN dots shake on a wrong PIN. */
+@keyframes pin-shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-8px); }
+  40%, 80% { transform: translateX(8px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [class*="pin-shake"] { animation: none !important; }
+}

@@ -6,6 +6,7 @@ import { differenceLabel } from "@/lib/cash";
 import { resolvePeriod } from "@/lib/period";
 import { EmptyState, PageHeader, Panel, ShareBar, Stat } from "@/components/admin/ui";
 import PeriodPicker from "@/components/admin/PeriodPicker";
+import ExportMenu from "@/components/admin/ExportMenu";
 import { PAYMENT_LABELS } from "@/components/admin/labels";
 import ShiftList from "./ShiftList";
 
@@ -36,7 +37,12 @@ export default async function CashUpPage({
         eyebrow={`Money · ${period.label}`}
         title="Cash-up"
         description="Every shift's drawer and MoMo, counted against what the till says should be there."
-        actions={<PeriodPicker period={period} presets={["today", "yesterday", "week", "month", "last-month"]} />}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <PeriodPicker period={period} presets={["today", "yesterday", "week", "month", "last-month"]} />
+            <ExportMenu endpoint="/api/admin/cash-up/export" from={period.from} to={period.to} title="Export cash-up" />
+          </div>
+        }
       />
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">

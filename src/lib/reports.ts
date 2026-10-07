@@ -29,7 +29,7 @@ import {
  */
 
 /** Orders that count as real revenue: completed, paid, not a void, not a demo. */
-const REVENUE_WHERE = {
+export const REVENUE_WHERE = {
   isDemo: false,
   paymentStatus: PaymentStatus.PAID,
   status: { not: OrderStatus.CANCELLED },
@@ -50,7 +50,7 @@ function netOf(order: { total: unknown; taxAmount: unknown }): number {
   return toMoney(order.total) - toMoney(order.taxAmount);
 }
 
-function splitByMethod(
+export function splitByMethod(
   orders: { paymentMethod: PaymentMethod; total: unknown; splitPayments: unknown }[],
 ): Record<string, number> {
   const byMethod: Record<string, number> = {};

@@ -38,8 +38,8 @@ function bucket(): string {
  */
 export async function uploadMenuImage(
   input: ArrayBuffer,
-  /** Folder inside the bucket: menu photos in items/, expense receipts in receipts/. */
-  folder: "items" | "receipts" = "items",
+  /** Folder inside the bucket: menu photos in items/, receipts in receipts/, staff photos in staff/. */
+  folder: "items" | "receipts" | "staff" = "items",
 ): Promise<UploadResult> {
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

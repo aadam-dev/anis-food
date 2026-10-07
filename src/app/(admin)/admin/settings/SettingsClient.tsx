@@ -113,6 +113,19 @@ export default function SettingsClient({ settings }: { settings: Record<SettingK
         </Field>
       </Panel>
 
+      <Panel title="Payroll" className="p-5 space-y-4">
+        <Segmented
+          label="Deduct SSNIT"
+          hint="Off until the business registers staff with SSNIT. Turning it on shows SSNIT on staff records and deducts 5.5% from the wages of those marked as registered."
+          value={values.ssnit_enabled === "true" ? "on" : "off"}
+          options={[
+            { value: "off", label: "Off" },
+            { value: "on", label: "On" },
+          ]}
+          onChange={(v) => set("ssnit_enabled", v === "on" ? "true" : "false")}
+        />
+      </Panel>
+
       <Panel title="Tax (Ghana VAT)" className="p-5 space-y-4">
         <Segmented
           label="Charge VAT & levies"

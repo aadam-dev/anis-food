@@ -1,69 +1,50 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
-import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/db";
 import { requireResource, logAudit, clientIp } from "@/lib/api-auth";
-import { ok, parseBody, handlePrismaError, badRequest } from "@/lib/api-utils";
-import { hashPassword } from "@/lib/auth/password";
-import { canAssignRole } from "@/lib/permissions";
-import { UserRole } from "@/generated/prisma";
+import { canAccess, canSeeCosts } from "@/lib/permissions";
+import { ok, parseBody, badRequest, handlePrismaError } from "@/lib/api-utils";
+import { forbiddenStaffFields, staffSchema, toDate } from "@/lib/staff-schema";
+import { roundMoney } from "@/lib/money";
 
-const createSchema = z.object({
-  name: z.string().min(1, "Enter a name").max(120),
-  email: z.string().email("Enter a valid email").max(200),
-  role: z.enum(["OWNER", "SUPER_ADMIN", "MANAGER", "ACCOUNTANT", "CASHIER"]),
-});
-
-/** A readable one-time password, e.g. K7PQ-3MTX-9RAW. */
-// Module scope on purpose — see the note in staff/[id]/route.ts. Inlining this
-// function drops a same-function `const`, which only breaks in the built output.
-const PASSWORD_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-
-function initialPassword(): string {
-  const bytes = randomBytes(12);
-  const chars = Array.from(bytes, (b) => PASSWORD_ALPHABET[b % PASSWORD_ALPHABET.length]);
-  return [0, 4, 8].map((i) => chars.slice(i, i + 4).join("")).join("-");
-}
-
+/** Add someone who works here. A login is optional and linked separately. */
 export async function POST(request: Request) {
   const auth = await requireResource("staff");
   if (auth instanceof NextResponse) return auth;
-
-  const parsed = await parseBody(request, createSchema);
+  const parsed = await parseBody(request, staffSchema);
   if (parsed instanceof NextResponse) return parsed;
   const body = parsed.data;
-
-  // A manager must not be able to mint an owner or a super-admin — that is how a
-  // "add a staff member" permission quietly becomes "take over the business".
-  if (!canAssignRole(auth.user.role, body.role as UserRole)) {
-    return badRequest("You cannot create an account with that role.");
+  // A new record always carries pay defaults; someone who may not set pay
+  // just gets those defaults, and only a login manager may link a login.
+  const mayPay = canAccess(auth.user.role, "payroll") || canSeeCosts(auth.user.role);
+  if (!mayPay) {
+    Object.assign(body, { payType: "MONTHLY", payRate: 0, momoNumber: null, bankName: null, bankAccount: null });
   }
+  const refused = forbiddenStaffFields({ userId: body.userId }, { pay: true, logins: canAccess(auth.user.role, "users") });
+  if (refused) return NextResponse.json({ error: refused }, { status: 403 });
 
   try {
-    const password = initialPassword();
-    const user = await prisma.user.create({
+    if (body.userId) {
+      const taken = await prisma.staff.findUnique({ where: { userId: body.userId }, select: { name: true } });
+      if (taken) return badRequest(`That login already belongs to ${taken.name}.`);
+    }
+    const staff = await prisma.staff.create({
       data: {
-        name: body.name,
-        email: body.email.trim().toLowerCase(),
-        role: body.role as UserRole,
-        passwordHash: await hashPassword(password),
-        passwordResetRequired: true,
-        staffProfile: { create: {} },
+        ...body,
+        payRate: roundMoney(body.payRate),
+        startedAt: toDate(body.startedAt),
+        endedAt: toDate(body.endedAt),
+        userId: body.userId ?? null,
       },
     });
-
     await logAudit({
       actorId: auth.user.sub,
       action: "staff.create",
-      resource: "User",
-      resourceId: user.id,
-      detail: { email: user.email, role: user.role },
+      resource: "Staff",
+      resourceId: staff.id,
+      detail: { name: staff.name, position: staff.position },
       ip: clientIp(request),
     });
-
-    // The one-time password is returned exactly once, for the admin to hand over.
-    // It is never stored in readable form.
-    return ok({ id: user.id, email: user.email, initialPassword: password }, { status: 201 });
+    return ok({ id: staff.id }, { status: 201 });
   } catch (error) {
     return handlePrismaError(error, "admin/staff POST");
   }
