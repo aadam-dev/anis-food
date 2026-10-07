@@ -2,9 +2,11 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { getSettings } from "@/lib/settings";
 import { currentSession } from "@/lib/pos-session";
 import { prisma } from "@/lib/db";
+import { SELLABLE_DISH } from "@/lib/menu-sizes";
 import { toMoney } from "@/lib/money";
 import { menuImage } from "@/lib/menu-image";
-import { canAccess, canVoidAtTill } from "@/lib/permissions";
+import { canAccess, canEditPaidOrders, canVoidAtTill } from "@/lib/permissions";
+import { serialiseOrder } from "@/lib/serialise-order";
 import Register from "@/components/pos/Register";
 import type { OrderView, PosCategory, PosMenuItem, SessionView } from "@/components/pos/types";
 
@@ -26,7 +28,7 @@ export default async function PosPage() {
       select: { id: true, name: true, sortOrder: true },
     }),
     prisma.menuItem.findMany({
-      where: { isAvailable: true, category: { isActive: true } },
+      where: SELLABLE_DISH,
       orderBy: [{ category: { sortOrder: "asc" } }, { sortOrder: "asc" }],
       select: {
         id: true,
@@ -36,6 +38,11 @@ export default async function PosPage() {
         categoryId: true,
         imageUrl: true,
         isPopular: true,
+          sizes: {
+            where: { isAvailable: true },
+            orderBy: { sortOrder: "asc" },
+            select: { id: true, label: true, price: true },
+          },
       },
     }),
     prisma.order.findMany({
@@ -58,49 +65,21 @@ export default async function PosPage() {
     id: item.id,
     slug: item.slug,
     name: item.name,
-    price: toMoney(item.price),
+    // A dish with sizes sells from its cheapest size.
+    price: item.sizes.length ? Math.min(...item.sizes.map((size) => toMoney(size.price))) : toMoney(item.price),
+    sizes: item.sizes.map((size) => ({ id: size.id, label: size.label, price: toMoney(size.price) })),
     categoryId: item.categoryId,
     imageUrl: menuImage(item.imageUrl, item.categoryId, item.name),
     isPopular: item.isPopular,
   }));
 
-  const openTickets: OrderView[] = tickets.map((order) => ({
-    id: order.id,
-    orderNumber: order.orderNumber,
-    clientRef: order.clientRef,
-    sessionId: order.sessionId,
-    status: order.status,
-    paymentMethod: order.paymentMethod,
-    paymentStatus: order.paymentStatus,
-    paymentReference: order.paymentReference,
-    splitPayments: order.splitPayments as OrderView["splitPayments"],
-    deliveryType: order.deliveryType,
-    subtotal: toMoney(order.subtotal),
-    discountAmount: toMoney(order.discountAmount),
-    taxAmount: toMoney(order.taxAmount),
-    total: toMoney(order.total),
-    tenderedAmount: order.tenderedAmount === null ? null : toMoney(order.tenderedAmount),
-    changeAmount: order.changeAmount === null ? null : toMoney(order.changeAmount),
-    tax:
-      (order.transactionSnapshot as { tax?: OrderView["tax"] } | null)?.tax ?? null,
-    tableLabel: order.tableLabel,
-    customerName: order.customerName,
-    customerPhone: order.customerPhone,
-    customerAddress: order.customerAddress,
-    notes: order.notes,
-    createdAt: order.createdAt.toISOString(),
-    items: order.items.map((item) => ({
-      id: item.id,
-      name: item.name,
-      quantity: item.quantity,
-      unitPrice: toMoney(item.unitPrice),
-      lineTotal: toMoney(item.lineTotal),
-      notes: item.notes,
-    })),
-  }));
+  // The same shape the till gets from the API on refresh, so a ticket looks
+  // identical on first paint and after a reload.
+  const openTickets: OrderView[] = tickets.map(serialiseOrder) as OrderView[];
 
   const canFileExpense = canAccess(user!.role, "expenses");
   const canVoid = canVoidAtTill(user!.role);
+  const canEditPaid = canEditPaidOrders(user!.role);
   const backOfficeHref = canAccess(user!.role, "admin") ? "/admin" : undefined;
 
   return (
@@ -121,6 +100,7 @@ export default async function PosPage() {
       expenseCategories={expenseCategories}
       canFileExpense={canFileExpense}
       canVoid={canVoid}
+      canEditPaid={canEditPaid}
       backOfficeHref={backOfficeHref}
     />
   );

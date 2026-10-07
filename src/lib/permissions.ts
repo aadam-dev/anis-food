@@ -66,6 +66,20 @@ export function canVoidAtTill(role: UserRole | undefined | null): boolean {
   return canAccess(role, "orders") && canAccess(role, "pos");
 }
 
+/**
+ * Changing a paid order moves money (extra collected or change given back), so
+ * it is for the people who answer for the drawer, not every cashier.
+ */
+export const PAID_ORDER_EDIT_ROLES: readonly UserRole[] = [
+  UserRole.OWNER,
+  UserRole.SUPER_ADMIN,
+  UserRole.MANAGER,
+];
+
+export function canEditPaidOrders(role: UserRole | undefined | null): boolean {
+  return !!role && PAID_ORDER_EDIT_ROLES.includes(role);
+}
+
 export function canSeeCosts(role: UserRole | undefined | null): boolean {
   return !!role && COST_VISIBLE_ROLES.includes(role);
 }
@@ -103,6 +117,8 @@ const PATH_RESOURCES: ReadonlyArray<readonly [string, Resource]> = [
   ["/admin/orders", "orders"],
   ["/admin/menu", "menu"],
   ["/admin/tables", "tables"],
+  ["/admin/inventory", "inventory"],
+  ["/admin/cash-up", "reports"],
   ["/admin/expenses", "expenses"],
   ["/admin/customers", "customers"],
   ["/admin/reports", "reports"],
@@ -114,7 +130,10 @@ const PATH_RESOURCES: ReadonlyArray<readonly [string, Resource]> = [
   ["/api/admin/orders", "orders"],
   ["/api/admin/menu", "menu"],
   ["/api/admin/tables", "tables"],
+  ["/api/admin/inventory", "inventory"],
+  ["/api/admin/upload", "menu"],
   ["/api/admin/expenses", "expenses"],
+  ["/api/admin/expense-categories", "expenses"],
   ["/api/admin/customers", "customers"],
   ["/api/admin/reports", "reports"],
   ["/api/admin/staff", "staff"],

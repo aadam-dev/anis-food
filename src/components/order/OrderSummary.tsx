@@ -2,6 +2,7 @@
 
 import { X, Plus, Minus } from "lucide-react";
 import { OrderItem } from "@/types";
+import { cartLineKey } from "@/contexts/CartContext";
 import { formatPrice, getOrderTotals } from "@/lib/utils";
 import { ORDER_CONFIG } from "@/lib/constants";
 import Card from "@/components/ui/Card";
@@ -43,7 +44,7 @@ export default function OrderSummary({
       <div className="space-y-4 mb-6">
         {items.map((orderItem) => (
           <div
-            key={orderItem.menuItem.id}
+            key={cartLineKey(orderItem)}
             className="flex items-start justify-between border-b border-gray-200 pb-4"
           >
             <div className="flex-1">
@@ -57,7 +58,7 @@ export default function OrderSummary({
                   </p>
                 </div>
                 <button
-                  onClick={() => onRemoveItem(orderItem.menuItem.id)}
+                  onClick={() => onRemoveItem(cartLineKey(orderItem))}
                   className="text-gray-400 hover:text-red-500 transition-colors ml-4"
                   aria-label="Remove item"
                 >
@@ -68,7 +69,7 @@ export default function OrderSummary({
                 <button
                   onClick={() =>
                     onUpdateQuantity(
-                      orderItem.menuItem.id,
+                      cartLineKey(orderItem),
                       Math.max(0, orderItem.quantity - 1)
                     )
                   }
@@ -82,7 +83,7 @@ export default function OrderSummary({
                 </span>
                 <button
                   onClick={() =>
-                    onUpdateQuantity(orderItem.menuItem.id, orderItem.quantity + 1)
+                    onUpdateQuantity(cartLineKey(orderItem), orderItem.quantity + 1)
                   }
                   className="p-1 rounded-full hover:bg-gray-100 transition-colors"
                   aria-label="Increase quantity"

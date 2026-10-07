@@ -46,3 +46,69 @@ export async function POST(request: Request) {
     return handlePrismaError(error, "admin/menu/categories POST");
   }
 }
+
+const updateSchema = z
+  .object({
+    id: z.string().min(1),
+    name: z.string().trim().min(1).max(40).optional(),
+    sortOrder: z.number().int().min(0).max(999).optional(),
+    isActive: z.boolean().optional(),
+  })
+  .refine((body) => Object.keys(body).length > 1, "Nothing to change");
+
+/** Rename, reorder, or hide a category. */
+export async function PATCH(request: Request) {
+  const auth = await requireResource("menu");
+  if (auth instanceof NextResponse) return auth;
+  const parsed = await parseBody(request, updateSchema);
+  if (parsed instanceof NextResponse) return parsed;
+  const { id, ...data } = parsed.data;
+
+  try {
+    const category = await prisma.menuCategory.update({ where: { id }, data });
+    revalidateMenu();
+    await logAudit({
+      actorId: auth.user.sub,
+      action: "menu.category.update",
+      resource: "MenuCategory",
+      resourceId: id,
+      detail: data,
+      ip: clientIp(request),
+    });
+    return ok({ id: category.id, name: category.name });
+  } catch (error) {
+    return handlePrismaError(error, "admin/menu/categories PATCH");
+  }
+}
+
+const deleteSchema = z.object({ id: z.string().min(1) });
+
+/** Delete an empty category. One with dishes must be emptied first. */
+export async function DELETE(request: Request) {
+  const auth = await requireResource("menu");
+  if (auth instanceof NextResponse) return auth;
+  const parsed = await parseBody(request, deleteSchema);
+  if (parsed instanceof NextResponse) return parsed;
+
+  try {
+    const dishes = await prisma.menuItem.count({ where: { categoryId: parsed.data.id } });
+    if (dishes > 0) {
+      return NextResponse.json(
+        { error: `${dishes} dish${dishes === 1 ? " is" : "es are"} in this category. Move them to another category first.` },
+        { status: 400 },
+      );
+    }
+    await prisma.menuCategory.delete({ where: { id: parsed.data.id } });
+    revalidateMenu();
+    await logAudit({
+      actorId: auth.user.sub,
+      action: "menu.category.delete",
+      resource: "MenuCategory",
+      resourceId: parsed.data.id,
+      ip: clientIp(request),
+    });
+    return ok({ deleted: true });
+  } catch (error) {
+    return handlePrismaError(error, "admin/menu/categories DELETE");
+  }
+}

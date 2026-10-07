@@ -2,7 +2,8 @@ import { z } from "zod";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { ok, parseBody, badRequest, handlePrismaError } from "@/lib/api-utils";
-import { computeOrderTotals, toMoney, roundMoney } from "@/lib/money";
+import { computeOrderTotals } from "@/lib/money";
+import { priceLines, itemRows } from "@/lib/order-lines";
 import { businessDay, formatOrderNumber } from "@/lib/session-utils";
 import { getSettings, getTaxConfig } from "@/lib/settings";
 import { taxBreakdown } from "@/lib/tax";
@@ -26,7 +27,9 @@ import {
  */
 
 const lineSchema = z.object({
+  /** The website knows dishes by slug; a database id works too. */
   menuItemId: z.string().min(1),
+  sizeId: z.string().min(1).nullish(),
   quantity: z.number().int().min(1).max(99),
   notes: z.string().max(200).optional(),
 });
@@ -59,30 +62,16 @@ export async function POST(request: Request) {
       return badRequest("Add a delivery address.");
     }
 
-    const menuItemIds = [...new Set(body.lines.map((line) => line.menuItemId))];
-    const menuItems = await prisma.menuItem.findMany({
-      where: { id: { in: menuItemIds }, isAvailable: true },
-      select: { id: true, name: true, price: true, costPrice: true },
-    });
-    const byId = new Map(menuItems.map((item) => [item.id, item]));
-    const missing = menuItemIds.filter((id) => !byId.has(id));
-    if (missing.length > 0) {
-      return badRequest("Some dishes are no longer available. Refresh the menu.", { missing });
+    // Priced from the database by slug or id (the site sends slugs). Before
+    // this the lookup was by id only, so every website order was refused.
+    const priced = await priceLines(body.lines);
+    if (!priced.ok) {
+      return badRequest(
+        priced.missing ? "Some dishes are no longer available. Refresh the menu." : priced.error,
+        priced.missing ? { missing: priced.missing } : undefined,
+      );
     }
-
-    const lines = body.lines.map((line) => {
-      const item = byId.get(line.menuItemId)!;
-      const unitPrice = toMoney(item.price);
-      return {
-        menuItemId: item.id,
-        name: item.name,
-        unitPrice,
-        unitCost: item.costPrice === null ? null : toMoney(item.costPrice),
-        quantity: line.quantity,
-        lineTotal: roundMoney(unitPrice * line.quantity),
-        notes: line.notes,
-      };
-    });
+    const lines = priced.lines;
 
     const books = saleBooks("UNPAID");
     const settings = await getSettings();
@@ -121,17 +110,7 @@ export async function POST(request: Request) {
             customerPhone: body.customerPhone.trim(),
             customerAddress: body.customerAddress?.trim() || null,
             notes: body.notes?.trim() || null,
-            items: {
-              create: lines.map((line) => ({
-                menuItemId: line.menuItemId,
-                name: line.name,
-                unitPrice: line.unitPrice,
-                unitCost: line.unitCost,
-                quantity: line.quantity,
-                lineTotal: line.lineTotal,
-                notes: line.notes,
-              })),
-            },
+            items: { create: itemRows(lines) },
           },
           include: { items: true },
         });
@@ -145,6 +124,7 @@ export async function POST(request: Request) {
               soldBy: "Online",
               lines: lines.map((line) => ({
                 name: line.name,
+                size: line.sizeLabel,
                 quantity: line.quantity,
                 unitPrice: line.unitPrice,
                 lineTotal: line.lineTotal,

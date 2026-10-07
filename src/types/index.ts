@@ -13,6 +13,8 @@ export interface MenuItem {
   popular?: boolean;
   available?: boolean;
   tags?: DietaryTag[];
+  /** Portions on sale, cheapest first. Absent or empty when the dish has one price. */
+  sizes?: { id: string; label: string; price: number }[];
 }
 
 export type MenuCategory = "rice" | "noodles" | "sandwiches" | "sides" | "drinks" | "local";
@@ -24,7 +26,13 @@ export interface MenuCategoryData {
 }
 
 export interface OrderItem {
+  /**
+   * The dish as ordered. For a sized dish, its name already carries the size
+   * ("Jollof (Large)") and its price is that size's price.
+   */
   menuItem: MenuItem;
+  /** The size picked, for a dish that comes in sizes. */
+  size?: { id: string; label: string };
   quantity: number;
   notes?: string;
 }

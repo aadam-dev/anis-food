@@ -13,21 +13,28 @@ export default function ReceiptModal({
   business,
   soldBy,
   onClose,
-  kind = "receipt",
+  kind,
 }: {
   order: OrderView;
   business: { header: string; address: string; phone: string; footer: string; taxLabel: string };
   soldBy: string;
   onClose: () => void;
-  /** Both are 80mm slips. Invoice adds the document title; the lines are the same. */
-  kind?: "receipt" | "invoice";
+  /** All 80mm slips. Invoice adds a title; a bill is for an order not yet paid
+   *  (amount due, no payment lines). Defaults from the order's payment state. */
+  kind?: "receipt" | "invoice" | "bill";
 }) {
+  // An unpaid order gets a bill, never a receipt: a receipt says money was taken.
+  const unpaid = order.paymentStatus === "PENDING" && order.status !== "CANCELLED";
   const printed = useRef(false);
   const printAfterKind = useRef(false);
   const [qrDataUrl, setQrDataUrl] = useState<string | undefined>();
-  const [slipKind, setSlipKind] = useState(kind);
+  // Unpaid: a bill, or a pro-forma invoice. Never a receipt.
+  const [slipKind, setSlipKind] = useState<"receipt" | "invoice" | "bill">(
+    unpaid ? (kind === "invoice" ? "invoice" : "bill") : kind === "bill" ? "receipt" : (kind ?? "receipt"),
+  );
+  const isBill = unpaid;
 
-  function chooseSlip(next: "receipt" | "invoice") {
+  function chooseSlip(next: "receipt" | "invoice" | "bill") {
     if (next === slipKind) {
       printReceiptNow();
       return;
@@ -44,6 +51,8 @@ export default function ReceiptModal({
   const verifyUrl = `${siteUrl}/receipt/${order.clientRef}`;
 
   useEffect(() => {
+    // A bill carries no verify code: there is no payment to verify yet.
+    if (isBill) return;
     let alive = true;
     QRCode.toDataURL(verifyUrl, { margin: 0, width: 240 })
       .then((url) => {
@@ -55,7 +64,7 @@ export default function ReceiptModal({
     return () => {
       alive = false;
     };
-  }, [verifyUrl]);
+  }, [verifyUrl, isBill]);
 
   const data: ReceiptData = {
     orderNumber: order.orderNumber,
@@ -63,6 +72,7 @@ export default function ReceiptModal({
     soldBy,
     lines: order.items.map((item) => ({
       name: item.name,
+      size: item.sizeLabel ?? null,
       quantity: item.quantity,
       unitPrice: item.unitPrice,
       lineTotal: item.lineTotal,
@@ -95,7 +105,8 @@ export default function ReceiptModal({
     address: business.address,
     phone: business.phone,
     footer: business.footer,
-    documentTitle: slipKind === "invoice" ? "INVOICE" : undefined,
+    documentTitle: slipKind === "invoice" ? "INVOICE" : unpaid ? "BILL" : undefined,
+    kind: isBill ? "bill" : "receipt",
     logoUrl: "/images/logo.png",
     verifyUrl,
     qrDataUrl,
@@ -106,6 +117,12 @@ export default function ReceiptModal({
     // clear before the browser print dialog blocks the main thread. On some POS
     // Chromes, print() hung the UI while "Processing…" was still showing.
     if (printed.current) return;
+    // Bills print when the guest asks for one (the Print bill button), not on
+    // every Pay later: the table may still order more.
+    if (isBill) {
+      printed.current = true;
+      return;
+    }
     if (!qrDataUrl) {
       const timer = setTimeout(() => {
         if (printed.current) return;
@@ -131,7 +148,7 @@ export default function ReceiptModal({
       }, 80);
     });
     return () => cancelAnimationFrame(frame);
-  }, [qrDataUrl]);
+  }, [qrDataUrl, isBill]);
 
   useEffect(() => {
     if (!printAfterKind.current) return;
@@ -150,8 +167,10 @@ export default function ReceiptModal({
           className="sticky top-0 flex items-center justify-between px-4 py-3 border-b"
           style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
         >
-          <h2 className="font-semibold">{slipKind === "invoice" ? "Invoice" : "Receipt"}</h2>
+          <h2 className="font-semibold">{slipKind === "invoice" ? "Invoice" : isBill ? "Bill" : "Receipt"}</h2>
           <div className="flex items-center gap-1">
+            {!unpaid && (
+              <>
             <button
               onClick={() => chooseSlip("receipt")}
               className="h-11 px-3 flex items-center gap-1.5 rounded-lg text-sm font-semibold"
@@ -166,6 +185,8 @@ export default function ReceiptModal({
             >
               <FileText className="w-4 h-4" /> Invoice
             </button>
+              </>
+            )}
             <button
               onClick={onClose}
               className="h-11 w-11 grid place-items-center rounded-lg"
@@ -181,13 +202,23 @@ export default function ReceiptModal({
         </div>
 
         <div className="space-y-2 px-4 pb-4">
-          <ReceiptWhatsAppButton order={order} businessName={business.header} />
+          {isBill ? (
+            <button
+              onClick={() => printReceiptNow()}
+              className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3.5 font-bold text-white"
+              style={{ background: "var(--s-brand)" }}
+            >
+              <Printer className="h-4 w-4" /> Print bill
+            </button>
+          ) : (
+            <ReceiptWhatsAppButton order={order} businessName={business.header} />
+          )}
           <button
             onClick={onClose}
-            className="w-full rounded-xl px-4 py-3.5 font-bold text-white"
-            style={{ background: "var(--s-brand)" }}
+            className="w-full rounded-xl px-4 py-3.5 font-bold"
+            style={isBill ? { background: "var(--s-panel-alt)" } : { background: "var(--s-brand)", color: "#fff" }}
           >
-            Next customer
+            {isBill ? "Done" : "Next customer"}
           </button>
         </div>
       </div>

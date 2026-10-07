@@ -18,11 +18,13 @@ import {
   LogOut,
   Store,
   Boxes,
-  Search,
+  Coins,
+  BookOpen,
 } from "lucide-react";
 import type { UserRole } from "@/generated/prisma";
 import { canAccess, type Resource } from "@/lib/permissions";
 import AnisLogo from "@/components/brand/AnisLogo";
+import InstallPrompt from "@/components/pwa/InstallPrompt";
 
 interface NavItem {
   href: string;
@@ -56,6 +58,7 @@ const SECTIONS: { title: string; items: NavItem[] }[] = [
   {
     title: "Money",
     items: [
+      { href: "/admin/cash-up", label: "Cash-up", icon: Coins, resource: "reports" },
       { href: "/admin/expenses", label: "Expenses", icon: Wallet, resource: "expenses" },
       { href: "/admin/payroll", label: "Payroll", icon: BadgeCent, resource: "payroll" },
       { href: "/admin/reports", label: "Reports", icon: BarChart3, resource: "reports" },
@@ -66,16 +69,24 @@ const SECTIONS: { title: string; items: NavItem[] }[] = [
     items: [
       { href: "/admin/staff", label: "Staff", icon: Users, resource: "staff" },
       { href: "/admin/settings", label: "Settings", icon: Settings, resource: "settings" },
+      { href: "/admin/help", label: "Manual", icon: BookOpen, resource: "admin" },
     ],
   },
 ];
 
+export interface ShiftStatus {
+  openedBy: string;
+  stale: boolean;
+}
+
 interface AdminShellProps {
   user: { name: string; email: string; role: UserRole };
+  /** The till's open shift, if any — shown in the top bar on every screen. */
+  shift: ShiftStatus | null;
   children: React.ReactNode;
 }
 
-export default function AdminShell({ user, children }: AdminShellProps) {
+export default function AdminShell({ user, shift, children }: AdminShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -116,7 +127,7 @@ export default function AdminShell({ user, children }: AdminShellProps) {
                     aria-current={current ? "page" : undefined}
                     className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-semibold transition-colors"
                     style={{
-                      background: current ? "color-mix(in srgb, var(--s-brand) 10%, white)" : "transparent",
+                      background: current ? "var(--s-brand-soft)" : "transparent",
                       color: current ? "var(--s-brand)" : "var(--s-ink-muted)",
                     }}
                   >
@@ -159,8 +170,27 @@ export default function AdminShell({ user, children }: AdminShellProps) {
     </div>
   ) : null;
 
+  const current = SECTIONS.flatMap((section) => section.items).find((item) => isCurrent(item.href));
+
+  const shiftPill = (
+    <Link
+      href="/admin/cash-up?period=today"
+      className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold"
+      style={{ borderColor: "var(--s-border)", background: "var(--s-panel)" }}
+      title={shift ? `Opened by ${shift.openedBy}` : "No shift is open"}
+    >
+      <span
+        className="h-2 w-2 rounded-full"
+        style={{ background: !shift ? "var(--s-ink-faint)" : shift.stale ? "var(--s-warn)" : "var(--s-good)" }}
+        aria-hidden
+      />
+      {!shift ? "Till closed" : shift.stale ? "Old shift still open" : `Till open · ${shift.openedBy}`}
+    </Link>
+  );
+
   const sidebarFooter = (
-    <div className="shrink-0 border-t px-3 py-3" style={{ borderColor: "var(--s-border)" }}>
+    <div className="shrink-0 space-y-2 border-t px-3 py-3" style={{ borderColor: "var(--s-border)" }}>
+      <InstallPrompt compact />
       <div className="flex items-center gap-3 px-2 py-1">
         <span
           className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold text-white"
@@ -246,17 +276,17 @@ export default function AdminShell({ user, children }: AdminShellProps) {
           className="hidden shrink-0 lg:flex h-20 items-center gap-4 border-b px-7"
           style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
         >
-          <div className="relative max-w-md flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "var(--s-ink-faint)" }} />
-            <input
-              type="search"
-              placeholder="Search menu, orders and more"
-              className="min-h-12 w-full rounded-2xl border pl-9 pr-3 text-sm outline-none"
-              style={{ borderColor: "var(--s-border)", background: "var(--s-panel-alt)" }}
-              aria-label="Search back office"
-            />
-          </div>
-          <div className="ml-auto text-right">
+          <p className="text-sm" style={{ color: "var(--s-ink-faint)" }}>
+            Back office
+            {current && current.href !== "/admin" && (
+              <>
+                <span className="mx-2">/</span>
+                <span className="font-bold" style={{ color: "var(--s-ink)" }}>{current.label}</span>
+              </>
+            )}
+          </p>
+          <div className="ml-auto">{shiftPill}</div>
+          <div className="text-right">
             <p className="text-sm font-bold">{user.name}</p>
             <p className="text-[10px] capitalize" style={{ color: "var(--s-ink-faint)" }}>{roleLabel}</p>
           </div>
@@ -279,6 +309,7 @@ export default function AdminShell({ user, children }: AdminShellProps) {
             <MenuIcon className="w-5 h-5" />
           </button>
           <AnisLogo priority className="h-7 w-auto" />
+          <span className="ml-auto pr-1">{shiftPill}</span>
         </header>
 
         <main className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6 lg:px-8 lg:py-8">

@@ -1,7 +1,10 @@
+import { ArrowRightLeft, Crown, Pin, Shuffle, Wallet } from "lucide-react";
 import { prisma } from "@/lib/db";
-import { toMoney, roundMoney } from "@/lib/money";
-import { businessDay, businessDayRange } from "@/lib/session-utils";
-import { PageHeader } from "@/components/admin/ui";
+import { toMoney, roundMoney, formatGHS } from "@/lib/money";
+import { addDays, resolvePeriod } from "@/lib/period";
+import { periodBounds } from "@/lib/reports";
+import { PageHeader, Stat } from "@/components/admin/ui";
+import PeriodPicker from "@/components/admin/PeriodPicker";
 import ExpensesClient, {
   type AdminDeposit,
   type AdminExpense,
@@ -14,22 +17,29 @@ export const dynamic = "force-dynamic";
 export default async function ExpensesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const params = await searchParams;
-  const month =
-    params.month && /^\d{4}-\d{2}$/.test(params.month) ? params.month : businessDay().slice(0, 7);
-  const start = businessDayRange(`${month}-01`).start;
-  const [year, m] = month.split("-").map(Number);
-  const nextMonth = m === 12 ? `${year + 1}-01-01` : `${year}-${String(m + 1).padStart(2, "0")}-01`;
-  const end = businessDayRange(nextMonth).start;
+  const period = resolvePeriod(await searchParams, "month");
+  const { start, end } = periodBounds(period.from, period.to);
 
   const [categories, expenses, deposits] = await Promise.all([
-    prisma.expenseCategory.findMany({ orderBy: { sortOrder: "asc" } }),
+    prisma.expenseCategory.findMany({
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      include: { _count: { select: { expenses: true } } },
+    }),
     prisma.expense.findMany({
-      where: { incurredOn: { gte: start, lt: end } },
-      orderBy: { incurredOn: "desc" },
-      include: { category: { select: { name: true } } },
+      // incurredOn is a DATE column, so compare against UTC midnights.
+      where: {
+        incurredOn: {
+          gte: new Date(`${period.from}T00:00:00Z`),
+          lt: new Date(`${addDays(period.to, 1)}T00:00:00Z`),
+        },
+      },
+      orderBy: [{ incurredOn: "desc" }, { createdAt: "desc" }],
+      include: {
+        category: { select: { id: true, name: true, isFixed: true } },
+        cashMovement: { select: { id: true } },
+      },
     }),
     prisma.cashMovement.findMany({
       where: { kind: "DEPOSIT", createdAt: { gte: start, lt: end } },
@@ -38,18 +48,39 @@ export default async function ExpensesPage({
     }),
   ]);
 
-  const total = roundMoney(expenses.reduce((sum, e) => sum + toMoney(e.amount), 0));
+  let fixed = 0;
+  let variable = 0;
+  const byCategory = new Map<string, number>();
+  for (const expense of expenses) {
+    const amount = toMoney(expense.amount);
+    if (expense.category.isFixed) fixed += amount;
+    else variable += amount;
+    byCategory.set(expense.category.name, (byCategory.get(expense.category.name) ?? 0) + amount);
+  }
+  const total = roundMoney(fixed + variable);
+  const top = [...byCategory.entries()].sort((a, b) => b[1] - a[1])[0];
+  const depositTotal = roundMoney(deposits.reduce((sum, deposit) => sum + toMoney(deposit.amount), 0));
 
   const serialized: AdminExpense[] = expenses.map((expense) => ({
     id: expense.id,
     description: expense.description,
     amount: toMoney(expense.amount),
+    categoryId: expense.category.id,
     category: expense.category.name,
+    isFixed: expense.category.isFixed,
     incurredOn: expense.incurredOn.toISOString().slice(0, 10),
     paymentMethod: expense.paymentMethod,
+    receiptUrl: expense.receiptUrl,
+    fromTill: expense.cashMovement !== null,
   }));
 
-  const cats: ExpenseCategory[] = categories.map((c) => ({ id: c.id, name: c.name }));
+  const cats: ExpenseCategory[] = categories.map((category) => ({
+    id: category.id,
+    name: category.name,
+    isFixed: category.isFixed,
+    count: category._count.expenses,
+  }));
+
   const depositRows: AdminDeposit[] = deposits.map((deposit) => ({
     id: deposit.id,
     amount: toMoney(deposit.amount),
@@ -61,16 +92,38 @@ export default async function ExpensesPage({
   return (
     <>
       <PageHeader
+        eyebrow={`Money · ${period.label}`}
         title="Expenses"
-        description="What the business spent. Deposits are transfers, not costs."
+        description="What the business spent. Spends from the till land here on their own; deposits are transfers, not costs."
+        actions={<PeriodPicker period={period} presets={["today", "week", "month", "last-month"]} />}
       />
-      <ExpensesClient
-        expenses={serialized}
-        deposits={depositRows}
-        categories={cats}
-        month={month}
-        total={total}
-      />
+
+      <div className="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <Stat
+          label="Total spent"
+          value={formatGHS(total)}
+          icon={<Wallet />}
+          tint="bad"
+          detail={`${expenses.length} expense${expenses.length === 1 ? "" : "s"} · fixed ${formatGHS(fixed)}`}
+        />
+        <Stat label="Variable" value={formatGHS(variable)} icon={<Shuffle />} tint="accent" detail="Stock, gas, repairs" />
+        <Stat
+          label="Biggest category"
+          value={top ? formatGHS(top[1]) : "—"}
+          icon={top ? <Crown /> : <Pin />}
+          tint="warn"
+          detail={top ? `${top[0]} · ${Math.round((top[1] / (total || 1)) * 100)}% of spending` : "Nothing spent yet"}
+        />
+        <Stat
+          label="Deposited"
+          value={formatGHS(depositTotal)}
+          icon={<ArrowRightLeft />}
+          tint="neutral"
+          detail="To MoMo or bank. Not a cost."
+        />
+      </div>
+
+      <ExpensesClient expenses={serialized} deposits={depositRows} categories={cats} />
     </>
   );
 }

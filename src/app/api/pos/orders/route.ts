@@ -3,7 +3,8 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireResource, logAudit, clientIp } from "@/lib/api-auth";
 import { ok, parseBody, badRequest, conflict, handlePrismaError } from "@/lib/api-utils";
-import { computeOrderTotals, toMoney, roundMoney, changeDue } from "@/lib/money";
+import { computeOrderTotals, toMoney, changeDue } from "@/lib/money";
+import { priceLines, itemRows } from "@/lib/order-lines";
 import { businessDay, formatOrderNumber } from "@/lib/session-utils";
 import { saleBlockedReason } from "@/lib/shift-close";
 import { getSettings, getTaxConfig } from "@/lib/settings";
@@ -37,12 +38,15 @@ import {
 
 const lineSchema = z.object({
   menuItemId: z.string().min(1),
+  sizeId: z.string().min(1).nullish(),
   quantity: z.number().int().min(1).max(999),
   notes: z.string().max(200).optional(),
 });
 
+// Bank transfer is not a till tender: the till takes cash, MoMo, card and Bolt.
+// The enum keeps BANK_TRANSFER so older orders still read correctly.
 const splitLegSchema = z.object({
-  method: z.enum(["CASH", "MOMO", "CARD", "BANK_TRANSFER", "BOLT_FOOD"]),
+  method: z.enum(["CASH", "MOMO", "CARD", "BOLT_FOOD"]),
   amount: z.number().min(0).max(1000000),
   ref: z.string().max(100).optional(),
 });
@@ -55,7 +59,6 @@ const createSchema = z.object({
     "CASH",
     "MOMO",
     "CARD",
-    "BANK_TRANSFER",
     "BOLT_FOOD",
     "UNPAID",
     "SPLIT",
@@ -76,7 +79,7 @@ const createSchema = z.object({
 
 const settleSchema = z.object({
   orderId: z.string().min(1),
-  paymentMethod: z.enum(["CASH", "MOMO", "CARD", "BANK_TRANSFER", "BOLT_FOOD", "SPLIT"]),
+  paymentMethod: z.enum(["CASH", "MOMO", "CARD", "BOLT_FOOD", "SPLIT"]),
   splitPayments: z.array(splitLegSchema).optional(),
   paymentReference: z.string().max(100).optional(),
   tenderedAmount: z.number().min(0).max(1000000).optional(),
@@ -156,32 +159,10 @@ export async function POST(request: Request) {
     if (blocked) return conflict(blocked, { stale: true });
 
     // Rule 2. Re-read every price from the database. What the client sent about
-    // money is ignored entirely.
-    const menuItemIds = [...new Set(body.lines.map((line) => line.menuItemId))];
-    const menuItems = await prisma.menuItem.findMany({
-      where: { id: { in: menuItemIds } },
-      select: { id: true, name: true, price: true, costPrice: true, isAvailable: true },
-    });
-    const byId = new Map(menuItems.map((item) => [item.id, item]));
-
-    const missing = menuItemIds.filter((id) => !byId.has(id));
-    if (missing.length > 0) {
-      return badRequest("Some items are no longer on the menu. Refresh the till.", { missing });
-    }
-
-    const lines = body.lines.map((line) => {
-      const item = byId.get(line.menuItemId)!;
-      const unitPrice = toMoney(item.price);
-      return {
-        menuItemId: item.id,
-        name: item.name,
-        unitPrice,
-        unitCost: item.costPrice === null ? null : toMoney(item.costPrice),
-        quantity: line.quantity,
-        lineTotal: roundMoney(unitPrice * line.quantity),
-        notes: line.notes,
-      };
-    });
+    // money is ignored entirely; sizes are priced by their own row.
+    const priced = await priceLines(body.lines);
+    if (!priced.ok) return badRequest(priced.error, priced.missing ? { missing: priced.missing } : undefined);
+    const lines = priced.lines;
 
     const settings = await getSettings();
     const totals = computeOrderTotals({
@@ -277,17 +258,7 @@ export async function POST(request: Request) {
           customerAddress: body.customerAddress,
           staffId: auth.user.sub,
           notes: body.notes,
-          items: {
-            create: lines.map((line) => ({
-              menuItemId: line.menuItemId,
-              name: line.name,
-              unitPrice: line.unitPrice,
-              unitCost: line.unitCost,
-              quantity: line.quantity,
-              lineTotal: line.lineTotal,
-              notes: line.notes,
-            })),
-          },
+          items: { create: itemRows(lines) },
         },
         include: { items: true },
       });
@@ -304,6 +275,7 @@ export async function POST(request: Request) {
             soldBy: auth.user.name,
             lines: lines.map((line) => ({
               name: line.name,
+              size: line.sizeLabel,
               quantity: line.quantity,
               unitPrice: line.unitPrice,
               lineTotal: line.lineTotal,

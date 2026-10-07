@@ -3,6 +3,20 @@
  * Used by InfoTooltip next to labels so admin/management can understand reports.
  */
 export const FINANCIAL_TERM_NOTES: Record<string, string> = {
+  sales:
+    "Everything customers paid for completed sales in this period, after discounts. The figure every margin is measured against.",
+  takings:
+    "Everything customers paid for completed sales, VAT included. This is the money that came in; not all of it is ours to keep.",
+  tax: "VAT and the levies (NHIL, GETFund, COVID) inside the takings. It is held for GRA, so it comes off before we count revenue.",
+  netSales:
+    "Takings minus VAT and levies: the business's real revenue, and the figure every margin is measured against.",
+  discounts:
+    "Money knocked off bills at the till. Already deducted from takings; shown so you can see what it cost.",
+  tillSpends:
+    "Cash spent from the drawer before spends had to be filed under an expense category. Counted as a cost so it is not lost.",
+  refunds: "Paid sales given back to the customer. Already left out of takings, so not deducted again.",
+  voids: "Tickets cancelled before the money was kept. No money changed hands, but the food may have been made.",
+  deposits: "Cash moved from the drawer into MoMo or the bank. A transfer, not a cost.",
   revenue:
     "Total money from sales (orders) in this period. This is what customers paid before we subtract any costs.",
   cogs: "Cost of goods sold: what we spent on ingredients and materials to make the food we sold. Helps us see how much we really make from each sale.",
@@ -22,7 +36,6 @@ export const FINANCIAL_TERM_NOTES: Record<string, string> = {
   cashIn: "Money that came in from paid orders (sales) in this period.",
   cashOut: "Money we paid out: expenses and payroll.",
   netCash: "Cash in minus cash out. Positive means we received more than we paid in the period.",
-  deposits: "Money moved from the till or cash to the bank. Helps match physical cash to bank balance.",
   paymentMethod:
     "How the customer paid: Cash, Mobile Money, Card, etc. Use this to reconcile what you have in hand or in the bank.",
   variance:

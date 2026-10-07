@@ -35,7 +35,9 @@ import {
   getQueueCount,
   getServerQueueCount,
 } from "@/lib/offlineQueue";
-import { cartReducer, emptyCart, cartCount } from "./cartReducer";
+import { cartReducer, emptyCart, cartCount, lineKey } from "./cartReducer";
+import { callNumber } from "@/lib/session-utils";
+import SizePickerSheet from "./SizePickerSheet";
 import MenuGrid from "./MenuGrid";
 import CartPanel from "./CartPanel";
 import MobileCartSheet from "./MobileCartSheet";
@@ -43,7 +45,7 @@ import PaymentSheet from "./PaymentSheet";
 import ShiftPanel, { OpenShiftCard } from "./ShiftPanel";
 import { SettleSheet, VoidSheet } from "./OpenTickets";
 import OrderDesk from "./OrderDesk";
-import PaymentCorrectionSheet from "./PaymentCorrectionSheet";
+import EditOrderSheet from "./EditOrderSheet";
 import ReceiptModal from "./ReceiptModal";
 import QuantityEntrySheet from "./QuantityEntrySheet";
 import CashMovementDialog from "./CashMovementDialog";
@@ -56,6 +58,7 @@ import { fetchWithTimeout } from "@/lib/fetch-timeout";
 import type { FulfillmentType } from "./CustomerFields";
 import Button from "./ui/Button";
 import type {
+  PosMenuSize,
   CartLine,
   OrderView,
   PosCategory,
@@ -89,6 +92,8 @@ interface RegisterProps {
   expenseCategories?: ExpenseCategoryOption[];
   canFileExpense?: boolean;
   canVoid?: boolean;
+  /** Owner / manager: may change an order that has already been paid. */
+  canEditPaid?: boolean;
   /** Set for roles that may use the back office. */
   backOfficeHref?: string;
 }
@@ -104,6 +109,7 @@ export default function Register({
   expenseCategories = [],
   canFileExpense = false,
   canVoid = false,
+  canEditPaid = false,
   backOfficeHref,
 }: RegisterProps) {
   const router = useRouter();
@@ -119,10 +125,13 @@ export default function Register({
   );
   const [view, setView] = useState<View>(initialSession?.isStale ? "tickets" : "register");
   const [tickets, setTickets] = useState<OrderView[]>(initialTickets);
+  // Online orders already announced, so each one is announced once.
+  const seenOnline = useRef(new Set(initialTickets.filter((order) => order.source === "ONLINE").map((order) => order.id)));
+  const initialOnlineSeeded = useRef(false);
   const [shiftOrders, setShiftOrders] = useState<OrderView[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [chargeIds, setChargeIds] = useState<string[] | null>(null);
-  const [correcting, setCorrecting] = useState<OrderView | null>(null);
+  const [editing, setEditing] = useState<OrderView | null>(null);
   const [paying, setPaying] = useState(false);
   // Phone only: the cart lives in a slide-up sheet, since there's no room for a
   // side rail. Desktop shows CartPanel inline and never opens this.
@@ -149,6 +158,7 @@ export default function Register({
   const [movingCash, setMovingCash] = useState(false);
   const [focusedMenuItemId, setFocusedMenuItemId] = useState<string | null>(null);
   const [qtyTarget, setQtyTarget] = useState<CartLine | null>(null);
+  const [sizeFor, setSizeFor] = useState<PosMenuItem | null>(null);
   const [tableId, setTableId] = useState("");
   const [tables, setTables] = useState<
     { id: string; label: string; area: string; seats: number; occupied: boolean }[]
@@ -173,7 +183,7 @@ export default function Register({
   const chargingLines = useMemo(() => {
     if (!chargeIds) return cart.lines;
     const keep = new Set(chargeIds);
-    return cart.lines.filter((line) => keep.has(line.menuItemId));
+    return cart.lines.filter((line) => keep.has(line.key));
   }, [cart.lines, chargeIds]);
 
   const chargingTotals = useMemo(() => {
@@ -189,7 +199,7 @@ export default function Register({
     const keep = new Set(selectedIds);
     return computeOrderTotals({
       lines: cart.lines
-        .filter((line) => keep.has(line.menuItemId))
+        .filter((line) => keep.has(line.key))
         .map((line) => ({ unitPrice: line.unitPrice, quantity: line.quantity })),
     }).total;
   }, [selectedIds, cart.lines]);
@@ -236,7 +246,24 @@ export default function Register({
       ]);
       if (openRes.ok) {
         const data = await openRes.json();
-        setTickets(data.orders);
+        const orders = data.orders as OrderView[];
+        // Announce online orders the first time this till sees them.
+        const online = orders.filter((order) => order.source === "ONLINE");
+        const fresh = online.filter((order) => !seenOnline.current.has(order.id));
+        if (seenOnline.current.size > 0 || initialOnlineSeeded.current) {
+          if (fresh.length === 1) {
+            const order = fresh[0];
+            setBanner({
+              tone: "good",
+              text: `New online order ${callNumber(order.orderNumber)}${order.customerName ? ` from ${order.customerName}` : ""}. It is on Orders.`,
+            });
+          } else if (fresh.length > 1) {
+            setBanner({ tone: "good", text: `${fresh.length} new online orders. They are on Orders.` });
+          }
+        }
+        initialOnlineSeeded.current = true;
+        for (const order of online) seenOnline.current.add(order.id);
+        setTickets(orders);
       }
       if (shiftRes.ok) {
         const data = await shiftRes.json();
@@ -261,7 +288,8 @@ export default function Register({
         if (Array.isArray(parsed.lines) && parsed.lines.length > 0) {
           dispatch({ type: "replace", lines: parsed.lines, discount: parsed.discount ?? 0 });
           const last = parsed.lines[parsed.lines.length - 1];
-          if (last?.menuItemId) setFocusedMenuItemId(last.menuItemId);
+          const lastKey = last?.key ?? last?.menuItemId;
+          if (lastKey) setFocusedMenuItemId(lastKey);
         }
         if (typeof parsed.customerName === "string") setCustomerName(parsed.customerName);
         if (typeof parsed.customerPhone === "string") setCustomerPhone(parsed.customerPhone);
@@ -350,8 +378,16 @@ export default function Register({
   // A shift can go stale while the till sits open past midnight.
   useEffect(() => {
     const timer = setInterval(() => void loadSession(), 5 * 60_000);
-    return () => clearInterval(timer);
-  }, [loadSession]);
+    // Online orders arrive without anyone touching the till: look every 30s
+    // while the till is on screen.
+    const ticketTimer = setInterval(() => {
+      if (document.visibilityState === "visible") void loadTickets();
+    }, 30_000);
+    return () => {
+      clearInterval(timer);
+      clearInterval(ticketTimer);
+    };
+  }, [loadSession, loadTickets]);
 
   useEffect(() => {
     let cancelled = false;
@@ -417,6 +453,7 @@ export default function Register({
       clientRef,
       lines: chargingLines.map((line) => ({
         menuItemId: line.menuItemId,
+        sizeId: line.sizeId ?? undefined,
         quantity: line.quantity,
         notes: line.notes,
       })),
@@ -474,7 +511,7 @@ export default function Register({
 
     const partial = Boolean(chargeIds && chargingLines.length > 0 && chargingLines.length < cart.lines.length);
     if (partial && chargeIds) {
-      dispatch({ type: "removeMany", menuItemIds: chargeIds });
+      dispatch({ type: "removeMany", keys: chargeIds });
       setSelectedIds((current) => current.filter((id) => !chargeIds.includes(id)));
     } else {
       clearOrder();
@@ -530,12 +567,23 @@ export default function Register({
 
   function addItem(item: PosMenuItem) {
     if (locked) return;
+    // A dish with sizes asks which one before it reaches the cart.
+    if (item.sizes && item.sizes.length > 0) {
+      setSizeFor(item);
+      return;
+    }
     dispatch({ type: "add", item });
-    setFocusedMenuItemId(item.id);
+    setFocusedMenuItemId(lineKey(item.id));
+  }
+
+  function addSized(item: PosMenuItem, size: PosMenuSize) {
+    dispatch({ type: "add", item, size });
+    setFocusedMenuItemId(lineKey(item.id, size.id));
+    setSizeFor(null);
   }
 
   function editQty(line: CartLine) {
-    setFocusedMenuItemId(line.menuItemId);
+    setFocusedMenuItemId(line.key);
     setQtyTarget(line);
   }
 
@@ -830,18 +878,14 @@ export default function Register({
               tickets={tickets}
               shiftOrders={shiftOrders}
               canVoidPaid={canVoid}
+              canEditPaid={canEditPaid}
               onTakePayment={(ticket) => setSettling(ticket)}
               onVoid={(ticket) => setVoiding(ticket)}
-              onReprint={(order) => {
-                setSlipKind("receipt");
+              onPrint={(order, kind) => {
+                setSlipKind(kind === "invoice" ? "invoice" : "receipt");
                 setReceipt(order);
               }}
-              onInvoice={(order) => {
-                setSlipKind("invoice");
-                setReceipt(order);
-              }}
-              onCorrect={(order) => setCorrecting(order)}
-              onChanged={() => void loadTickets()}
+              onEdit={(order) => setEditing(order)}
             />
           </main>
         )}
@@ -924,6 +968,10 @@ export default function Register({
         />
       )}
 
+      {sizeFor && (
+        <SizePickerSheet item={sizeFor} onPick={(size) => addSized(sizeFor, size)} onClose={() => setSizeFor(null)} />
+      )}
+
       {qtyTarget && (
         <QuantityEntrySheet
           productName={qtyTarget.name}
@@ -932,12 +980,12 @@ export default function Register({
           onConfirm={(quantity) => {
             dispatch({
               type: "setQuantity",
-              menuItemId: qtyTarget.menuItemId,
+              key: qtyTarget.key,
               quantity,
             });
             if (quantity === 0) {
-              const remaining = cart.lines.filter((line) => line.menuItemId !== qtyTarget.menuItemId);
-              setFocusedMenuItemId(remaining[remaining.length - 1]?.menuItemId ?? null);
+              const remaining = cart.lines.filter((line) => line.key !== qtyTarget.key);
+              setFocusedMenuItemId(remaining[remaining.length - 1]?.key ?? null);
             }
           }}
           onClose={() => setQtyTarget(null)}
@@ -970,6 +1018,12 @@ export default function Register({
         <SettleSheet
           ticket={settling}
           onClose={() => setSettling(null)}
+          onPrintBill={() => {
+            const order = settling;
+            setSettling(null);
+            setSlipKind("receipt");
+            setReceipt(order);
+          }}
           onSettled={(order) => {
             setSettling(null);
             setSlipKind("receipt");
@@ -1025,14 +1079,15 @@ export default function Register({
         />
       )}
 
-      {correcting && (
-        <PaymentCorrectionSheet
-          order={correcting}
-          endpoint={`/api/pos/orders/${correcting.id}`}
-          onClose={() => setCorrecting(null)}
+      {editing && (
+        <EditOrderSheet
+          order={editing}
+          menu={menu}
+          endpoint={`/api/pos/orders/${editing.id}`}
+          onClose={() => setEditing(null)}
           onSaved={() => {
-            setCorrecting(null);
-            setBanner({ tone: "good", text: "Payment updated." });
+            setEditing(null);
+            setBanner({ tone: "good", text: "Order updated." });
             void loadTickets();
             void loadSession();
           }}
@@ -1084,7 +1139,7 @@ function PosRail({
 }) {
   const entries = [
     { id: "register" as const, label: "Order", icon: Store },
-    { id: "tickets" as const, label: "Tickets", icon: ReceiptText, count: ticketCount },
+    { id: "tickets" as const, label: "Orders", icon: ReceiptText, count: ticketCount },
     { id: "shift" as const, label: "Shift", icon: Wallet },
   ];
   return (

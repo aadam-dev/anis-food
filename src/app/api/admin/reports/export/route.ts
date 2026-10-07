@@ -1,38 +1,65 @@
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { requireResource } from "@/lib/api-auth";
-import { getMonthlyReport, getVatReturn } from "@/lib/reports";
-import { getSessionsForMonth } from "@/lib/report-sessions";
-import { getSettings } from "@/lib/settings";
-import { PAYMENT_LABELS } from "@/components/admin/labels";
+import { getLedger, getVatReturn } from "@/lib/reports";
+import { getShifts } from "@/lib/report-sessions";
+import { getSettings, getTaxConfig } from "@/lib/settings";
+import { resolvePeriod } from "@/lib/period";
+import { PAYMENT_LABELS, VOID_REASON_LABELS } from "@/components/admin/labels";
 
 /**
- * Download a month's figures as a spreadsheet.
+ * Download a period's figures as a spreadsheet.
  *
  * XLSX so the accountant can open it and keep the number formatting, or CSV for
  * anything that only speaks plain text. Same numbers as the on-screen report —
- * both read getMonthlyReport, so an exported figure can never disagree with the
- * one Karim was looking at when he clicked Export.
+ * both read getLedger, so an exported figure can never disagree with the one
+ * Karim was looking at when he clicked Export. Takes the Reports page's own
+ * `period` / `from`+`to` params, and the older `month=` links still work.
  */
 export async function GET(request: Request) {
   const auth = await requireResource("reports");
   if (auth instanceof NextResponse) return auth;
 
   const url = new URL(request.url);
-  const month = url.searchParams.get("month") ?? new Date().toISOString().slice(0, 7);
+  const period = resolvePeriod(Object.fromEntries(url.searchParams), "month");
   const format = url.searchParams.get("format") === "csv" ? "csv" : "xlsx";
+  const label = period.from === period.to ? period.from : `${period.from}_to_${period.to}`;
 
-  if (!/^\d{4}-\d{2}$/.test(month)) {
-    return NextResponse.json({ error: "Bad month" }, { status: 400 });
-  }
-
-  const [report, sessions, vat, settings] = await Promise.all([
-    getMonthlyReport(month),
-    getSessionsForMonth(month),
-    getVatReturn(month),
+  const [ledger, shifts, vat, settings] = await Promise.all([
+    getLedger(period.from, period.to),
+    getShifts(period.from, period.to),
+    getVatReturn(period.from, period.to),
     getSettings(),
   ]);
-  const title = `${settings.business_name} — ${month}`;
+  const title = `${settings.business_name} — ${period.from} to ${period.to}`;
+  // VAT lines appear only once tax is on (or the period really carried tax).
+  const showTax = getTaxConfig(settings).enabled || ledger.tax > 0;
+
+  const plRows: [string, number, boolean?][] = [
+    ...(showTax
+      ? ([
+          ["Takings (VAT included)", ledger.takings],
+          ["Less VAT & levies", -ledger.tax],
+          ["Net sales", ledger.netSales, true],
+        ] as [string, number, boolean?][])
+      : ([["Sales", ledger.netSales, true]] as [string, number, boolean?][])),
+    ["Cost of items sold", -ledger.cogs],
+    ["Gross profit", ledger.grossProfit, true],
+    ...ledger.expenses.byCategory.map(
+      (row) => [`Expense: ${row.category}${row.isFixed ? " (fixed)" : ""}`, -row.amount] as [string, number],
+    ),
+    ["Till spends with no category", -ledger.tillSpends.amount],
+    ["Payroll paid", -ledger.payroll],
+    ["Net profit", ledger.netProfit, true],
+  ];
+  const memoRows: [string, number, number?][] = [
+    ["Discounts given (already off takings)", ledger.discounts, ledger.discountedOrders],
+    ["Voids", ledger.voids.amount, ledger.voids.count],
+    ["Refunds", ledger.refunds.amount, ledger.refunds.count],
+    ["Deposited to MoMo", ledger.deposits.momo],
+    ["Deposited to bank", ledger.deposits.bank],
+    ["Bolt awaiting payout", ledger.boltAwaiting.amount, ledger.boltAwaiting.count],
+  ];
 
   if (format === "csv") {
     const rows: string[] = [];
@@ -42,39 +69,30 @@ export async function GET(request: Request) {
     line(title);
     line("");
     line("PROFIT & LOSS");
-    line("Revenue", report.revenue);
-    line("Cost of items sold", report.cogs);
-    line("Gross profit", report.grossProfit);
-    line("Expenses", report.expenses);
-    line("Payroll", report.payroll);
-    line("Net profit", report.netProfit);
+    for (const [name, value] of plRows) line(name, value);
+    line(`Cost price coverage: ${ledger.cogsCoverage}% of item sales`);
     line("");
-    line("MEMO — not in the profit figure");
-    line("Voids", report.voids.count, report.voids.amount);
-    line("Refunds", report.refunds.count, report.refunds.amount);
-    line("Deposited to MoMo", report.deposits.momo);
-    line("Deposited to bank", report.deposits.bank);
-    line("Bolt awaiting payout", report.boltAwaiting.count, report.boltAwaiting.amount);
+    line("OUTSIDE THE PROFIT FIGURE", "Amount", "Count");
+    for (const [name, value, count] of memoRows) line(name, value, count ?? "");
     line("");
     line("DAILY SALES");
-    line("Day", "Orders", "Revenue");
-    for (const day of report.dailySales) line(day.day, day.orders, day.revenue);
+    line("Day", "Orders", showTax ? "Net sales" : "Sales");
+    for (const day of ledger.daily) line(day.day, day.orders, day.revenue);
     line("");
     line("PAYMENT BREAKDOWN");
-    for (const entry of report.paymentBreakdown) {
-      line(PAYMENT_LABELS[entry.method] ?? entry.method, entry.amount);
-    }
+    for (const entry of ledger.paymentMix) line(PAYMENT_LABELS[entry.method] ?? entry.method, entry.amount);
     line("");
-    line("SHIFTS");
-    line("Day", "Cashier", "Expected", "Counted", "Difference");
-    for (const s of sessions) {
-      line(s.businessDay, s.openedBy, s.expectedCash ?? "", s.closingCash ?? "", s.differenceLabel);
-    }
+    line("REFUNDS BY REASON");
+    for (const row of ledger.refunds.byReason) line(VOID_REASON_LABELS[row.reason] ?? row.reason, row.count, row.amount);
     line("");
-    line("VAT RETURN");
-    if (!vat.active) {
-      line("No VAT charged this month (tax engine off).");
-    } else {
+    line("CASH-UP");
+    line("Day", "Cashier", "Expected cash", "Counted cash", "Difference", "MoMo expected", "MoMo counted");
+    for (const s of shifts) {
+      line(s.businessDay, s.openedBy, s.expectedCash ?? "", s.closingCash ?? "", s.differenceLabel, s.expectedMomo ?? "", s.closingMomo ?? "");
+    }
+    if (showTax) {
+      line("");
+      line("VAT RETURN");
       line("Taxable sales (excl. tax)", vat.taxable);
       for (const levy of vat.byLevy) line(levy.label, levy.amount);
       line("Total tax collected", vat.taxTotal);
@@ -83,44 +101,29 @@ export async function GET(request: Request) {
     return new NextResponse(rows.join("\n"), {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="anis-${month}.csv"`,
+        "Content-Disposition": `attachment; filename="anis-${label}.csv"`,
       },
     });
   }
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "Anis Back Office";
-
-  const money = '#,##0.00';
+  const money = "#,##0.00;[Red]-#,##0.00";
 
   const pl = workbook.addWorksheet("P&L");
-  pl.columns = [{ width: 24 }, { width: 16 }];
-  pl.addRow([title]);
-  pl.getRow(1).font = { bold: true, size: 14 };
+  pl.columns = [{ width: 40 }, { width: 16 }, { width: 10 }];
+  pl.addRow([title]).font = { bold: true, size: 14 };
   pl.addRow([]);
-  const plRows: [string, number][] = [
-    ["Revenue", report.revenue],
-    ["Cost of items sold", report.cogs],
-    ["Gross profit", report.grossProfit],
-    ["Expenses", report.expenses],
-    ["Payroll", report.payroll],
-    ["Net profit", report.netProfit],
-  ];
-  for (const [label, value] of plRows) {
-    const row = pl.addRow([label, value]);
+  for (const [name, value, bold] of plRows) {
+    const row = pl.addRow([name, value]);
     row.getCell(2).numFmt = money;
-    if (label === "Net profit" || label === "Gross profit") row.font = { bold: true };
+    if (bold) row.font = { bold: true };
   }
+  pl.addRow([`Cost price coverage: ${ledger.cogsCoverage}% of item sales`]).font = { italic: true };
   pl.addRow([]);
-  pl.addRow(["Memo — not in the profit figure"]).font = { bold: true };
-  for (const [label, value] of [
-    ["Voids", report.voids.amount],
-    ["Refunds", report.refunds.amount],
-    ["Deposited to MoMo", report.deposits.momo],
-    ["Deposited to bank", report.deposits.bank],
-    ["Bolt awaiting payout", report.boltAwaiting.amount],
-  ] as [string, number][]) {
-    const row = pl.addRow([label, value]);
+  pl.addRow(["Outside the profit figure", "Amount", "Count"]).font = { bold: true };
+  for (const [name, value, count] of memoRows) {
+    const row = pl.addRow([name, value, count ?? ""]);
     row.getCell(2).numFmt = money;
   }
 
@@ -128,53 +131,75 @@ export async function GET(request: Request) {
   sales.columns = [
     { header: "Day", key: "day", width: 14 },
     { header: "Orders", key: "orders", width: 10 },
-    { header: "Revenue", key: "revenue", width: 16, style: { numFmt: money } },
+    { header: showTax ? "Net sales" : "Sales", key: "revenue", width: 16, style: { numFmt: money } },
   ];
   sales.getRow(1).font = { bold: true };
-  for (const day of report.dailySales) sales.addRow(day);
+  for (const day of ledger.daily) sales.addRow(day);
 
   const items = workbook.addWorksheet("Top items");
   items.columns = [
     { header: "Item", key: "name", width: 36 },
     { header: "Sold", key: "quantity", width: 10 },
-    { header: "Revenue", key: "revenue", width: 16, style: { numFmt: money } },
+    { header: "Sales", key: "revenue", width: 16, style: { numFmt: money } },
   ];
   items.getRow(1).font = { bold: true };
-  for (const item of report.topItems) items.addRow(item);
+  for (const item of ledger.topItems) items.addRow(item);
 
-  const shifts = workbook.addWorksheet("Shifts");
-  shifts.columns = [
+  const payments = workbook.addWorksheet("Payments");
+  payments.columns = [
+    { header: "Method", key: "method", width: 20 },
+    { header: "Amount", key: "amount", width: 16, style: { numFmt: money } },
+  ];
+  payments.getRow(1).font = { bold: true };
+  for (const entry of ledger.paymentMix) {
+    payments.addRow({ method: PAYMENT_LABELS[entry.method] ?? entry.method, amount: entry.amount });
+  }
+
+  const refunds = workbook.addWorksheet("Refunds");
+  refunds.columns = [
+    { header: "Reason", key: "reason", width: 24 },
+    { header: "Orders", key: "count", width: 10 },
+    { header: "Value", key: "amount", width: 16, style: { numFmt: money } },
+  ];
+  refunds.getRow(1).font = { bold: true };
+  for (const row of ledger.refunds.byReason) {
+    refunds.addRow({ reason: VOID_REASON_LABELS[row.reason] ?? row.reason, count: row.count, amount: row.amount });
+  }
+
+  const cashUp = workbook.addWorksheet("Cash-up");
+  cashUp.columns = [
     { header: "Day", key: "day", width: 14 },
     { header: "Cashier", key: "cashier", width: 20 },
-    { header: "Expected", key: "expected", width: 14, style: { numFmt: money } },
-    { header: "Counted", key: "counted", width: 14, style: { numFmt: money } },
-    { header: "Difference", key: "difference", width: 20 },
+    { header: "Closed by", key: "closedBy", width: 20 },
+    { header: "Float", key: "float", width: 12, style: { numFmt: money } },
+    { header: "Expected cash", key: "expected", width: 14, style: { numFmt: money } },
+    { header: "Counted cash", key: "counted", width: 14, style: { numFmt: money } },
+    { header: "Difference", key: "difference", width: 22 },
+    { header: "MoMo expected", key: "momoExpected", width: 14, style: { numFmt: money } },
+    { header: "MoMo counted", key: "momoCounted", width: 14, style: { numFmt: money } },
   ];
-  shifts.getRow(1).font = { bold: true };
-  for (const s of sessions) {
-    shifts.addRow({
+  cashUp.getRow(1).font = { bold: true };
+  for (const s of shifts) {
+    cashUp.addRow({
       day: s.businessDay,
       cashier: s.openedBy,
+      closedBy: s.closedBy ?? (s.status === "OPEN" ? "(still open)" : ""),
+      float: s.openingFloat,
       expected: s.expectedCash ?? undefined,
       counted: s.closingCash ?? undefined,
       difference: s.differenceLabel,
+      momoExpected: s.expectedMomo ?? undefined,
+      momoCounted: s.closingMomo ?? undefined,
     });
   }
 
-  const vatSheet = workbook.addWorksheet("VAT return");
-  vatSheet.columns = [{ width: 24 }, { width: 16 }];
-  vatSheet.addRow([`VAT return — ${month}`]);
-  vatSheet.getRow(1).font = { bold: true, size: 14 };
-  vatSheet.addRow([]);
-  if (!vat.active) {
-    vatSheet.addRow(["No VAT charged this month (tax engine off)."]);
-  } else {
-    const taxable = vatSheet.addRow(["Taxable sales (excl. tax)", vat.taxable]);
-    taxable.getCell(2).numFmt = money;
-    for (const levy of vat.byLevy) {
-      const row = vatSheet.addRow([levy.label, levy.amount]);
-      row.getCell(2).numFmt = money;
-    }
+  if (showTax) {
+    const vatSheet = workbook.addWorksheet("VAT return");
+    vatSheet.columns = [{ width: 28 }, { width: 16 }];
+    vatSheet.addRow([`VAT return — ${period.from} to ${period.to}`]).font = { bold: true, size: 14 };
+    vatSheet.addRow([]);
+    vatSheet.addRow(["Taxable sales (excl. tax)", vat.taxable]).getCell(2).numFmt = money;
+    for (const levy of vat.byLevy) vatSheet.addRow([levy.label, levy.amount]).getCell(2).numFmt = money;
     const total = vatSheet.addRow(["Total tax collected", vat.taxTotal]);
     total.getCell(2).numFmt = money;
     total.font = { bold: true };
@@ -184,7 +209,7 @@ export async function GET(request: Request) {
   return new NextResponse(buffer as ArrayBuffer, {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="anis-${month}.xlsx"`,
+      "Content-Disposition": `attachment; filename="anis-${label}.xlsx"`,
     },
   });
 }

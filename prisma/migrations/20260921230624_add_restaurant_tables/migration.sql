@@ -1,9 +1,9 @@
 -- AlterTable
-ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "tableId" TEXT;
-ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "tableLabel" TEXT;
+ALTER TABLE "Order" ADD COLUMN     "tableId" TEXT,
+ADD COLUMN     "tableLabel" TEXT;
 
 -- CreateTable
-CREATE TABLE IF NOT EXISTS "RestaurantTable" (
+CREATE TABLE "RestaurantTable" (
     "id" TEXT NOT NULL,
     "label" TEXT NOT NULL,
     "zone" TEXT NOT NULL DEFAULT 'Main',
@@ -17,28 +17,14 @@ CREATE TABLE IF NOT EXISTS "RestaurantTable" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX IF NOT EXISTS "RestaurantTable_label_key" ON "RestaurantTable"("label");
+CREATE UNIQUE INDEX "RestaurantTable_label_key" ON "RestaurantTable"("label");
 
 -- CreateIndex
-CREATE INDEX IF NOT EXISTS "RestaurantTable_zone_sortOrder_idx" ON "RestaurantTable"("zone", "sortOrder");
+CREATE INDEX "RestaurantTable_zone_sortOrder_idx" ON "RestaurantTable"("zone", "sortOrder");
 
 -- CreateIndex
-CREATE INDEX IF NOT EXISTS "Order_tableId_paymentStatus_idx" ON "Order"("tableId", "paymentStatus");
+CREATE INDEX "Order_tableId_paymentStatus_idx" ON "Order"("tableId", "paymentStatus");
 
--- The till-only line pointed tableId at DiningTable. Seats live on RestaurantTable.
-ALTER TABLE "Order" DROP CONSTRAINT IF EXISTS "Order_tableId_fkey";
+-- AddForeignKey
+ALTER TABLE "Order" ADD CONSTRAINT "Order_tableId_fkey" FOREIGN KEY ("tableId") REFERENCES "RestaurantTable"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
-UPDATE "Order"
-SET "tableId" = NULL
-WHERE "tableId" IS NOT NULL
-  AND NOT EXISTS (
-    SELECT 1 FROM "RestaurantTable" WHERE "RestaurantTable"."id" = "Order"."tableId"
-  );
-
-ALTER TABLE "Order"
-  ADD CONSTRAINT "Order_tableId_fkey"
-  FOREIGN KEY ("tableId") REFERENCES "RestaurantTable"("id")
-  ON DELETE SET NULL ON UPDATE CASCADE;
-
-DROP TABLE IF EXISTS "DiningTable";
-DROP TABLE IF EXISTS "DiningArea";

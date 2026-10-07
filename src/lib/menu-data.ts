@@ -31,4 +31,12 @@ export interface SerializedMenuItem {
   popular: boolean;
   available: boolean;
   tags: string[];
+  /** Small / Large and so on, cheapest first. Empty when the dish has one price. */
+  sizes: SerializedMenuSize[];
+}
+
+export interface SerializedMenuSize {
+  id: string;
+  label: string;
+  price: number;
 }

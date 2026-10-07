@@ -48,7 +48,7 @@ export default async function StaffPage() {
 
   return (
     <>
-      <PageHeader title="Staff" description="Who can sign in, and what they can do." />
+      <PageHeader eyebrow="Manage" title="Staff" description="Who can sign in, and what they can do." />
       <StaffClient staff={staff} assignableRoles={assignableRoles} />
     </>
   );

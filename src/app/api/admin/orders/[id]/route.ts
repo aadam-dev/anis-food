@@ -3,7 +3,7 @@ import { requireResource, clientIp } from "@/lib/api-auth";
 import { ok, parseBody, badRequest, conflict, handlePrismaError, notFound } from "@/lib/api-utils";
 import { applyOrderDesk, deskSchema } from "@/lib/order-desk";
 
-/** The same desk actions, from the back office. */
+/** The same order edits as the till, from the back office, under the same rules. */
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const auth = await requireResource("orders");
   if (auth instanceof NextResponse) return auth;
@@ -17,11 +17,13 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       orderId: id,
       input: parsed.data,
       actorId: auth.user.sub,
+      role: auth.user.role,
       ip: clientIp(request),
       source: "admin",
     });
     if (!result.ok) {
       if (result.status === 404) return notFound(result.message);
+      if (result.status === 403) return NextResponse.json({ error: result.message }, { status: 403 });
       if (result.status === 409) return conflict(result.message);
       return badRequest(result.message);
     }

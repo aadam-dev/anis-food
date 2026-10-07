@@ -102,7 +102,8 @@ export default function XReportSheet({
   );
 }
 
-function SlipRows({ report }: { report: XReport }) {
+/** The slip body, shared with the back office's shift reprint (Z report). */
+export function SlipRows({ report }: { report: XReport }) {
   return (
     <>
       <Row label="Opening float" value={formatGHS(report.openingFloat)} />
@@ -154,7 +155,7 @@ function SlipRows({ report }: { report: XReport }) {
   );
 }
 
-function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+export function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
     <div className={strong ? "r-row r-total" : "r-row"}>
       <span>{label}</span>

@@ -1,12 +1,12 @@
-import MenuItem from "./MenuItem";
+import MenuItem, { type MenuSize } from "./MenuItem";
 import { MenuItem as MenuItemType } from "@/types";
 import type { OrderItem } from "@/types";
 
 interface MenuCardProps {
   items: MenuItemType[];
   cartItems?: OrderItem[];
-  onAddToOrder?: (item: MenuItemType, quantity?: number) => void;
-  onDecrease?: (item: MenuItemType) => void;
+  onAddToOrder?: (item: MenuItemType, quantity?: number, size?: MenuSize) => void;
+  onDecrease?: (item: MenuItemType, size?: MenuSize) => void;
 }
 
 export default function MenuCard({
@@ -25,7 +25,7 @@ export default function MenuCard({
         <MenuItem
           key={item.id}
           item={item}
-          cartQuantity={cartItems.find((i) => i.menuItem.id === item.id)?.quantity ?? 0}
+          cartItems={cartItems.filter((line) => line.menuItem.id === item.id)}
           onAddToOrder={onAddToOrder}
           onDecrease={onDecrease}
         />
@@ -33,4 +33,3 @@ export default function MenuCard({
     </div>
   );
 }
-

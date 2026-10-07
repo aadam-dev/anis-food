@@ -39,11 +39,11 @@ export default function CartLines({
   return (
     <ul className="space-y-2 px-3 py-3">
       {cart.lines.map((line) => {
-        const focused = line.menuItemId === focusedMenuItemId;
-        const selected = selectedIds?.includes(line.menuItemId) ?? false;
+        const focused = line.key === focusedMenuItemId;
+        const selected = selectedIds?.includes(line.key) ?? false;
         return (
           <li
-            key={line.menuItemId}
+            key={line.key}
             className="rounded-2xl px-3 py-3"
             style={{
               background: focused
@@ -56,7 +56,7 @@ export default function CartLines({
                 <input
                   type="checkbox"
                   checked={selected}
-                  onChange={() => onToggle(line.menuItemId)}
+                  onChange={() => onToggle(line.key)}
                   aria-label={`Select ${line.name}`}
                 />
                 {selected ? "On this check" : "Leave on the bill"}
@@ -64,7 +64,7 @@ export default function CartLines({
             )}
             <button
               type="button"
-              onClick={() => onFocus?.(line.menuItemId)}
+              onClick={() => onFocus?.(line.key)}
               className="flex w-full items-start gap-3 text-left min-h-0"
             >
               <DishThumb
@@ -74,7 +74,14 @@ export default function CartLines({
                 letterClassName="text-base"
               />
               <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold leading-snug">{line.name}</span>
+                <span className="block text-sm font-semibold leading-snug">
+                  {line.name}
+                  {line.sizeLabel && (
+                    <span className="ml-1.5 rounded-md px-1.5 py-0.5 text-[11px] font-bold" style={{ background: "color-mix(in srgb, var(--s-brand) 12%, transparent)", color: "var(--s-brand)" }}>
+                      {line.sizeLabel}
+                    </span>
+                  )}
+                </span>
                 <span className="money mt-0.5 block text-xs" style={{ color: "var(--s-ink-muted)" }}>
                   {formatGHS(line.unitPrice)} each
                 </span>
@@ -86,7 +93,7 @@ export default function CartLines({
             <div className="mt-2.5 flex items-center gap-2 pl-15" style={{ paddingLeft: "3.75rem" }}>
               <button
                 type="button"
-                onClick={() => dispatch({ type: "decrement", menuItemId: line.menuItemId })}
+                onClick={() => dispatch({ type: "decrement", key: line.key })}
                 className="grid h-11 w-11 place-items-center rounded-xl"
                 style={{ background: "var(--s-panel)", boxShadow: "inset 0 0 0 1px var(--s-border)" }}
                 aria-label={`One less ${line.name}`}
@@ -107,7 +114,7 @@ export default function CartLines({
               </button>
               <button
                 type="button"
-                onClick={() => dispatch({ type: "increment", menuItemId: line.menuItemId })}
+                onClick={() => dispatch({ type: "increment", key: line.key })}
                 className="grid h-11 w-11 place-items-center rounded-xl"
                 style={{ background: "var(--s-panel)", boxShadow: "inset 0 0 0 1px var(--s-border)" }}
                 aria-label={`One more ${line.name}`}
@@ -116,7 +123,7 @@ export default function CartLines({
               </button>
               <button
                 type="button"
-                onClick={() => dispatch({ type: "remove", menuItemId: line.menuItemId })}
+                onClick={() => dispatch({ type: "remove", key: line.key })}
                 className="ml-auto grid h-11 w-11 place-items-center rounded-xl"
                 style={{ color: "var(--s-ink-faint)" }}
                 aria-label={`Remove ${line.name}`}

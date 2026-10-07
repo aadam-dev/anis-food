@@ -2,331 +2,355 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, MessageCircle, Search, Wallet } from "lucide-react";
-import { formatGHS } from "@/lib/money";
+import { ChevronDown, History, MessageCircle, Pencil, Printer, Search, Wallet } from "lucide-react";
+import { formatGHS, roundMoney } from "@/lib/money";
 import { callNumber } from "@/lib/session-utils";
+import { editVerdict } from "@/lib/order-edit-rules";
+import { getWhatsAppUrl, onlineOrderConfirmMessage, onlineOrderPaymentMessage } from "@/lib/utils";
 import {
-  getWhatsAppUrl,
-  onlineOrderConfirmMessage,
-  onlineOrderPaymentMessage,
-} from "@/lib/utils";
-import { Panel, EmptyState, Chip, AdminButton, inputClass, inputStyle } from "@/components/admin/ui";
-import {
-  PAYMENT_LABELS,
-  ORDER_SOURCE_LABELS,
-  VOID_REASON_LABELS,
-} from "@/components/admin/labels";
+  AdminButton,
+  Chip,
+  Dialog,
+  EmptyState,
+  Field,
+  Panel,
+  Segmented,
+  inputClass,
+  inputStyle,
+} from "@/components/admin/ui";
+import { ORDER_SOURCE_LABELS, PAYMENT_LABELS, VOID_REASON_LABELS } from "@/components/admin/labels";
 import ReceiptModal from "@/components/pos/ReceiptModal";
-import PaymentCorrectionSheet from "@/components/pos/PaymentCorrectionSheet";
-import type { OrderView } from "@/components/pos/types";
+import EditOrderSheet from "@/components/pos/EditOrderSheet";
+import type { OrderView, PosCategory, PosMenuItem } from "@/components/pos/types";
 
-export interface AdminOrder {
-  id: string;
-  orderNumber: string;
-  createdAt: string;
-  status: string;
-  source: string;
-  paymentMethod: string;
-  paymentStatus: string;
-  total: number;
-  staffId: string | null;
+export interface AdminOrder extends OrderView {
   staff: string | null;
-  customerName: string | null;
-  customerPhone: string | null;
-  customerAddress: string | null;
   voidReason: string | null;
-  clientRef: string;
-  deliveryType: string;
-  tableLabel: string | null;
-  subtotal: number;
-  discountAmount: number;
-  taxAmount: number;
-  tax: OrderView["tax"];
-  splitPayments: OrderView["splitPayments"];
-  tenderedAmount: number | null;
-  changeAmount: number | null;
-  notes: string | null;
-  paymentReference: string | null;
-  items: { id: string; name: string; quantity: number; unitPrice: number; lineTotal: number; notes: string | null }[];
+  voidNote: string | null;
+  /** Status of the order's shift; edits follow the till's rules. */
+  shiftStatus: "OPEN" | "CLOSED" | null;
+  /** Changed after it was rung. */
+  edited: boolean;
+  history: { at: string; by: string | null; text: string }[];
 }
 
-function asOrderView(order: AdminOrder): OrderView {
-  return {
-    id: order.id,
-    orderNumber: order.orderNumber,
-    clientRef: order.clientRef,
-    status: order.status,
-    paymentMethod: order.paymentMethod,
-    paymentStatus: order.paymentStatus,
-    paymentReference: order.paymentReference,
-    splitPayments: order.splitPayments,
-    deliveryType: order.deliveryType,
-    subtotal: order.subtotal,
-    discountAmount: order.discountAmount,
-    taxAmount: order.taxAmount,
-    total: order.total,
-    tenderedAmount: order.tenderedAmount,
-    changeAmount: order.changeAmount,
-    tax: order.tax,
-    tableLabel: order.tableLabel,
-    customerName: order.customerName,
-    customerPhone: order.customerPhone,
-    customerAddress: order.customerAddress,
-    notes: order.notes,
-    createdAt: order.createdAt,
-    items: order.items,
-  };
+export type OrderFilter = "all" | "unpaid" | "paid" | "voided" | "edited";
+
+const KIND_LABEL: Record<string, string> = { DINE_IN: "Dine-in", TAKEAWAY: "Takeaway", DELIVERY: "Delivery" };
+
+function statusOf(order: AdminOrder): "unpaid" | "paid" | "voided" {
+  if (order.status === "CANCELLED" || order.paymentStatus === "REFUNDED") return "voided";
+  if (order.paymentStatus === "PENDING") return "unpaid";
+  return "paid";
 }
 
-const VOID_REASONS = Object.entries(VOID_REASON_LABELS);
-
-type OrderFilter = "all" | "online" | "unpaid" | "paid" | "voided";
-
-const FILTERS: { id: OrderFilter; label: string }[] = [
-  { id: "all", label: "All" },
-  { id: "online", label: "Online" },
-  { id: "unpaid", label: "Unpaid" },
-  { id: "paid", label: "Paid" },
-  { id: "voided", label: "Voided" },
-];
+function time(iso: string, withDate: boolean) {
+  return new Date(iso).toLocaleString("en-GB", {
+    timeZone: "Africa/Accra",
+    ...(withDate ? { day: "numeric", month: "short" } : {}),
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export default function OrdersClient({
   orders,
   cashiers,
-  day,
+  menu,
+  canEditPaid,
+  multiDay,
+  truncated,
+  initialFilter = "all",
+  initialQuery = "",
   business,
 }: {
   orders: AdminOrder[];
   cashiers: { id: string; name: string }[];
-  day: string;
-  business: {
-    header: string;
-    address: string;
-    phone: string;
-    footer: string;
-    taxLabel: string;
-    whatsapp: string;
-  };
+  menu: { categories: PosCategory[]; items: PosMenuItem[] };
+  canEditPaid: boolean;
+  /** The list spans more than one day, so rows show the date too. */
+  multiDay: boolean;
+  /** The query hit its row limit; say so rather than imply this is everything. */
+  truncated: boolean;
+  initialFilter?: OrderFilter;
+  initialQuery?: string;
+  business: { header: string; address: string; phone: string; footer: string; taxLabel: string; whatsapp: string };
 }) {
   const router = useRouter();
   const [open, setOpen] = useState<string | null>(null);
   const [voiding, setVoiding] = useState<AdminOrder | null>(null);
-  const [reprinting, setReprinting] = useState<AdminOrder | null>(null);
-  const [slipKind, setSlipKind] = useState<"receipt" | "invoice">("receipt");
-  const [correcting, setCorrecting] = useState<AdminOrder | null>(null);
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<OrderFilter>("all");
-  const [cashierId, setCashierId] = useState<string>("all");
+  const [printing, setPrinting] = useState<{ order: AdminOrder; kind: "receipt" | "invoice" } | null>(null);
+  const [editing, setEditing] = useState<AdminOrder | null>(null);
+  const [query, setQuery] = useState(initialQuery);
+  const [filter, setFilter] = useState<OrderFilter>(initialFilter);
+  const [source, setSource] = useState("all");
+  const [method, setMethod] = useState("all");
+  const [cashierId, setCashierId] = useState("all");
 
-  const active = orders.filter((order) => order.status !== "CANCELLED");
-  const total = active.reduce((sum, order) => sum + order.total, 0);
-
-  const visible = useMemo(() => {
+  // Everything except the status tab, so each tab's count reflects the other filters.
+  const narrowed = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return orders.filter((order) => {
-      const voided = order.status === "CANCELLED";
-      if (filter === "voided" && !voided) return false;
-      if (filter === "online" && order.source !== "ONLINE") return false;
-      if (filter === "unpaid" && (voided || order.paymentStatus !== "PENDING")) return false;
-      if (filter === "paid" && (voided || order.paymentStatus === "PENDING")) return false;
+      if (source !== "all" && (order.source ?? "POS") !== source) return false;
+      if (method !== "all" && order.paymentMethod !== method) return false;
       if (cashierId !== "all" && order.staffId !== cashierId) return false;
       if (!needle) return true;
-      const haystack = [
+      return [
         order.orderNumber,
         callNumber(order.orderNumber),
         order.customerName,
         order.customerPhone,
+        order.customerAddress,
+        order.tableLabel,
         order.staff,
+        order.paymentReference,
+        ...order.items.map((item) => `${item.name} ${item.sizeLabel ?? ""}`),
       ]
         .filter(Boolean)
         .join(" ")
-        .toLowerCase();
-      return haystack.includes(needle);
+        .toLowerCase()
+        .includes(needle);
     });
-  }, [orders, query, filter, cashierId]);
+  }, [orders, query, source, method, cashierId]);
+
+  const counts = useMemo(() => {
+    const result: Record<OrderFilter, number> = { all: narrowed.length, unpaid: 0, paid: 0, voided: 0, edited: 0 };
+    for (const order of narrowed) {
+      result[statusOf(order)] += 1;
+      if (order.edited) result.edited += 1;
+    }
+    return result;
+  }, [narrowed]);
+
+  const visible = useMemo(
+    () =>
+      narrowed.filter((order) =>
+        filter === "all" ? true : filter === "edited" ? order.edited : statusOf(order) === filter,
+      ),
+    [narrowed, filter],
+  );
+
+  const takings = roundMoney(visible.filter((order) => statusOf(order) === "paid").reduce((sum, order) => sum + order.total, 0));
+  const owed = roundMoney(visible.filter((order) => statusOf(order) === "unpaid").reduce((sum, order) => sum + order.total, 0));
+  const methods = useMemo(() => [...new Set(orders.map((order) => order.paymentMethod))].sort(), [orders]);
+  const sources = useMemo(() => [...new Set(orders.map((order) => order.source ?? "POS"))].sort(), [orders]);
+  const filtered = source !== "all" || method !== "all" || cashierId !== "all" || query.trim() !== "";
+
+  const select = (label: string, value: string, onChange: (value: string) => void, options: [string, string][]) => (
+    <select
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className={`${inputClass} w-full text-sm sm:w-auto`}
+      style={{ ...inputStyle, ...(value !== "all" ? { borderColor: "var(--s-brand)" } : {}) }}
+      aria-label={label}
+    >
+      {options.map(([optionValue, optionLabel]) => (
+        <option key={optionValue} value={optionValue}>
+          {optionLabel}
+        </option>
+      ))}
+    </select>
+  );
 
   return (
     <>
-      <div className="mb-4 flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <input
-            type="date"
-            value={day}
-            onChange={(event) => router.push(`/admin/orders?day=${event.target.value}`)}
-            className={`${inputClass} w-auto`}
-            style={inputStyle}
-            aria-label="Day"
-          />
-          <select
-            value={cashierId}
-            onChange={(event) => setCashierId(event.target.value)}
-            className={`${inputClass} w-auto min-w-40`}
-            style={inputStyle}
-            aria-label="Cashier"
-          >
-            <option value="all">All cashiers</option>
-            {cashiers.map((cashier) => (
-              <option key={cashier.id} value={cashier.id}>
-                {cashier.name}
-              </option>
-            ))}
-          </select>
-          <Chip>{active.length} orders</Chip>
-          <Chip tone="good">{formatGHS(total)}</Chip>
+      <div className="mb-4 space-y-3">
+        <Segmented
+          value={filter}
+          onChange={setFilter}
+          options={[
+            { value: "all", label: "All", count: counts.all },
+            { value: "unpaid", label: "Unpaid", count: counts.unpaid },
+            { value: "paid", label: "Paid", count: counts.paid },
+            { value: "voided", label: "Voided & refunded", count: counts.voided },
+            { value: "edited", label: "Edited", count: counts.edited },
+          ]}
+        />
+        <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto_auto]">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "var(--s-ink-faint)" }} />
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Name, phone, number, table, address or dish"
+              aria-label="Search orders"
+              className={`${inputClass} pl-10 text-sm`}
+              style={inputStyle}
+            />
+          </div>
+          {select("Source", source, setSource, [["all", "Any source"], ...sources.map((value) => [value, ORDER_SOURCE_LABELS[value] ?? value] as [string, string])])}
+          {select("Payment", method, setMethod, [["all", "Any payment"], ...methods.map((value) => [value, PAYMENT_LABELS[value] ?? value] as [string, string])])}
+          {select("Cashier", cashierId, setCashierId, [["all", "All staff"], ...cashiers.map((cashier) => [cashier.id, cashier.name] as [string, string])])}
         </div>
-
-        <div className="relative">
-          <Search
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4"
-            style={{ color: "var(--s-ink-faint)" }}
-          />
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Name, phone, or order number"
-            aria-label="Search orders"
-            className={`${inputClass} pl-10`}
-            style={inputStyle}
-          />
-        </div>
-
-        <div className="flex gap-2 overflow-x-auto no-scrollbar">
-          {FILTERS.map((entry) => {
-            const selected = filter === entry.id;
-            return (
-              <button
-                key={entry.id}
-                type="button"
-                onClick={() => setFilter(entry.id)}
-                className="shrink-0 rounded-full border px-4 py-2 text-sm font-semibold"
-                style={{
-                  background: selected ? "var(--s-brand)" : "var(--s-panel)",
-                  borderColor: selected ? "var(--s-brand)" : "var(--s-border)",
-                  color: selected ? "#fff" : "var(--s-ink-muted)",
-                }}
-              >
-                {entry.label}
-              </button>
-            );
-          })}
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <Chip>
+            {visible.length} order{visible.length === 1 ? "" : "s"}
+          </Chip>
+          <Chip tone="good">{formatGHS(takings)} paid</Chip>
+          {owed > 0 && <Chip tone="warn">{formatGHS(owed)} unpaid</Chip>}
+          {filtered && (
+            <button
+              type="button"
+              className="font-bold"
+              style={{ color: "var(--s-brand)" }}
+              onClick={() => {
+                setSource("all");
+                setMethod("all");
+                setCashierId("all");
+                setQuery("");
+              }}
+            >
+              Clear filters
+            </button>
+          )}
+          {truncated && <Chip tone="warn">Latest 500 only. Narrow the dates to see all.</Chip>}
         </div>
       </div>
 
       <Panel>
-        {orders.length === 0 ? (
-          <EmptyState title="No orders on this day" hint="Pick another date above." />
-        ) : visible.length === 0 ? (
-          <EmptyState title="Nothing matches" hint="Try another search or filter." />
+        {visible.length === 0 ? (
+          <EmptyState title={orders.length === 0 ? "No orders in this period" : "Nothing matches"} hint="Try another period or filter." />
         ) : (
-          <ul className="flex flex-col gap-3 p-3 sm:gap-0 sm:p-0 sm:divide-y" style={{ borderColor: "var(--s-border)" }}>
+          <ul className="divide-y" style={{ borderColor: "var(--s-border)" }}>
             {visible.map((order) => {
-              const voided = order.status === "CANCELLED";
+              const state = statusOf(order);
               const isOpen = open === order.id;
-              const when = new Date(order.createdAt).toLocaleTimeString("en-GB", {
-                timeZone: "Africa/Accra",
-                hour: "2-digit",
-                minute: "2-digit",
-              });
-              const customer = [order.customerName?.trim(), order.customerPhone?.trim()]
-                .filter(Boolean)
-                .join(" · ");
+              const verdict = editVerdict(
+                { status: order.status, paymentStatus: order.paymentStatus, paymentMethod: order.paymentMethod, shiftStatus: order.shiftStatus },
+                canEditPaid,
+              );
+              const unpaidTicket = state === "unpaid" && order.paymentMethod === "UNPAID";
+              const canVoid = state !== "voided" && (unpaidTicket || canEditPaid);
               return (
-                <li
-                  key={order.id}
-                  className="rounded-xl border p-3 sm:rounded-none sm:border-0 sm:px-5 sm:py-3"
-                  style={{ borderColor: "var(--s-border)", background: "var(--s-panel)" }}
-                >
+                <li key={order.id} style={{ borderColor: "var(--s-border)" }}>
                   <button
+                    type="button"
                     onClick={() => setOpen(isOpen ? null : order.id)}
-                    className="w-full flex items-center gap-3 text-left"
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--s-hover)] sm:px-5"
+                    aria-expanded={isOpen}
                   >
-                    <span
-                      className="money text-lg font-bold w-12 shrink-0"
-                      style={{ color: voided ? "var(--s-ink-faint)" : "var(--s-ink)" }}
-                    >
+                    <span className="money w-12 shrink-0 text-lg font-extrabold" style={{ color: state === "voided" ? "var(--s-ink-faint)" : "var(--s-ink)" }}>
                       {callNumber(order.orderNumber)}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-2 flex-wrap">
-                        <span
-                          className="text-sm font-medium"
-                          style={voided ? { textDecoration: "line-through", color: "var(--s-ink-faint)" } : undefined}
-                        >
-                          {when}
-                        </span>
-                        {voided ? (
-                          <Chip tone="bad">Voided</Chip>
+                      <span className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-sm font-semibold">{time(order.createdAt, multiDay)}</span>
+                        {state === "voided" ? (
+                          <Chip tone="bad">{order.paymentStatus === "REFUNDED" ? "Refunded" : "Voided"}</Chip>
+                        ) : state === "unpaid" ? (
+                          <Chip tone="warn">{order.paymentMethod === "BOLT_FOOD" ? "On Bolt" : "Unpaid"}</Chip>
                         ) : (
-                          <Chip>{PAYMENT_LABELS[order.paymentMethod] ?? order.paymentMethod}</Chip>
+                          <Chip tone="good">{PAYMENT_LABELS[order.paymentMethod] ?? order.paymentMethod}</Chip>
                         )}
-                        {order.paymentStatus === "PENDING" && !voided && <Chip tone="warn">Unpaid</Chip>}
-                        {order.source !== "POS" && (
-                          <Chip tone={order.source === "ONLINE" ? "warn" : "neutral"}>
-                            {ORDER_SOURCE_LABELS[order.source] ?? order.source}
-                          </Chip>
+                        {order.source && order.source !== "POS" && (
+                          <Chip tone={order.source === "ONLINE" ? "accent" : "neutral"}>{ORDER_SOURCE_LABELS[order.source] ?? order.source}</Chip>
                         )}
+                        {order.edited && <Chip tone="brand">Edited</Chip>}
                       </span>
-                      <span className="block text-xs mt-0.5 truncate" style={{ color: "var(--s-ink-faint)" }}>
-                        {customer || "Walk-in"}
-                        {order.source === "ONLINE" && order.deliveryType
-                          ? ` · ${order.deliveryType === "DELIVERY" ? "Delivery" : order.deliveryType === "TAKEAWAY" ? "Pickup" : order.deliveryType}`
-                          : ""}
+                      <span className="mt-0.5 block truncate text-xs" style={{ color: "var(--s-ink-faint)" }}>
+                        {[order.customerName?.trim(), order.customerPhone?.trim()].filter(Boolean).join(" · ") ||
+                          (order.tableLabel ? `Table ${order.tableLabel}` : "Walk-in")}
+                        {" · "}
+                        {KIND_LABEL[order.deliveryType] ?? order.deliveryType}
+                        {order.staff ? ` · ${order.staff}` : ""}
                       </span>
                     </span>
-                    <span
-                      className="money font-semibold whitespace-nowrap"
-                      style={voided ? { textDecoration: "line-through", color: "var(--s-ink-faint)" } : undefined}
-                    >
+                    <span className="money whitespace-nowrap font-bold" style={state === "voided" ? { textDecoration: "line-through", color: "var(--s-ink-faint)" } : undefined}>
                       {formatGHS(order.total)}
                     </span>
+                    <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`} style={{ color: "var(--s-ink-faint)" }} />
                   </button>
 
                   {isOpen && (
-                    <div className="mt-3 sm:pl-12">
-                      <ul className="space-y-1 text-sm" style={{ color: "var(--s-ink-muted)" }}>
-                        {order.items.map((item) => (
-                          <li key={item.id} className="flex justify-between gap-3">
-                            <span>
-                              {item.quantity}× {item.name}
-                            </span>
-                            <span className="money">{formatGHS(item.lineTotal)}</span>
-                          </li>
-                        ))}
-                      </ul>
-                      <div className="mt-2 flex items-center justify-between gap-3">
-                        <span className="text-xs" style={{ color: "var(--s-ink-faint)" }}>
-                          {order.orderNumber}
-                          {order.staff ? ` · ${order.staff}` : ""}
-                          {voided && order.voidReason
-                            ? ` · ${VOID_REASON_LABELS[order.voidReason] ?? order.voidReason}`
-                            : ""}
-                        </span>
-                        <div className="flex flex-wrap justify-end gap-2">
-                          {order.source === "ONLINE" && order.customerPhone?.trim() && !voided && (
-                            <>
-                              <a
-                                href={getWhatsAppUrl(
-                                  order.customerPhone,
-                                  onlineOrderConfirmMessage({
-                                    customerName: order.customerName?.trim() || "there",
-                                    orderNumber: order.orderNumber,
-                                    total: order.total,
-                                    deliveryType: order.deliveryType,
-                                  }),
+                    <div className="grid gap-4 border-t px-4 py-4 sm:px-5 lg:grid-cols-[1.4fr_1fr]" style={{ borderColor: "var(--s-border)", background: "var(--s-panel-alt)" }}>
+                      <div>
+                        <ul className="space-y-1.5 text-sm">
+                          {order.items.map((item) => (
+                            <li key={item.id} className="flex justify-between gap-3">
+                              <span className="min-w-0">
+                                <span className="font-bold">{item.quantity}×</span> {item.name}
+                                {item.sizeLabel && <span style={{ color: "var(--s-brand)" }}> · {item.sizeLabel}</span>}
+                                {item.notes && (
+                                  <span className="block text-xs" style={{ color: "var(--s-ink-faint)" }}>
+                                    {item.notes}
+                                  </span>
                                 )}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border px-4 py-2.5 text-sm font-bold"
-                                style={{
-                                  background: "var(--s-panel)",
-                                  color: "var(--s-ink)",
-                                  borderColor: "var(--s-border)",
-                                  boxShadow: "var(--s-shadow)",
-                                }}
-                              >
-                                <MessageCircle className="w-4 h-4" /> Confirm on WhatsApp
-                              </a>
+                              </span>
+                              <span className="money whitespace-nowrap">{formatGHS(item.lineTotal)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                        <dl className="mt-3 space-y-1 border-t pt-3 text-sm" style={{ borderColor: "var(--s-border)" }}>
+                          {order.discountAmount > 0 && <Pair label="Discount" value={`−${formatGHS(order.discountAmount)}`} />}
+                          {order.taxAmount > 0 && <Pair label={business.taxLabel || "Tax"} value={formatGHS(order.taxAmount)} />}
+                          <Pair label="Total" value={formatGHS(order.total)} strong />
+                          {order.splitPayments?.map((leg, index) => (
+                            <Pair key={index} label={PAYMENT_LABELS[leg.method] ?? leg.method} value={formatGHS(leg.amount)} />
+                          ))}
+                          {order.paymentReference && <Pair label="Reference" value={order.paymentReference} />}
+                          {order.tenderedAmount !== null && <Pair label="Cash given" value={formatGHS(order.tenderedAmount)} />}
+                        </dl>
+                        {(order.customerAddress || order.notes || order.voidReason) && (
+                          <div className="mt-3 space-y-1 text-sm" style={{ color: "var(--s-ink-muted)" }}>
+                            {order.customerAddress && <p>Deliver to: {order.customerAddress}</p>}
+                            {order.notes && <p>Note: {order.notes}</p>}
+                            {order.voidReason && (
+                              <p style={{ color: "var(--s-bad)" }}>
+                                Void reason: {VOID_REASON_LABELS[order.voidReason] ?? order.voidReason}
+                                {order.voidNote ? ` — ${order.voidNote}` : ""}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                        <p className="mt-2 text-xs" style={{ color: "var(--s-ink-faint)" }}>
+                          {order.orderNumber}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider" style={{ color: "var(--s-ink-faint)" }}>
+                          <History className="h-3.5 w-3.5" /> History
+                        </p>
+                        {order.history.length === 0 ? (
+                          <p className="text-sm" style={{ color: "var(--s-ink-faint)" }}>
+                            No changes recorded.
+                          </p>
+                        ) : (
+                          <ol className="space-y-2 border-l-2 pl-3" style={{ borderColor: "var(--s-border)" }}>
+                            {order.history.map((entry, index) => (
+                              <li key={index} className="text-sm">
+                                <p>{entry.text}</p>
+                                <p className="text-xs" style={{ color: "var(--s-ink-faint)" }}>
+                                  {time(entry.at, true)}
+                                  {entry.by ? ` · ${entry.by}` : ""}
+                                </p>
+                              </li>
+                            ))}
+                          </ol>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap gap-2 lg:col-span-2">
+                        {order.source === "ONLINE" && order.customerPhone?.trim() && state !== "voided" && (
+                          <>
+                            <a
+                              href={getWhatsAppUrl(
+                                order.customerPhone,
+                                onlineOrderConfirmMessage({
+                                  customerName: order.customerName?.trim() || "there",
+                                  orderNumber: order.orderNumber,
+                                  total: order.total,
+                                  deliveryType: order.deliveryType,
+                                }),
+                              )}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="s-card inline-flex min-h-12 items-center gap-2 px-4 text-sm font-bold"
+                            >
+                              <MessageCircle className="h-4 w-4" /> Confirm on WhatsApp
+                            </a>
+                            {state === "unpaid" && (
                               <a
                                 href={getWhatsAppUrl(
                                   order.customerPhone,
@@ -339,43 +363,32 @@ export default function OrdersClient({
                                 )}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border px-4 py-2.5 text-sm font-bold"
-                                style={{
-                                  background: "var(--s-panel)",
-                                  color: "var(--s-ink)",
-                                  borderColor: "var(--s-border)",
-                                  boxShadow: "var(--s-shadow)",
-                                }}
+                                className="s-card inline-flex min-h-12 items-center gap-2 px-4 text-sm font-bold"
                               >
-                                <Wallet className="w-4 h-4" /> Ask for payment
+                                <Wallet className="h-4 w-4" /> Ask for payment
                               </a>
-                            </>
-                          )}
-                          <AdminButton
-                            onClick={() => {
-                              setSlipKind("receipt");
-                              setReprinting(order);
-                            }}
-                          >
-                            Reprint
+                            )}
+                          </>
+                        )}
+                        <AdminButton onClick={() => setPrinting({ order, kind: "receipt" })}>
+                          <Printer className="h-4 w-4" /> {state === "unpaid" ? "Print bill" : "Reprint"}
+                        </AdminButton>
+                        {state !== "voided" && <AdminButton onClick={() => setPrinting({ order, kind: "invoice" })}>Invoice</AdminButton>}
+                        {verdict.ok && (
+                          <AdminButton onClick={() => setEditing(order)}>
+                            <Pencil className="h-4 w-4" /> Edit
                           </AdminButton>
-                          <AdminButton
-                            onClick={() => {
-                              setSlipKind("invoice");
-                              setReprinting(order);
-                            }}
-                          >
-                            Invoice
+                        )}
+                        {!verdict.ok && state !== "voided" && order.shiftStatus === "CLOSED" && (
+                          <span className="self-center text-xs" style={{ color: "var(--s-ink-faint)" }}>
+                            Shift closed: void and re-ring to change it.
+                          </span>
+                        )}
+                        {canVoid && (
+                          <AdminButton variant="danger" onClick={() => setVoiding(order)}>
+                            Void
                           </AdminButton>
-                          {!voided && (
-                            <AdminButton onClick={() => setCorrecting(order)}>Fix payment</AdminButton>
-                          )}
-                          {!voided && (
-                            <AdminButton variant="danger" onClick={() => setVoiding(order)}>
-                              Void
-                            </AdminButton>
-                          )}
-                        </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -386,23 +399,24 @@ export default function OrdersClient({
         )}
       </Panel>
 
-      {reprinting && (
+      {printing && (
         <ReceiptModal
-          order={asOrderView(reprinting)}
+          order={printing.order}
           business={business}
-          soldBy={reprinting.staff ?? "Anis"}
-          kind={slipKind}
-          onClose={() => setReprinting(null)}
+          soldBy={printing.order.staff ?? "Anis"}
+          kind={printing.kind}
+          onClose={() => setPrinting(null)}
         />
       )}
 
-      {correcting && (
-        <PaymentCorrectionSheet
-          order={asOrderView(correcting)}
-          endpoint={`/api/admin/orders/${correcting.id}`}
-          onClose={() => setCorrecting(null)}
+      {editing && (
+        <EditOrderSheet
+          order={editing}
+          menu={menu}
+          endpoint={`/api/admin/orders/${editing.id}`}
+          onClose={() => setEditing(null)}
           onSaved={() => {
-            setCorrecting(null);
+            setEditing(null);
             router.refresh();
           }}
         />
@@ -422,19 +436,21 @@ export default function OrdersClient({
   );
 }
 
-function VoidDialog({
-  order,
-  onClose,
-  onDone,
-}: {
-  order: AdminOrder;
-  onClose: () => void;
-  onDone: () => void;
-}) {
+function Pair({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className={`flex justify-between gap-3 ${strong ? "font-bold" : ""}`}>
+      <dt style={{ color: strong ? "var(--s-ink)" : "var(--s-ink-muted)" }}>{label}</dt>
+      <dd className="money">{value}</dd>
+    </div>
+  );
+}
+
+function VoidDialog({ order, onClose, onDone }: { order: AdminOrder; onClose: () => void; onDone: () => void }) {
   const [reason, setReason] = useState("MISTAKE");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const needsNote = reason === "OTHER" && !note.trim();
 
   async function submit() {
     setBusy(true);
@@ -459,62 +475,41 @@ function VoidDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden />
-      <div
-        className="relative w-full max-w-sm rounded-2xl border p-5"
-        style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
-      >
-        <h2 className="font-bold">Void order {callNumber(order.orderNumber)}?</h2>
-        <p className="mt-1 text-sm" style={{ color: "var(--s-ink-muted)" }}>
-          {formatGHS(order.total)} · the order stays on record with your reason, but stops
-          counting as revenue.
-        </p>
-
-        <label className="mt-4 block text-sm font-medium mb-1.5">Why?</label>
-        <select
-          value={reason}
-          onChange={(event) => setReason(event.target.value)}
-          className={inputClass}
-          style={inputStyle}
-        >
-          {VOID_REASONS.map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-
-        <input
-          type="text"
-          value={note}
-          onChange={(event) => setNote(event.target.value)}
-          placeholder="Note (optional)"
-          className={`${inputClass} mt-2`}
-          style={inputStyle}
-        />
-
+    <Dialog
+      open
+      title={`Void order ${callNumber(order.orderNumber)}?`}
+      description={`${formatGHS(order.total)}. It stays on record with your reason but stops counting as a sale.`}
+      onClose={onClose}
+      footer={
+        <>
+          <AdminButton variant="ghost" onClick={onClose} disabled={busy}>
+            Keep it
+          </AdminButton>
+          <AdminButton variant="primary" onClick={submit} loading={busy} disabled={needsNote} style={{ background: "var(--s-bad)" }}>
+            Void order
+          </AdminButton>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <Field label="Why?">
+          <select value={reason} onChange={(event) => setReason(event.target.value)} className={inputClass} style={inputStyle}>
+            {Object.entries(VOID_REASON_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Note" hint={reason === "OTHER" ? "Required for Other" : "Optional"}>
+          <input value={note} onChange={(event) => setNote(event.target.value)} className={inputClass} style={inputStyle} />
+        </Field>
         {error && (
-          <p className="mt-3 text-sm" style={{ color: "var(--s-bad)" }}>
+          <p role="alert" className="text-sm" style={{ color: "var(--s-bad)" }}>
             {error}
           </p>
         )}
-
-        <div className="mt-4 flex gap-2">
-          <AdminButton onClick={onClose} className="flex-1">
-            Keep it
-          </AdminButton>
-          <button
-            onClick={submit}
-            disabled={busy}
-            className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold text-white min-h-11 disabled:opacity-50"
-            style={{ background: "var(--s-bad)" }}
-          >
-            {busy && <Loader2 className="w-4 h-4 animate-spin" />}
-            Void order
-          </button>
-        </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

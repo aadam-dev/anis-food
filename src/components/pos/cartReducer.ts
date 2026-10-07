@@ -1,5 +1,5 @@
 import { roundMoney } from "@/lib/money";
-import type { CartLine, PosMenuItem } from "./types";
+import type { CartLine, PosMenuItem, PosMenuSize } from "./types";
 
 /**
  * Cart state.
@@ -7,19 +7,26 @@ import type { CartLine, PosMenuItem } from "./types";
  * A reducer rather than scattered useState calls, so every way the cart can
  * change is in one readable list — and so the "clear after a sale" path cannot
  * forget a field.
+ *
+ * Lines are keyed by dish + size, so a Small and a Large jollof are two lines
+ * with their own price and quantity.
  */
 
 /** Catering trays need room past a single plate; fat-finger still clamps. */
 export const MAX_LINE_QTY = 999;
 
+export function lineKey(menuItemId: string, sizeId?: string | null): string {
+  return sizeId ? `${menuItemId}:${sizeId}` : menuItemId;
+}
+
 export type CartAction =
-  | { type: "add"; item: PosMenuItem }
-  | { type: "setQuantity"; menuItemId: string; quantity: number }
-  | { type: "increment"; menuItemId: string }
-  | { type: "decrement"; menuItemId: string }
-  | { type: "remove"; menuItemId: string }
-  | { type: "removeMany"; menuItemIds: string[] }
-  | { type: "setNotes"; menuItemId: string; notes: string }
+  | { type: "add"; item: PosMenuItem; size?: PosMenuSize | null }
+  | { type: "setQuantity"; key: string; quantity: number }
+  | { type: "increment"; key: string }
+  | { type: "decrement"; key: string }
+  | { type: "remove"; key: string }
+  | { type: "removeMany"; keys: string[] }
+  | { type: "setNotes"; key: string; notes: string }
   | { type: "setDiscount"; amount: number }
   | { type: "replace"; lines: CartLine[]; discount?: number }
   | { type: "enrichImages"; byId: Record<string, string | null> }
@@ -35,12 +42,14 @@ export const emptyCart: CartState = { lines: [], discount: 0 };
 export function cartReducer(state: CartState, action: CartAction): CartState {
   switch (action.type) {
     case "add": {
-      const existing = state.lines.find((line) => line.menuItemId === action.item.id);
+      const size = action.size ?? null;
+      const key = lineKey(action.item.id, size?.id);
+      const existing = state.lines.find((line) => line.key === key);
       if (existing) {
         return {
           ...state,
           lines: state.lines.map((line) =>
-            line.menuItemId === action.item.id
+            line.key === key
               ? {
                   ...line,
                   quantity: Math.min(MAX_LINE_QTY, line.quantity + 1),
@@ -55,9 +64,12 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
         lines: [
           ...state.lines,
           {
+            key,
             menuItemId: action.item.id,
+            sizeId: size?.id ?? null,
+            sizeLabel: size?.label ?? null,
             name: action.item.name,
-            unitPrice: action.item.price,
+            unitPrice: size ? size.price : action.item.price,
             quantity: 1,
             imageUrl: action.item.imageUrl,
           },
@@ -68,59 +80,51 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
     case "setQuantity": {
       const quantity = Math.max(0, Math.min(MAX_LINE_QTY, Math.trunc(action.quantity)));
       if (quantity === 0) {
-        return {
-          ...state,
-          lines: state.lines.filter((line) => line.menuItemId !== action.menuItemId),
-        };
+        return { ...state, lines: state.lines.filter((line) => line.key !== action.key) };
       }
       return {
         ...state,
-        lines: state.lines.map((line) =>
-          line.menuItemId === action.menuItemId ? { ...line, quantity } : line,
-        ),
+        lines: state.lines.map((line) => (line.key === action.key ? { ...line, quantity } : line)),
       };
     }
 
     case "increment":
       return cartReducer(state, {
         type: "setQuantity",
-        menuItemId: action.menuItemId,
-        quantity:
-          (state.lines.find((line) => line.menuItemId === action.menuItemId)?.quantity ?? 0) + 1,
+        key: action.key,
+        quantity: (state.lines.find((line) => line.key === action.key)?.quantity ?? 0) + 1,
       });
 
     case "decrement":
       return cartReducer(state, {
         type: "setQuantity",
-        menuItemId: action.menuItemId,
-        quantity:
-          (state.lines.find((line) => line.menuItemId === action.menuItemId)?.quantity ?? 0) - 1,
+        key: action.key,
+        quantity: (state.lines.find((line) => line.key === action.key)?.quantity ?? 0) - 1,
       });
 
     case "remove":
-      return {
-        ...state,
-        lines: state.lines.filter((line) => line.menuItemId !== action.menuItemId),
-      };
+      return { ...state, lines: state.lines.filter((line) => line.key !== action.key) };
 
     case "removeMany": {
-      const drop = new Set(action.menuItemIds);
-      return { ...state, lines: state.lines.filter((line) => !drop.has(line.menuItemId)) };
+      const drop = new Set(action.keys);
+      return { ...state, lines: state.lines.filter((line) => !drop.has(line.key)) };
     }
 
     case "setNotes":
       return {
         ...state,
-        lines: state.lines.map((line) =>
-          line.menuItemId === action.menuItemId ? { ...line, notes: action.notes } : line,
-        ),
+        lines: state.lines.map((line) => (line.key === action.key ? { ...line, notes: action.notes } : line)),
       };
 
     case "setDiscount":
       return { ...state, discount: Math.max(0, roundMoney(action.amount)) };
 
     case "replace":
-      return { lines: action.lines, discount: action.discount ?? 0 };
+      // Carts saved before sizes existed have no key: the dish id was the key.
+      return {
+        lines: action.lines.map((line) => ({ ...line, key: line.key ?? lineKey(line.menuItemId, line.sizeId) })),
+        discount: action.discount ?? 0,
+      };
 
     case "enrichImages":
       return {

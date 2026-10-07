@@ -1,8 +1,17 @@
+export interface PosMenuSize {
+  id: string;
+  label: string;
+  price: number;
+}
+
 export interface PosMenuItem {
   id: string;
   slug: string;
   name: string;
+  /** For a dish with sizes, the cheapest size: shown as "from". */
   price: number;
+  /** Small / Medium / Large. Empty for a dish sold one way. */
+  sizes?: PosMenuSize[];
   categoryId: string;
   imageUrl: string | null;
   isPopular: boolean;
@@ -15,7 +24,12 @@ export interface PosCategory {
 }
 
 export interface CartLine {
+  /** Identifies the line: the dish, plus its size when it has one. Two sizes
+   *  of the same dish are two lines. */
+  key: string;
   menuItemId: string;
+  sizeId?: string | null;
+  sizeLabel?: string | null;
   name: string;
   unitPrice: number;
   quantity: number;
@@ -72,6 +86,12 @@ export interface OrderView {
   clientRef: string;
   sessionId?: string | null;
   status: string;
+  /** POS, ONLINE, BOLT or WALK_IN. Website orders show an Online tag. */
+  source?: string;
+  staffId?: string | null;
+  /** Set when the order was changed after it was rung. */
+  editedAt?: string | null;
+  editCount?: number;
   paymentMethod: string;
   paymentStatus: string;
   paymentReference: string | null;
@@ -97,6 +117,9 @@ export interface OrderView {
   createdAt: string;
   items: {
     id: string;
+    menuItemId?: string | null;
+    sizeId?: string | null;
+    sizeLabel?: string | null;
     name: string;
     quantity: number;
     unitPrice: number;
@@ -109,7 +132,6 @@ export type PaymentChoice =
   | "CASH"
   | "MOMO"
   | "CARD"
-  | "BANK_TRANSFER"
   | "BOLT_FOOD"
   | "SPLIT"
   | "UNPAID";

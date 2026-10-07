@@ -243,7 +243,14 @@ export default function MenuGrid({
                       {item.name}
                     </span>
                     <span className="mt-auto flex items-center justify-between gap-2">
-                      <span className="money text-sm font-extrabold">{formatGHS(item.price)}</span>
+                      <span className="money text-sm font-extrabold">
+                        {item.sizes && item.sizes.length > 0 && (
+                          <span className="mr-1 font-sans text-[10px] font-semibold uppercase" style={{ color: "var(--s-ink-faint)" }}>
+                            from
+                          </span>
+                        )}
+                        {formatGHS(item.price)}
+                      </span>
                       <span
                         className="rounded-full px-2.5 py-1 text-[10px] font-extrabold"
                         style={{

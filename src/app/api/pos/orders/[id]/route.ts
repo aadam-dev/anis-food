@@ -3,7 +3,7 @@ import { requireResource, clientIp } from "@/lib/api-auth";
 import { ok, parseBody, badRequest, conflict, handlePrismaError, notFound } from "@/lib/api-utils";
 import { applyOrderDesk, deskSchema } from "@/lib/order-desk";
 
-/** Payment correction and unpaid line edits, from the till. */
+/** Edit an order (items, discount, payment) or correct its payment, from the till. */
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const auth = await requireResource("pos");
   if (auth instanceof NextResponse) return auth;
@@ -17,11 +17,13 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       orderId: id,
       input: parsed.data,
       actorId: auth.user.sub,
+      role: auth.user.role,
       ip: clientIp(request),
       source: "pos",
     });
     if (!result.ok) {
       if (result.status === 404) return notFound(result.message);
+      if (result.status === 403) return NextResponse.json({ error: result.message }, { status: 403 });
       if (result.status === 409) return conflict(result.message);
       return badRequest(result.message);
     }
