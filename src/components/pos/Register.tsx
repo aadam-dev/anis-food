@@ -1223,7 +1223,7 @@ function Tabs({
         <Store className="w-4 h-4" /> Register
       </TabButton>
       <TabButton active={view === "tickets"} onClick={() => setView("tickets")}>
-        <Receipt className="w-4 h-4" /> Tickets
+        <Receipt className="w-4 h-4" /> Orders
         {ticketCount > 0 && <Badge>{ticketCount}</Badge>}
       </TabButton>
       <TabButton active={view === "shift"} onClick={() => setView("shift")}>

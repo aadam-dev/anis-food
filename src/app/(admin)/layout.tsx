@@ -18,7 +18,13 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: "#F4F6F8",
+  width: "device-width",
+  initialScale: 1,
+  // Pinch-zoom stays on in the back office (reports are worth zooming into);
+  // fields never trigger iOS's auto-zoom, see globals.css.
   viewportFit: "cover",
+  // The on-screen keyboard shrinks the layout instead of covering the field.
+  interactiveWidget: "resizes-content",
 };
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {

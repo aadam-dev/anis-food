@@ -20,7 +20,8 @@ const manifest = {
   start_url: "/app",
   scope: "/",
   display: "standalone",
-  orientation: "portrait",
+  // Tills are often tablets on their side: follow the device, do not lock it.
+  orientation: "any",
   theme_color: "#F4F6F8",
   background_color: "#F4F6F8",
   categories: ["business", "productivity"],

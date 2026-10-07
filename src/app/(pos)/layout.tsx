@@ -21,6 +21,7 @@ export const viewport: Viewport = {
   userScalable: false,
   // So the cart's action bar clears the home indicator on a modern phone.
   viewportFit: "cover",
+  interactiveWidget: "resizes-content",
 };
 
 export default async function PosLayout({ children }: { children: React.ReactNode }) {

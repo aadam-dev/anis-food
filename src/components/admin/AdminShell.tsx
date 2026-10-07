@@ -107,7 +107,7 @@ export default function AdminShell({ user, shift, children }: AdminShellProps) {
   }
 
   const nav = (
-    <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-4 space-y-6">
+    <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 space-y-6">
       {sections.map((section) => (
         <div key={section.title}>
           <p
@@ -250,8 +250,13 @@ export default function AdminShell({ user, shift, children }: AdminShellProps) {
             aria-hidden
           />
           <aside
-            className="relative flex h-full w-72 flex-col border-r"
-            style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
+            className="relative flex h-full w-72 max-w-[85vw] flex-col border-r overscroll-contain"
+            style={{
+              background: "var(--s-panel)",
+              borderColor: "var(--s-border)",
+              paddingTop: "env(safe-area-inset-top)",
+              paddingBottom: "env(safe-area-inset-bottom)",
+            }}
           >
             <div className="flex shrink-0 items-start justify-between pr-2">
               {brand}
@@ -312,7 +317,7 @@ export default function AdminShell({ user, shift, children }: AdminShellProps) {
           <span className="ml-auto pr-1">{shiftPill}</span>
         </header>
 
-        <main className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
+        <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-4 py-5 sm:px-6 lg:px-8 lg:py-8" style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}>
           {children}
         </main>
       </div>
