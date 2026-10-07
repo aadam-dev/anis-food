@@ -54,3 +54,6 @@ docs/
 # Serwist (PWA service worker — generated at build time)
 public/sw*
 public/swe-worker*
+
+# sales backups from scripts/reset-sales.mjs (customer data)
+/backups/

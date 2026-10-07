@@ -13,8 +13,8 @@
  * The largest portion becomes the dish (it keeps its photo, popular flag and
  * slug) and takes the plain name. Each portion's price and cost move onto its
  * size, and the kept dish's past order lines are linked to its size. The other
- * portions are switched off, never deleted: past orders point at them, and
- * their receipts and reports must not change.
+ * portions are deleted if they were never sold; if past orders point at them
+ * they are switched off instead, so those receipts and reports stay whole.
  *
  * Needs the sizes migration (20261006230322_sizes_and_order_edits) applied first.
  */
@@ -107,7 +107,12 @@ async function main() {
       console.log(`  becomes one dish (kept: ${plan.keeper.slug}, ${plan.keeper.sold} past order lines)`);
       for (const portion of plan.portions) {
         const cost = portion.costPrice === null ? "no cost" : `cost GH₵${portion.costPrice}`;
-        const fate = portion.id === plan.keeper.id ? "the dish itself" : `switched off (${portion.sold} past order lines keep it)`;
+        const fate =
+          portion.id === plan.keeper.id
+            ? "the dish itself"
+            : portion.sold > 0
+              ? `switched off (${portion.sold} past order lines keep it)`
+              : "deleted (never sold)";
         console.log(`  · ${portion.size.padEnd(6)} GH₵${portion.price}, ${cost}  ← ${portion.slug}: ${fate}`);
       }
     }
@@ -141,8 +146,14 @@ async function main() {
           `UPDATE "MenuItem" SET name = $2, description = $3, price = $4, "costPrice" = NULL, "updatedAt" = now() WHERE id = $1`,
           [plan.keeper.id, plan.base, plainDescription(plan.keeper.description ?? ""), cheapest],
         );
-        const others = plan.portions.filter((portion) => portion.id !== plan.keeper.id).map((portion) => portion.id);
-        await client.query(`UPDATE "MenuItem" SET "isAvailable" = false, "updatedAt" = now() WHERE id = ANY($1)`, [others]);
+        // A portion never sold goes; one on past orders is switched off so those receipts stay whole.
+        const others = plan.portions.filter((portion) => portion.id !== plan.keeper.id);
+        const unsold = others.filter((portion) => portion.sold === 0).map((portion) => portion.id);
+        const sold = others.filter((portion) => portion.sold > 0).map((portion) => portion.id);
+        if (unsold.length) await client.query(`DELETE FROM "MenuItem" WHERE id = ANY($1)`, [unsold]);
+        if (sold.length) {
+          await client.query(`UPDATE "MenuItem" SET "isAvailable" = false, "updatedAt" = now() WHERE id = ANY($1)`, [sold]);
+        }
         await client.query("COMMIT");
         console.log(`Merged: ${plan.base}`);
       } catch (error) {
