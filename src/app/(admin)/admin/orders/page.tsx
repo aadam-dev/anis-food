@@ -60,6 +60,10 @@ function describeEvent(type: string, detail: Record<string, unknown> | null): st
         const removed = lineList(d.removed as LineSummary[]);
         if (added) parts.push(`added ${added}`);
         if (removed) parts.push(`removed ${removed}`);
+        const changed = ((d.changed as { name: string; size?: string | null; from?: number; to?: number }[]) ?? [])
+          .map((line) => `${line.name}${line.size ? ` (${line.size})` : ""} ${line.from} → ${line.to}`)
+          .join(", ");
+        if (changed) parts.push(`changed ${changed}`);
         const before = d.before as { total?: number; payment?: string } | undefined;
         const after = d.after as { total?: number; payment?: string } | undefined;
         if (before?.total !== undefined && after?.total !== undefined && before.total !== after.total) {

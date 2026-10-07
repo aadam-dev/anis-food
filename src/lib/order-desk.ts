@@ -370,6 +370,10 @@ async function editOrder(
           after: { lines: describe(allNamed), total: newTotal, payment: payment?.paymentMethod ?? order.paymentMethod },
           added: describe(added.lines),
           removed: describe(removed),
+          // Lines kept with a new quantity, so the history can say "1 → 2".
+          changed: kept
+            .filter((line) => line.quantity !== byId.get(line.id)?.quantity)
+            .map((line) => ({ name: line.name, size: line.sizeLabel, from: byId.get(line.id)?.quantity, to: line.quantity })),
         } as never,
       },
     });
