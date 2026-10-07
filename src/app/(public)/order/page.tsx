@@ -251,6 +251,7 @@ export default function OrderPage() {
               <OrderForm
                 items={orderItems.map((item) => ({
                   menuItem: item.menuItem,
+                  size: item.size,
                   quantity: item.quantity,
                 }))}
                 primaryAction="submit"
