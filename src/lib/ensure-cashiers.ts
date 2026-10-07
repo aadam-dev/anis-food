@@ -129,6 +129,8 @@ async function provision(): Promise<void> {
  * never overwritten: from then on the Staff page owns their details.
  */
 async function ensureStaffRecord(userId: string, person: (typeof STAFF)[number]): Promise<void> {
+  // Owner and IT sign in, but they are not staff.
+  if (person.role === UserRole.OWNER || person.role === UserRole.SUPER_ADMIN) return;
   const existing = await prisma.staff.findUnique({ where: { userId }, select: { id: true } });
   if (existing) return;
   await prisma.staff.create({
