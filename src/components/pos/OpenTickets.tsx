@@ -112,6 +112,7 @@ export function TicketCard({
             <li key={item.id} className="flex justify-between gap-3">
               <span className="min-w-0 truncate">
                 {item.quantity}× {item.name}
+                {item.sizeLabel ? ` · ${item.sizeLabel}` : ""}
               </span>
               <span className="money whitespace-nowrap">{formatGHS(item.lineTotal)}</span>
             </li>
@@ -255,6 +256,7 @@ export function SettleSheet({
             <li key={item.id} className="flex justify-between gap-3 py-0.5">
               <span className="min-w-0 truncate">
                 {item.quantity}× {item.name}
+                {item.sizeLabel ? ` · ${item.sizeLabel}` : ""}
               </span>
               <span className="money whitespace-nowrap">{formatGHS(item.lineTotal)}</span>
             </li>
