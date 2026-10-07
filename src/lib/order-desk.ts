@@ -9,7 +9,7 @@ import { serialiseOrder } from "@/lib/serialise-order";
 import { canEditPaidOrders } from "@/lib/permissions";
 import { editVerdict } from "@/lib/order-edit-rules";
 import { priceLines } from "@/lib/order-lines";
-import { settlementAfterCorrection, splitAddsUp } from "@/lib/till-rules";
+import { boltRate, platformFee, settlementAfterCorrection, splitAddsUp } from "@/lib/till-rules";
 import {
   OrderEventType,
   OrderStatus,
@@ -150,6 +150,7 @@ async function correctPayment(
   if (problem) return { ok: false, status: 400, message: problem };
 
   const fields = paymentFields(input, total);
+  const rate = boltRate(await getSettings());
   const updated = await prisma.$transaction(async (tx) => {
     const saved = await tx.order.update({
       where: { id: order.id },
@@ -160,6 +161,7 @@ async function correctPayment(
         splitPayments: fields.splitPayments,
         tenderedAmount: fields.tenderedAmount,
         changeAmount: fields.changeAmount,
+        platformFee: platformFee(input.paymentMethod, total, rate),
         status: order.status === OrderStatus.COMPLETED && fields.paymentStatus === "PAID" ? OrderStatus.COMPLETED : fields.nextStatus,
         editedAt: new Date(),
         editCount: { increment: 1 },
@@ -326,6 +328,7 @@ async function editOrder(
         discountAmount: totals.discountAmount,
         taxAmount: tax.taxTotal,
         total: newTotal,
+        platformFee: platformFee(payment?.paymentMethod ?? order.paymentMethod, newTotal, boltRate(settings)),
         ...(payment && {
           paymentMethod: payment.paymentMethod,
           paymentStatus: payment.paymentStatus,

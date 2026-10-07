@@ -33,6 +33,7 @@ export const SETTING_KEYS = [
   "receipt_header",
   "receipt_footer",
   "default_opening_float",
+  "bolt_commission_rate",
   "pos_theme",
   "admin_theme",
 ] as const;
@@ -57,6 +58,8 @@ export const SETTING_DEFAULTS: Record<SettingKey, string> = {
   receipt_header: "Anis Food and Drink",
   receipt_footer: "Thank you. Please come again!",
   default_opening_float: "200",
+  // Bolt Food keeps a commission on every order. Stored as a fraction (0.2 = 20%).
+  bolt_commission_rate: "0.2",
   pos_theme: "light",
   admin_theme: "light",
 };

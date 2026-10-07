@@ -374,6 +374,15 @@ model Order {
   editedAt  DateTime?
   editCount Int       @default(0)
 
+  /// What the delivery platform keeps from this sale (Bolt's commission),
+  /// worked out at the rate in force when it was sold. A platform cost, so
+  /// profit shows what the business actually keeps.
+  platformFee Decimal? @db.Decimal(10, 2)
+
+  /// When a cashier accepted an online order. Until then the till keeps
+  /// alerting, and the kitchen does not see it.
+  acceptedAt DateTime?
+
   notes     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

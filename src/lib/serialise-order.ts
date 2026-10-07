@@ -21,6 +21,7 @@ export function serialiseOrder(order: Prisma.OrderGetPayload<{ include: { items:
     staffId: order.staffId,
     editedAt: order.editedAt?.toISOString() ?? null,
     editCount: order.editCount,
+    acceptedAt: order.acceptedAt?.toISOString() ?? null,
     paymentMethod: order.paymentMethod,
     paymentStatus: order.paymentStatus,
     paymentReference: order.paymentReference,

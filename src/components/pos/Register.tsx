@@ -36,7 +36,7 @@ import {
   getServerQueueCount,
 } from "@/lib/offlineQueue";
 import { cartReducer, emptyCart, cartCount, lineKey } from "./cartReducer";
-import { callNumber } from "@/lib/session-utils";
+import OnlineOrderAlert from "./OnlineOrderAlert";
 import SizePickerSheet from "./SizePickerSheet";
 import MenuGrid from "./MenuGrid";
 import CartPanel from "./CartPanel";
@@ -125,9 +125,6 @@ export default function Register({
   );
   const [view, setView] = useState<View>(initialSession?.isStale ? "tickets" : "register");
   const [tickets, setTickets] = useState<OrderView[]>(initialTickets);
-  // Online orders already announced, so each one is announced once.
-  const seenOnline = useRef(new Set(initialTickets.filter((order) => order.source === "ONLINE").map((order) => order.id)));
-  const initialOnlineSeeded = useRef(false);
   const [shiftOrders, setShiftOrders] = useState<OrderView[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [chargeIds, setChargeIds] = useState<string[] | null>(null);
@@ -246,24 +243,7 @@ export default function Register({
       ]);
       if (openRes.ok) {
         const data = await openRes.json();
-        const orders = data.orders as OrderView[];
-        // Announce online orders the first time this till sees them.
-        const online = orders.filter((order) => order.source === "ONLINE");
-        const fresh = online.filter((order) => !seenOnline.current.has(order.id));
-        if (seenOnline.current.size > 0 || initialOnlineSeeded.current) {
-          if (fresh.length === 1) {
-            const order = fresh[0];
-            setBanner({
-              tone: "good",
-              text: `New online order ${callNumber(order.orderNumber)}${order.customerName ? ` from ${order.customerName}` : ""}. It is on Orders.`,
-            });
-          } else if (fresh.length > 1) {
-            setBanner({ tone: "good", text: `${fresh.length} new online orders. They are on Orders.` });
-          }
-        }
-        initialOnlineSeeded.current = true;
-        for (const order of online) seenOnline.current.add(order.id);
-        setTickets(orders);
+        setTickets(data.orders as OrderView[]);
       }
       if (shiftRes.ok) {
         const data = await shiftRes.json();
@@ -601,8 +581,18 @@ export default function Register({
 
   // No shift at all: the drawer is counted in before anything else. A shift that
   // is merely old gets the full till below, so its tickets can be dealt with.
+  // Website orders alert on every till screen, shift open or not, until accepted.
+  const onlineAlert = (
+    <OnlineOrderAlert
+      onAccepted={() => void loadTickets()}
+      onOpenOrders={() => setView("tickets")}
+    />
+  );
+
   if (gate === "none" || gate === "error" || !session) {
     return (
+      <>
+      {onlineAlert}
       <OpenShiftCard
         userName={activeUser.name}
         defaultOpeningFloat={defaultOpeningFloat}
@@ -614,6 +604,7 @@ export default function Register({
         onSignOut={handleSignOut}
         backOfficeHref={backOfficeHref}
       />
+      </>
     );
   }
 
@@ -625,6 +616,7 @@ export default function Register({
           "radial-gradient(circle at 0 100%, color-mix(in srgb, var(--s-brand) 8%, transparent), transparent 30%), var(--s-bg)",
       }}
     >
+      {onlineAlert}
       <header
         className="z-30 shrink-0 border-b lg:rounded-[1.5rem] lg:border-0 lg:px-2"
         style={{

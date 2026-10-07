@@ -99,6 +99,16 @@ export default async function AdminOverviewPage({
       href: "/pos",
     });
   }
+  if (data.onlineWaiting.count > 0) {
+    attention.push({
+      key: "online",
+      tone: data.onlineWaiting.oldestMinutes >= 3 ? "bad" : "warn",
+      icon: <Clock />,
+      title: `${data.onlineWaiting.count} online order${data.onlineWaiting.count === 1 ? "" : "s"} not accepted`,
+      detail: `Waiting ${data.onlineWaiting.oldestMinutes} min. Accept ${data.onlineWaiting.count === 1 ? "it" : "them"} on the till.`,
+      href: "/pos",
+    });
+  }
   if (data.openTickets.stale > 0) {
     attention.push({
       key: "tickets",
@@ -145,7 +155,7 @@ export default async function AdminOverviewPage({
 
   const periodQuery = period === "today" ? "period=today" : `period=${period}`;
   const paymentTotal = current.paymentMix.reduce((sum, row) => sum + row.amount, 0);
-  const spend = current.expenses.total + current.tillSpends.amount;
+  const spend = current.expenses.total + current.tillSpends.amount + current.platformFees.amount;
   const margin = current.profitKnown ? current.grossMargin : null;
 
   return (

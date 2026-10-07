@@ -27,6 +27,8 @@ export const FINANCIAL_TERM_NOTES: Record<string, string> = {
   expenses:
     "Running costs like rent, utilities, supplies, and other day-to-day spending. Does not include staff pay.",
   payroll: "Total staff wages and salaries we paid in this period.",
+  platformFees:
+    "What Bolt Food keeps from each Bolt order (its commission). Bolt sales count in full; this cost brings profit down to what the business actually receives.",
   operatingCost:
     "All non-ingredient costs: expenses plus payroll. What we spend to keep the business running.",
   netProfit:

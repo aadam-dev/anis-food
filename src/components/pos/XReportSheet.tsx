@@ -149,8 +149,10 @@ export function SlipRows({ report }: { report: XReport }) {
       />
       <div className="r-rule" />
       <Row label={`Unpaid tickets (${report.unpaid.count})`} value={formatGHS(report.unpaid.amount)} />
-      <Row label={`Bolt awaiting (${report.boltAwaiting.count})`} value={formatGHS(report.boltAwaiting.amount)} />
-      <div className="r-small">Bolt money is not in the drawer until the payout is marked paid.</div>
+      {report.boltAwaiting.count > 0 && (
+        <Row label={`Bolt, older unpaid (${report.boltAwaiting.count})`} value={formatGHS(report.boltAwaiting.amount)} />
+      )}
+      <div className="r-small">Bolt sales are paid to Bolt, so they are never in the drawer.</div>
     </>
   );
 }

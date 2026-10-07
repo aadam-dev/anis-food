@@ -5,7 +5,7 @@ import { businessDay, BUSINESS_TIMEZONE } from "@/lib/session-utils";
 import { currentSession } from "@/lib/pos-session";
 import { addDays, daysIn } from "@/lib/period";
 import { getLedger, periodBounds, type Ledger } from "@/lib/reports";
-import { KitchenStatus, OrderStatus, PaymentMethod, PaymentStatus } from "@/generated/prisma";
+import { OrderSource, KitchenStatus, OrderStatus, PaymentMethod, PaymentStatus } from "@/generated/prisma";
 
 /**
  * The owner's dashboard: one period at a time — today, this week or this
@@ -53,6 +53,8 @@ export interface DashboardView {
   heatmap: { weekday: number; hour: number; revenue: number; orders: number }[];
   openTickets: { count: number; value: number; stale: number };
   kitchenQueue: number;
+  /** Website orders no cashier has accepted yet. */
+  onlineWaiting: { count: number; oldestMinutes: number };
   lowStock: { id: string; name: string }[];
   lastClosedShift: { day: string; difference: number | null; closedBy: string | null } | null;
   openShift: {
@@ -98,7 +100,7 @@ export async function getDashboardView(period: DashboardPeriod, now = new Date()
   const daily14From = addDays(today, -13);
   const heatFrom = addDays(today, -27);
 
-  const [current, previous, recent, openTickets, kitchenQueue, inventory, lastShift, costing] = await Promise.all([
+  const [current, previous, recent, openTickets, kitchenQueue, inventory, lastShift, costing, onlineWaiting] = await Promise.all([
     getLedger(span.from, span.to),
     getLedger(span.prevFrom, span.prevTo),
     prisma.order.findMany({
@@ -132,6 +134,11 @@ export async function getDashboardView(period: DashboardPeriod, now = new Date()
       select: { openedAt: true, expectedCash: true, closingCash: true, closedBy: { select: { name: true } } },
     }),
     getCostingProgress(today),
+    prisma.order.findMany({
+      where: { isDemo: false, source: OrderSource.ONLINE, acceptedAt: null, status: { not: OrderStatus.CANCELLED } },
+      orderBy: { createdAt: "asc" },
+      select: { createdAt: true },
+    }),
   ]);
 
   const shift = current.booksReady ? await currentSession() : null;
@@ -182,6 +189,12 @@ export async function getDashboardView(period: DashboardPeriod, now = new Date()
       ).length,
     },
     kitchenQueue,
+    onlineWaiting: {
+      count: onlineWaiting.length,
+      oldestMinutes: onlineWaiting.length
+        ? Math.floor((Date.now() - onlineWaiting[0].createdAt.getTime()) / 60_000)
+        : 0,
+    },
     lowStock: inventory
       .filter((item) => Number(item.lowStock) > 0 && Number(item.stock) <= Number(item.lowStock))
       .map((item) => ({ id: item.id, name: item.name })),

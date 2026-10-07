@@ -2,7 +2,7 @@
   "id": "/",
   "name": "Anis Food and Drink",
   "short_name": "Anis",
-  "description": "Authentic Ghanaian cuisine in Madina, Accra. Browse the menu, order on WhatsApp, book a table.",
+  "description": "Authentic Ghanaian cuisine in Madina, Accra. Browse the menu, order online, book a table.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

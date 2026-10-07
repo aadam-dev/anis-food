@@ -268,13 +268,13 @@ export default function Receipt80mm({
         </>
       ) : (
         <div className="r-row">
-          <span>{data.paymentMethod === "BOLT_FOOD" ? "Tender" : "Paid by"}</span>
+          <span>Paid by</span>
           <span>{METHOD_LABELS[data.paymentMethod] ?? data.paymentMethod}</span>
         </div>
       )}
 
       {data.kind !== "bill" && data.paymentMethod === "BOLT_FOOD" && (
-        <div className="r-small">Money is with Bolt. Not collected at the till.</div>
+        <div className="r-small">Paid on Bolt Food. Nothing to collect.</div>
       )}
 
       {data.kind !== "bill" && data.tenderedAmount !== null && data.tenderedAmount !== undefined && (

@@ -51,6 +51,12 @@ export async function PATCH(request: Request) {
       return badRequest("Tax rate must be a decimal between 0 and 1, e.g. 0.125 for 12.5%.");
     }
   }
+  if ("bolt_commission_rate" in body) {
+    const rate = Number(body.bolt_commission_rate);
+    if (!Number.isFinite(rate) || rate < 0 || rate >= 1) {
+      return badRequest("Bolt commission must be between 0% and 99%.");
+    }
+  }
   if ("pos_theme" in body && body.pos_theme !== "light" && body.pos_theme !== "dark") {
     return badRequest("Theme must be light or dark.");
   }

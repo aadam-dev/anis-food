@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireResource, logAudit, clientIp } from "@/lib/api-auth";
 import { ok, parseBody, badRequest, handlePrismaError } from "@/lib/api-utils";
-import { KitchenStatus, OrderStatus, OrderEventType } from "@/generated/prisma";
+import { OrderSource, KitchenStatus, OrderStatus, OrderEventType } from "@/generated/prisma";
 
 /**
  * The kitchen display.
@@ -27,6 +27,8 @@ export async function GET() {
         status: { not: OrderStatus.CANCELLED },
         kitchenStatus: { not: KitchenStatus.SERVED },
         createdAt: { gte: new Date(Date.now() - WINDOW_MS) },
+        // An online order reaches the kitchen once a cashier has accepted it.
+        OR: [{ source: { not: OrderSource.ONLINE } }, { acceptedAt: { not: null } }],
       },
       orderBy: { createdAt: "asc" },
       select: {
