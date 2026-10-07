@@ -5,7 +5,7 @@ import { toMoney, roundMoney } from "@/lib/money";
 import { businessDay, businessDayRange, BUSINESS_TIMEZONE } from "@/lib/session-utils";
 import { tillBooksReady } from "@/lib/till-books";
 import { addDays, daysIn, previousPeriod } from "@/lib/period";
-import { isBoltAwaiting, isRefund, isVoid, type MoneyCount } from "@/lib/x-report";
+import { isRefund, isVoid, type MoneyCount } from "@/lib/x-report";
 import {
   PaymentMethod,
   PaymentStatus,
@@ -137,14 +137,15 @@ export interface Ledger {
    *  had to be filed). Counted as a cost so it cannot fall out of the books. */
   tillSpends: MoneyCount;
   payroll: number;
-  /** Expenses + unfiled till spends + payroll. */
+  /** Expenses + unfiled till spends + payroll + platform fees. */
   overheads: number;
   netProfit: number;
   netMargin: number | null;
   voids: MoneyCount;
   refunds: MoneyCount & { byReason: { reason: string; count: number; amount: number }[] };
   deposits: { momo: number; bank: number };
-  boltAwaiting: MoneyCount;
+  /** Bolt sales in the period, and the commission Bolt kept (a cost). */
+  platformFees: MoneyCount & { sales: number };
   paymentMix: { method: string; amount: number }[];
   daily: { day: string; revenue: number; orders: number }[];
   hourly: { hour: number; revenue: number; orders: number }[];
@@ -155,7 +156,7 @@ export async function getLedger(from: string, to: string): Promise<Ledger> {
   const window = range(from, to);
   const books = await booksReady();
 
-  const [orders, items, expenses, payroll, adjustments, boltOrders, movements] = await Promise.all([
+  const [orders, items, expenses, payroll, adjustments, movements] = await Promise.all([
     prisma.order.findMany({
       where: { ...REVENUE_WHERE, createdAt: window },
       select: {
@@ -164,6 +165,7 @@ export async function getLedger(from: string, to: string): Promise<Ledger> {
         taxAmount: true,
         discountAmount: true,
         splitPayments: true,
+        platformFee: true,
         createdAt: true,
       },
     }),
@@ -201,16 +203,6 @@ export async function getLedger(from: string, to: string): Promise<Ledger> {
         OR: [{ status: OrderStatus.CANCELLED }, { paymentStatus: PaymentStatus.REFUNDED }],
       },
       select: { total: true, paymentMethod: true, paymentStatus: true, status: true, voidReason: true },
-    }),
-    prisma.order.findMany({
-      where: {
-        isDemo: false,
-        paymentMethod: PaymentMethod.BOLT_FOOD,
-        paymentStatus: PaymentStatus.PENDING,
-        status: { not: OrderStatus.CANCELLED },
-        createdAt: window,
-      },
-      select: { total: true, paymentMethod: true, paymentStatus: true, status: true },
     }),
     books.ok
       ? prisma.cashMovement.findMany({
@@ -313,7 +305,13 @@ export async function getLedger(from: string, to: string): Promise<Ledger> {
   const depositRows = movements.filter((row) => row.kind === CashMovementKind.DEPOSIT);
   const tillSpends = countOrders(spendRows.map((row) => ({ total: row.amount })));
   const payrollTotal = roundMoney(payroll.reduce((sum, row) => sum + toMoney(row.netAmount), 0));
-  const overheads = roundMoney(expenseTotal + tillSpends.amount + payrollTotal);
+  const boltSales = orders.filter((order) => order.paymentMethod === PaymentMethod.BOLT_FOOD);
+  const platformFees = {
+    count: boltSales.length,
+    sales: roundMoney(boltSales.reduce((sum, order) => sum + toMoney(order.total), 0)),
+    amount: roundMoney(orders.reduce((sum, order) => sum + (order.platformFee === null ? 0 : toMoney(order.platformFee)), 0)),
+  };
+  const overheads = roundMoney(expenseTotal + tillSpends.amount + payrollTotal + platformFees.amount);
   const netProfit = roundMoney(grossProfit - overheads);
 
   // ---- Voids, refunds, transfers -------------------------------------------
@@ -372,7 +370,7 @@ export async function getLedger(from: string, to: string): Promise<Ledger> {
         .sort((a, b) => b.amount - a.amount),
     },
     deposits: { momo: depositTo("MOMO"), bank: depositTo("BANK") },
-    boltAwaiting: countOrders(boltOrders.filter(isBoltAwaiting)),
+    platformFees,
     paymentMix: Object.entries(splitByMethod(orders))
       .map(([method, amount]) => ({ method, amount }))
       .sort((a, b) => b.amount - a.amount),

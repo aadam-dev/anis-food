@@ -104,6 +104,15 @@ export default function SettingsClient({ settings }: { settings: Record<SettingK
         </Field>
       </Panel>
 
+      <Panel title="Bolt Food" className="p-5 space-y-3">
+        <Field
+          label="Bolt commission (%)"
+          hint="What Bolt keeps from each order. Recorded as a cost on every Bolt sale, so profit shows what you actually receive."
+        >
+          <PercentInput value={values.bolt_commission_rate} onChange={(value) => set("bolt_commission_rate", value)} />
+        </Field>
+      </Panel>
+
       <Panel title="Tax (Ghana VAT)" className="p-5 space-y-4">
         <Segmented
           label="Charge VAT & levies"
@@ -263,5 +272,34 @@ function Segmented({
         ))}
       </div>
     </div>
+  );
+}
+
+/** A rate stored as a fraction ("0.2"), typed as a percentage ("20"). */
+function PercentInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const toPercent = (fraction: string) => {
+    const number = Number(fraction);
+    return Number.isFinite(number) ? String(Math.round(number * 10000) / 100) : "";
+  };
+  const [text, setText] = useState(() => toPercent(value));
+  const [seen, setSeen] = useState(value);
+  if (seen !== value) {
+    setSeen(value);
+    if (Number(text) / 100 !== Number(value)) setText(toPercent(value));
+  }
+  return (
+    <input
+      inputMode="decimal"
+      value={text}
+      onChange={(event) => {
+        const next = event.target.value.replace(/[^\d.]/g, "");
+        setText(next);
+        const percent = Number(next);
+        if (next !== "" && Number.isFinite(percent) && percent < 100) onChange(String(Math.round(percent * 100) / 10000));
+      }}
+      className={`${inputClass} money max-w-32`}
+      style={inputStyle}
+      aria-label="Bolt commission percent"
+    />
   );
 }

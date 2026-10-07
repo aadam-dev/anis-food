@@ -151,7 +151,7 @@ export default function PaymentSheet({
             {method === "UNPAID"
               ? "Send to kitchen"
               : method === "BOLT_FOOD"
-                ? "Send on Bolt"
+                ? "Record Bolt sale"
                 : `Take ${formatGHS(totals.total)}`}
           </Button>
         </div>
@@ -238,7 +238,7 @@ export default function PaymentSheet({
 
         {method === "BOLT_FOOD" && (
           <p className="text-sm" style={{ color: "var(--s-ink-muted)" }}>
-            Bolt collects this. It is not cash in the drawer. Mark it paid when the payout lands.
+            The customer paid on Bolt, so this prints a paid receipt. It is not cash in the drawer, and Bolt&apos;s commission is recorded automatically.
           </p>
         )}
 

@@ -7,15 +7,26 @@ import {
   movementBooks,
   saleBooks,
   splitAddsUp,
+  platformFee,
+  boltRate,
 } from "./till-rules";
 
 describe("Bolt Food", () => {
-  it("is not drawer cash", () => {
+  it("is a paid sale that needs a shift", () => {
     const books = saleBooks("BOLT_FOOD");
-    assert.equal(books.paymentStatus, "PENDING");
+    assert.equal(books.paymentStatus, "PAID");
     assert.equal(books.needsOpenShift, true);
-    assert.equal(countsInDrawer(books.paymentStatus), false);
     assert.equal(countsInDrawer("PAID"), true);
+  });
+
+  it("records Bolt's commission as the platform fee", () => {
+    assert.equal(platformFee("BOLT_FOOD", 220, 0.2), 44);
+    assert.equal(platformFee("BOLT_FOOD", 99.99, 0.2), 20);
+    assert.equal(platformFee("CASH", 220, 0.2), null);
+    assert.equal(platformFee("BOLT_FOOD", 220, 0), 0);
+    assert.equal(boltRate({ bolt_commission_rate: "0.2" }), 0.2);
+    assert.equal(boltRate({ bolt_commission_rate: "20" }), 0);
+    assert.equal(boltRate({}), 0);
   });
 
   it("does not block the Z-out", () => {

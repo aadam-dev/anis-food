@@ -10,7 +10,7 @@ import { saleBlockedReason } from "@/lib/shift-close";
 import { getSettings, getTaxConfig } from "@/lib/settings";
 import { taxBreakdown } from "@/lib/tax";
 import { serialiseOrder } from "@/lib/serialise-order";
-import { saleBooks, settlementAfterCorrection, splitAddsUp } from "@/lib/till-rules";
+import { boltRate, platformFee, saleBooks, settlementAfterCorrection, splitAddsUp } from "@/lib/till-rules";
 import {
   PaymentMethod,
   PaymentStatus,
@@ -251,6 +251,7 @@ export async function POST(request: Request) {
           discountAmount: totals.discountAmount,
           taxAmount: tax.taxTotal,
           total: orderTotal,
+          platformFee: platformFee(body.paymentMethod, orderTotal, boltRate(settings)),
           tenderedAmount: tendered,
           changeAmount: tendered === null ? null : changeDue(orderTotal, tendered),
           customerName: body.customerName,
@@ -386,6 +387,7 @@ export async function PATCH(request: Request) {
     }
 
     const next = settlementAfterCorrection(body.paymentMethod);
+    const fee = platformFee(body.paymentMethod, total, boltRate(await getSettings()));
 
     const tendered =
       body.paymentMethod === "CASH" && body.tenderedAmount !== undefined
@@ -408,6 +410,7 @@ export async function PATCH(request: Request) {
           tenderedAmount: tendered,
           changeAmount: tendered === null ? null : changeDue(total, tendered),
           status: next.orderStatus as OrderStatus,
+          platformFee: fee,
           // Belongs to the shift that took the money, not the one that cooked it.
           sessionId: session.id,
         },

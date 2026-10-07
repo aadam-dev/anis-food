@@ -92,6 +92,8 @@ export interface OrderView {
   /** Set when the order was changed after it was rung. */
   editedAt?: string | null;
   editCount?: number;
+  /** When a cashier accepted this online order; null while it is still new. */
+  acceptedAt?: string | null;
   paymentMethod: string;
   paymentStatus: string;
   paymentReference: string | null;

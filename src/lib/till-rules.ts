@@ -18,10 +18,22 @@ export function saleBooks(method: string): {
   if (method === "UNPAID") {
     return { paymentStatus: "PENDING", orderStatus: "PREPARING", needsOpenShift: false };
   }
-  if (method === "BOLT_FOOD") {
-    return { paymentStatus: "PENDING", orderStatus: "PREPARING", needsOpenShift: true };
-  }
+  // Bolt: the customer has paid Bolt, so it is a paid sale. It is not cash in
+  // the drawer; Bolt's commission is recorded as the order's platform fee.
   return { paymentStatus: "PAID", orderStatus: "COMPLETED", needsOpenShift: true };
+}
+
+/** Bolt's cut of a sale, at the commission rate in force (a fraction, 0.2 = 20%). */
+export function platformFee(method: string, total: number, rate: number): number | null {
+  if (method !== "BOLT_FOOD") return null;
+  const safe = Number.isFinite(rate) && rate > 0 && rate < 1 ? rate : 0;
+  return roundMoney(toMoney(total) * safe);
+}
+
+/** The commission rate from settings, as a fraction. */
+export function boltRate(settings: { bolt_commission_rate?: string }): number {
+  const rate = Number(settings.bolt_commission_rate);
+  return Number.isFinite(rate) && rate > 0 && rate < 1 ? rate : 0;
 }
 
 /** Takings and the drawer only count money that has actually been received. */
@@ -62,7 +74,7 @@ export function settlementAfterCorrection(method: string): {
   paymentStatus: "PENDING" | "PAID";
   orderStatus: "PREPARING" | "COMPLETED";
 } {
-  if (method === "BOLT_FOOD" || method === "UNPAID") {
+  if (method === "UNPAID") {
     return { paymentStatus: "PENDING", orderStatus: "PREPARING" };
   }
   return { paymentStatus: "PAID", orderStatus: "COMPLETED" };

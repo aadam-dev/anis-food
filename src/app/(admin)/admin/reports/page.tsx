@@ -117,7 +117,10 @@ const minus = (value: number) => (value === 0 ? formatGHS(0) : `(${formatGHS(val
 function ProfitAndLoss({ ledger, previous, showTax }: { ledger: Ledger; previous: Ledger; showTax: boolean }) {
   const prevExpense = new Map(previous.expenses.byCategory.map((row) => [row.category, row.amount]));
   const hasOverheads =
-    ledger.expenses.byCategory.length > 0 || ledger.tillSpends.amount > 0 || ledger.payroll > 0;
+    ledger.expenses.byCategory.length > 0 ||
+    ledger.tillSpends.amount > 0 ||
+    ledger.payroll > 0 ||
+    ledger.platformFees.amount > 0;
 
   return (
     <>
@@ -148,7 +151,7 @@ function ProfitAndLoss({ ledger, previous, showTax }: { ledger: Ledger; previous
           tint="warn"
           delta={change(ledger.overheads, previous.overheads)}
           invertDelta
-          detail="Expenses and payroll"
+          detail={ledger.platformFees.amount > 0 ? "Expenses, payroll and Bolt commission" : "Expenses and payroll"}
         />
         <Stat
           label="Net profit"
@@ -257,6 +260,14 @@ function ProfitAndLoss({ ledger, previous, showTax }: { ledger: Ledger; previous
             value={minus(ledger.payroll)}
             compare={minus(previous.payroll)}
           />
+          {(ledger.platformFees.amount > 0 || previous.platformFees.amount > 0) && (
+            <StatementRow
+              indent
+              label={<Term name="platformFees">Bolt commission</Term>}
+              value={minus(ledger.platformFees.amount)}
+              compare={minus(previous.platformFees.amount)}
+            />
+          )}
           {!hasOverheads && (
             <p className="px-4 pb-2 pl-8 text-sm sm:px-5 sm:pl-9" style={{ color: "var(--s-ink-faint)" }}>
               No expenses or payroll paid in this period.
@@ -297,7 +308,7 @@ function ProfitAndLoss({ ledger, previous, showTax }: { ledger: Ledger; previous
               <Memo label={<Term name="discounts">Discounts</Term>} count={ledger.discountedOrders} amount={ledger.discounts} />
               <Memo label={<Term name="deposits">Deposited to MoMo</Term>} amount={ledger.deposits.momo} />
               <Memo label="Deposited to bank" amount={ledger.deposits.bank} />
-              <Memo label="Bolt awaiting payout" count={ledger.boltAwaiting.count} amount={ledger.boltAwaiting.amount} />
+              <Memo label="Sold on Bolt (in sales)" count={ledger.platformFees.count} amount={ledger.platformFees.sales} />
             </dl>
           </Panel>
 

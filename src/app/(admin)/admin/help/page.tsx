@@ -113,6 +113,11 @@ export default function ManualPage() {
                 </>,
               ]}
             />
+            <p className="mt-3">
+              <b>Bolt Food orders:</b> ring them up with <i>Bolt</i>. The customer already paid Bolt, so a paid
+              receipt prints. Bolt sales count at full menu price, are never cash in the drawer, and Bolt&apos;s
+              commission (20%, change it in Settings) is recorded as a cost, so profit shows what you actually keep.
+            </p>
             <Tip>
               Transfer is no longer a till payment: customers pay by Cash, MoMo or Card. Bank transfers to suppliers are
               still recorded under Expenses.
@@ -151,13 +156,18 @@ export default function ManualPage() {
 
           <Section id="online" n={4} title="Online orders">
             <p>
-              Orders placed on the website land on the till straight away with an <b>Online</b> tag, the
-              customer&apos;s name and phone, pickup or delivery, the delivery address and any notes. The till shows a
-              banner when a new one arrives, and they appear on the kitchen board.
+              Orders placed on the website land on the till within seconds, with an <b>Online</b> tag, the
+              customer&apos;s name and phone, pickup or delivery, the delivery address and any notes. A new one takes
+              over the top of the till screen and <b>chimes every 15 seconds until someone taps Accept</b>, on every
+              till screen, even before a shift is opened. Keep the till&apos;s sound on. Tap{" "}
+              <i>Also alert me when the till is in the background</i> once, so a desktop notification shows too.
             </p>
             <Steps
               items={[
-                <>Call or WhatsApp the customer from the number on the card if anything needs checking.</>,
+                <>
+                  Tap <b>Accept</b>. That sends it to the kitchen board; until then the kitchen does not see it. If
+                  anything looks odd, call the number on the alert first.
+                </>,
                 <>Cook and pack it like any other order.</>,
                 <>
                   When the customer pays (on pickup or delivery), open it in Orders and tap <i>Take payment</i>. Print
@@ -166,6 +176,12 @@ export default function ManualPage() {
                 <>If they never come, void it with the reason &ldquo;Customer cancelled&rdquo;.</>,
               ]}
             />
+            <Tip>
+              WhatsApp is optional for customers: the website order is already on the till. A WhatsApp message that
+              quotes an order number (ANIS-…) is about an order you already have, so never ring it up again. Only a
+              message with no order number is a new order: ring it up on the till as usual. The back-office dashboard
+              also warns if an online order has not been accepted.
+            </Tip>
           </Section>
 
           <Section id="dashboard" n={5} title="Reading the dashboard">

@@ -50,6 +50,7 @@ export async function GET(request: Request) {
     ),
     ["Till spends with no category", -ledger.tillSpends.amount],
     ["Payroll paid", -ledger.payroll],
+    ["Bolt commission", -ledger.platformFees.amount],
     ["Net profit", ledger.netProfit, true],
   ];
   const memoRows: [string, number, number?][] = [
@@ -58,7 +59,7 @@ export async function GET(request: Request) {
     ["Refunds", ledger.refunds.amount, ledger.refunds.count],
     ["Deposited to MoMo", ledger.deposits.momo],
     ["Deposited to bank", ledger.deposits.bank],
-    ["Bolt awaiting payout", ledger.boltAwaiting.amount, ledger.boltAwaiting.count],
+    ["Sold on Bolt (in sales above)", ledger.platformFees.sales, ledger.platformFees.count],
   ];
 
   if (format === "csv") {

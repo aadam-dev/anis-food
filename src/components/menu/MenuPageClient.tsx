@@ -109,7 +109,7 @@ export default function MenuPageClient({ categories, items }: Props) {
         eyebrow="Our menu"
         title="Every plate,"
         highlight="freshly made"
-        subtitle="Explore our full selection of authentic Ghanaian dishes — add what you love to your order and send it on WhatsApp."
+        subtitle="Explore our full selection of authentic Ghanaian dishes, then order online for delivery or pickup."
         image="/images/menu/jollof-fried-chicken.jpg"
       />
       <div className="bg-warm py-16 min-h-screen">

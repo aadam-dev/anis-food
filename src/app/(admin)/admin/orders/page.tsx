@@ -82,6 +82,7 @@ function describeEvent(type: string, detail: Record<string, unknown> | null): st
       // Older edits were recorded as status changes; kitchen moves are noise here.
       if (d.action === "payment_corrected") return `Payment changed from ${method(d.from)} to ${method(d.to)}`;
       if (d.action === "lines_edited") return "Edited: quantities changed";
+      if (d.action === "accepted") return "Accepted at the till";
       return null;
     default:
       return null;
