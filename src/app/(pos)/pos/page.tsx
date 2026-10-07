@@ -4,7 +4,8 @@ import { currentSession } from "@/lib/pos-session";
 import { prisma } from "@/lib/db";
 import { toMoney } from "@/lib/money";
 import { menuImage } from "@/lib/menu-image";
-import { canAccess, canVoidAtTill } from "@/lib/permissions";
+import { canAccess, canEditPaidOrders, canVoidAtTill } from "@/lib/permissions";
+import { serialiseOrder } from "@/lib/serialise-order";
 import Register from "@/components/pos/Register";
 import type { OrderView, PosCategory, PosMenuItem, SessionView } from "@/components/pos/types";
 
@@ -71,43 +72,13 @@ export default async function PosPage() {
     isPopular: item.isPopular,
   }));
 
-  const openTickets: OrderView[] = tickets.map((order) => ({
-    id: order.id,
-    orderNumber: order.orderNumber,
-    clientRef: order.clientRef,
-    sessionId: order.sessionId,
-    status: order.status,
-    paymentMethod: order.paymentMethod,
-    paymentStatus: order.paymentStatus,
-    paymentReference: order.paymentReference,
-    splitPayments: order.splitPayments as OrderView["splitPayments"],
-    deliveryType: order.deliveryType,
-    subtotal: toMoney(order.subtotal),
-    discountAmount: toMoney(order.discountAmount),
-    taxAmount: toMoney(order.taxAmount),
-    total: toMoney(order.total),
-    tenderedAmount: order.tenderedAmount === null ? null : toMoney(order.tenderedAmount),
-    changeAmount: order.changeAmount === null ? null : toMoney(order.changeAmount),
-    tax:
-      (order.transactionSnapshot as { tax?: OrderView["tax"] } | null)?.tax ?? null,
-    tableLabel: order.tableLabel,
-    customerName: order.customerName,
-    customerPhone: order.customerPhone,
-    customerAddress: order.customerAddress,
-    notes: order.notes,
-    createdAt: order.createdAt.toISOString(),
-    items: order.items.map((item) => ({
-      id: item.id,
-      name: item.name,
-      quantity: item.quantity,
-      unitPrice: toMoney(item.unitPrice),
-      lineTotal: toMoney(item.lineTotal),
-      notes: item.notes,
-    })),
-  }));
+  // The same shape the till gets from the API on refresh, so a ticket looks
+  // identical on first paint and after a reload.
+  const openTickets: OrderView[] = tickets.map(serialiseOrder) as OrderView[];
 
   const canFileExpense = canAccess(user!.role, "expenses");
   const canVoid = canVoidAtTill(user!.role);
+  const canEditPaid = canEditPaidOrders(user!.role);
   const backOfficeHref = canAccess(user!.role, "admin") ? "/admin" : undefined;
 
   return (
@@ -128,6 +99,7 @@ export default async function PosPage() {
       expenseCategories={expenseCategories}
       canFileExpense={canFileExpense}
       canVoid={canVoid}
+      canEditPaid={canEditPaid}
       backOfficeHref={backOfficeHref}
     />
   );

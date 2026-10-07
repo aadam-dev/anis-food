@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Ban, Search, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Ban } from "lucide-react";
 import { formatGHS, roundMoney } from "@/lib/money";
 import { callNumber } from "@/lib/session-utils";
 import { VOID_REASON_LABELS } from "@/components/admin/labels";
@@ -55,119 +55,6 @@ const SETTLE_METHODS: { value: SettleMethod; label: string }[] = [
  * what was ordered is a void and a re-order — not a quiet edit that leaves the
  * kitchen and the till telling different stories.
  */
-export default function OpenTickets({
-  tickets,
-  canVoid,
-  onTakePayment,
-  onVoid,
-}: {
-  tickets: OrderView[];
-  canVoid: boolean;
-  onTakePayment: (ticket: OrderView) => void;
-  onVoid: (ticket: OrderView) => void;
-}) {
-  const [query, setQuery] = useState("");
-  const now = useNow();
-
-  const visible = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    if (!needle) return tickets;
-    return tickets.filter((ticket) => {
-      const haystack = [
-        ticket.customerName,
-        ticket.customerPhone,
-        ticket.orderNumber,
-        callNumber(ticket.orderNumber),
-        ...ticket.items.map((item) => item.name),
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(needle);
-    });
-  }, [tickets, query]);
-
-  const owed = roundMoney(tickets.reduce((sum, ticket) => sum + ticket.total, 0));
-
-  return (
-    <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 pb-24 max-w-2xl mx-auto w-full">
-      <div className="mb-3 flex items-end justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold">Unpaid tickets</h1>
-          <p className="text-sm" style={{ color: "var(--s-ink-muted)" }}>
-            {tickets.length === 0
-              ? "Nothing waiting to be paid."
-              : `${tickets.length} waiting · ${formatGHS(owed)} to collect`}
-          </p>
-        </div>
-      </div>
-
-      {tickets.length > 0 && (
-        <div className="relative mb-3">
-          <Search
-            className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2"
-            style={{ color: "var(--s-ink-muted)" }}
-          />
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search name, phone, number or dish"
-            aria-label="Search tickets"
-            className="w-full min-h-12 rounded-[1.25rem] border pl-12 pr-12 text-sm font-medium outline-none"
-            style={{
-              background: "var(--s-panel)",
-              borderColor: "var(--s-border)",
-              color: "var(--s-ink)",
-              boxShadow: "var(--s-shadow)",
-            }}
-          />
-          {query && (
-            <button
-              type="button"
-              onClick={() => setQuery("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 grid place-items-center rounded-xl"
-              style={{ color: "var(--s-ink-muted)" }}
-              aria-label="Clear search"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-      )}
-
-      {tickets.length === 0 ? (
-        <div
-          className="rounded-3xl border border-dashed px-6 py-14 text-center"
-          style={{ borderColor: "var(--s-border)" }}
-        >
-          <p className="font-semibold">All paid up</p>
-          <p className="mt-1 text-sm" style={{ color: "var(--s-ink-muted)" }}>
-            Anything sent to the kitchen with &quot;Pay later&quot; shows up here.
-          </p>
-        </div>
-      ) : visible.length === 0 ? (
-        <p className="py-12 text-center text-sm" style={{ color: "var(--s-ink-muted)" }}>
-          No ticket matches that.
-        </p>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {visible.map((ticket) => (
-            <TicketCard
-              key={ticket.id}
-              ticket={ticket}
-              now={now}
-              canVoid={canVoid}
-              onTakePayment={() => onTakePayment(ticket)}
-              onVoid={() => onVoid(ticket)}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export function TicketCard({
   ticket,
   now,
@@ -252,10 +139,13 @@ export function SettleSheet({
   ticket,
   onClose,
   onSettled,
+  onPrintBill,
 }: {
   ticket: OrderView;
   onClose: () => void;
   onSettled: (order: OrderView) => void;
+  /** Present the bill before payment, as at a table. */
+  onPrintBill?: () => void;
 }) {
   const [method, setMethod] = useState<SettleMethod>("CASH");
   const [splitCash, setSplitCash] = useState("");
@@ -293,9 +183,16 @@ export function SettleSheet({
       onClose={onClose}
       dismissible={!busy}
       footer={
-        <Button size="lg" className="w-full" busy={busy} disabled={splitInvalid} onClick={settle}>
-          {method === "SPLIT" ? "Confirm split" : `Take ${formatGHS(ticket.total)}`}
-        </Button>
+        <div className={onPrintBill ? "grid grid-cols-[auto_1fr] gap-2" : undefined}>
+          {onPrintBill && (
+            <Button tone="secondary" size="lg" onClick={onPrintBill} disabled={busy}>
+              Print bill
+            </Button>
+          )}
+          <Button size="lg" className="w-full" busy={busy} disabled={splitInvalid} onClick={settle}>
+            {method === "SPLIT" ? "Confirm split" : `Take ${formatGHS(ticket.total)}`}
+          </Button>
+        </div>
       }
     >
       <div className="space-y-4">

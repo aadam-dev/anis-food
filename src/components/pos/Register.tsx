@@ -36,6 +36,7 @@ import {
   getServerQueueCount,
 } from "@/lib/offlineQueue";
 import { cartReducer, emptyCart, cartCount, lineKey } from "./cartReducer";
+import { callNumber } from "@/lib/session-utils";
 import SizePickerSheet from "./SizePickerSheet";
 import MenuGrid from "./MenuGrid";
 import CartPanel from "./CartPanel";
@@ -44,7 +45,7 @@ import PaymentSheet from "./PaymentSheet";
 import ShiftPanel, { OpenShiftCard } from "./ShiftPanel";
 import { SettleSheet, VoidSheet } from "./OpenTickets";
 import OrderDesk from "./OrderDesk";
-import PaymentCorrectionSheet from "./PaymentCorrectionSheet";
+import EditOrderSheet from "./EditOrderSheet";
 import ReceiptModal from "./ReceiptModal";
 import QuantityEntrySheet from "./QuantityEntrySheet";
 import CashMovementDialog from "./CashMovementDialog";
@@ -91,6 +92,8 @@ interface RegisterProps {
   expenseCategories?: ExpenseCategoryOption[];
   canFileExpense?: boolean;
   canVoid?: boolean;
+  /** Owner / manager: may change an order that has already been paid. */
+  canEditPaid?: boolean;
   /** Set for roles that may use the back office. */
   backOfficeHref?: string;
 }
@@ -106,6 +109,7 @@ export default function Register({
   expenseCategories = [],
   canFileExpense = false,
   canVoid = false,
+  canEditPaid = false,
   backOfficeHref,
 }: RegisterProps) {
   const router = useRouter();
@@ -121,10 +125,13 @@ export default function Register({
   );
   const [view, setView] = useState<View>(initialSession?.isStale ? "tickets" : "register");
   const [tickets, setTickets] = useState<OrderView[]>(initialTickets);
+  // Online orders already announced, so each one is announced once.
+  const seenOnline = useRef(new Set(initialTickets.filter((order) => order.source === "ONLINE").map((order) => order.id)));
+  const initialOnlineSeeded = useRef(false);
   const [shiftOrders, setShiftOrders] = useState<OrderView[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [chargeIds, setChargeIds] = useState<string[] | null>(null);
-  const [correcting, setCorrecting] = useState<OrderView | null>(null);
+  const [editing, setEditing] = useState<OrderView | null>(null);
   const [paying, setPaying] = useState(false);
   // Phone only: the cart lives in a slide-up sheet, since there's no room for a
   // side rail. Desktop shows CartPanel inline and never opens this.
@@ -239,7 +246,24 @@ export default function Register({
       ]);
       if (openRes.ok) {
         const data = await openRes.json();
-        setTickets(data.orders);
+        const orders = data.orders as OrderView[];
+        // Announce online orders the first time this till sees them.
+        const online = orders.filter((order) => order.source === "ONLINE");
+        const fresh = online.filter((order) => !seenOnline.current.has(order.id));
+        if (seenOnline.current.size > 0 || initialOnlineSeeded.current) {
+          if (fresh.length === 1) {
+            const order = fresh[0];
+            setBanner({
+              tone: "good",
+              text: `New online order ${callNumber(order.orderNumber)}${order.customerName ? ` from ${order.customerName}` : ""}. It is on Orders.`,
+            });
+          } else if (fresh.length > 1) {
+            setBanner({ tone: "good", text: `${fresh.length} new online orders. They are on Orders.` });
+          }
+        }
+        initialOnlineSeeded.current = true;
+        for (const order of online) seenOnline.current.add(order.id);
+        setTickets(orders);
       }
       if (shiftRes.ok) {
         const data = await shiftRes.json();
@@ -354,8 +378,16 @@ export default function Register({
   // A shift can go stale while the till sits open past midnight.
   useEffect(() => {
     const timer = setInterval(() => void loadSession(), 5 * 60_000);
-    return () => clearInterval(timer);
-  }, [loadSession]);
+    // Online orders arrive without anyone touching the till: look every 30s
+    // while the till is on screen.
+    const ticketTimer = setInterval(() => {
+      if (document.visibilityState === "visible") void loadTickets();
+    }, 30_000);
+    return () => {
+      clearInterval(timer);
+      clearInterval(ticketTimer);
+    };
+  }, [loadSession, loadTickets]);
 
   useEffect(() => {
     let cancelled = false;
@@ -846,18 +878,14 @@ export default function Register({
               tickets={tickets}
               shiftOrders={shiftOrders}
               canVoidPaid={canVoid}
+              canEditPaid={canEditPaid}
               onTakePayment={(ticket) => setSettling(ticket)}
               onVoid={(ticket) => setVoiding(ticket)}
-              onReprint={(order) => {
-                setSlipKind("receipt");
+              onPrint={(order, kind) => {
+                setSlipKind(kind === "invoice" ? "invoice" : "receipt");
                 setReceipt(order);
               }}
-              onInvoice={(order) => {
-                setSlipKind("invoice");
-                setReceipt(order);
-              }}
-              onCorrect={(order) => setCorrecting(order)}
-              onChanged={() => void loadTickets()}
+              onEdit={(order) => setEditing(order)}
             />
           </main>
         )}
@@ -990,6 +1018,12 @@ export default function Register({
         <SettleSheet
           ticket={settling}
           onClose={() => setSettling(null)}
+          onPrintBill={() => {
+            const order = settling;
+            setSettling(null);
+            setSlipKind("receipt");
+            setReceipt(order);
+          }}
           onSettled={(order) => {
             setSettling(null);
             setSlipKind("receipt");
@@ -1045,14 +1079,15 @@ export default function Register({
         />
       )}
 
-      {correcting && (
-        <PaymentCorrectionSheet
-          order={correcting}
-          endpoint={`/api/pos/orders/${correcting.id}`}
-          onClose={() => setCorrecting(null)}
+      {editing && (
+        <EditOrderSheet
+          order={editing}
+          menu={menu}
+          endpoint={`/api/pos/orders/${editing.id}`}
+          onClose={() => setEditing(null)}
           onSaved={() => {
-            setCorrecting(null);
-            setBanner({ tone: "good", text: "Payment updated." });
+            setEditing(null);
+            setBanner({ tone: "good", text: "Order updated." });
             void loadTickets();
             void loadSession();
           }}
@@ -1104,7 +1139,7 @@ function PosRail({
 }) {
   const entries = [
     { id: "register" as const, label: "Order", icon: Store },
-    { id: "tickets" as const, label: "Tickets", icon: ReceiptText, count: ticketCount },
+    { id: "tickets" as const, label: "Orders", icon: ReceiptText, count: ticketCount },
     { id: "shift" as const, label: "Shift", icon: Wallet },
   ];
   return (

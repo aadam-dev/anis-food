@@ -15,6 +15,7 @@ import {
   OrderStatus,
   PaymentMethod,
   PaymentStatus,
+  type Prisma,
   type UserRole,
 } from "@/generated/prisma";
 
@@ -108,14 +109,9 @@ export async function applyOrderDesk(params: { orderId: string; input: DeskInput
   return editOrder(order, params.input, verdict.paid, params);
 }
 
-type LoadedOrder = NonNullable<Awaited<ReturnType<typeof loadShape>>>;
-// Only used for its type: the order as applyOrderDesk loads it.
-function loadShape(id: string) {
-  return prisma.order.findUnique({
-    where: { id },
-    include: { items: true, session: { select: { id: true, status: true } } },
-  });
-}
+type LoadedOrder = Prisma.OrderGetPayload<{
+  include: { items: true; session: { select: { id: true; status: true } } };
+}>;
 
 function paymentFields(input: z.infer<typeof paymentSchema>, total: number) {
   const next = settlementAfterCorrection(input.paymentMethod);

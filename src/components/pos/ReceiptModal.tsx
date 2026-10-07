@@ -28,8 +28,11 @@ export default function ReceiptModal({
   const printed = useRef(false);
   const printAfterKind = useRef(false);
   const [qrDataUrl, setQrDataUrl] = useState<string | undefined>();
-  const [slipKind, setSlipKind] = useState<"receipt" | "invoice" | "bill">(kind ?? (unpaid ? "bill" : "receipt"));
-  const isBill = slipKind === "bill";
+  // Unpaid: a bill, or a pro-forma invoice. Never a receipt.
+  const [slipKind, setSlipKind] = useState<"receipt" | "invoice" | "bill">(
+    unpaid ? (kind === "invoice" ? "invoice" : "bill") : kind === "bill" ? "receipt" : (kind ?? "receipt"),
+  );
+  const isBill = unpaid;
 
   function chooseSlip(next: "receipt" | "invoice" | "bill") {
     if (next === slipKind) {
@@ -102,7 +105,7 @@ export default function ReceiptModal({
     address: business.address,
     phone: business.phone,
     footer: business.footer,
-    documentTitle: slipKind === "invoice" ? "INVOICE" : isBill ? "BILL" : undefined,
+    documentTitle: slipKind === "invoice" ? "INVOICE" : unpaid ? "BILL" : undefined,
     kind: isBill ? "bill" : "receipt",
     logoUrl: "/images/logo.png",
     verifyUrl,
@@ -164,7 +167,7 @@ export default function ReceiptModal({
           className="sticky top-0 flex items-center justify-between px-4 py-3 border-b"
           style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
         >
-          <h2 className="font-semibold">{isBill ? "Bill" : slipKind === "invoice" ? "Invoice" : "Receipt"}</h2>
+          <h2 className="font-semibold">{slipKind === "invoice" ? "Invoice" : isBill ? "Bill" : "Receipt"}</h2>
           <div className="flex items-center gap-1">
             {!unpaid && (
               <>
