@@ -12,7 +12,11 @@ export const metadata = { title: "Manual" };
 
 const SECTIONS = [
   { id: "day", title: "A day at Anis" },
+  { id: "orders", title: "Taking orders and bills" },
+  { id: "editing", title: "Changing an order" },
+  { id: "online", title: "Online orders" },
   { id: "dashboard", title: "Reading the dashboard" },
+  { id: "sizes", title: "Dishes and sizes" },
   { id: "costing", title: "Costing a dish by hand" },
   { id: "payroll", title: "Running payroll" },
   { id: "expenses", title: "Expenses and deposits" },
@@ -87,7 +91,84 @@ export default function ManualPage() {
             </Tip>
           </Section>
 
-          <Section id="dashboard" n={2} title="Reading the dashboard">
+          <Section id="orders" n={2} title="Taking orders and bills">
+            <Steps
+              items={[
+                <>
+                  <b>Ring it up.</b> Tap dishes on the Sell screen. A dish that comes in sizes asks <i>which size?</i>{" "}
+                  first; tap Small, Medium or Large and the right price goes on the order. The line reads like{" "}
+                  <i>Jollof with Grilled Chicken · Large</i> on the screen, the kitchen board and the receipt.
+                </>,
+                <>
+                  <b>Paying now:</b> tap <i>Charge</i> and pick Cash, MoMo, Card, Bolt or Split. The receipt prints.
+                </>,
+                <>
+                  <b>Paying later</b> (sit-down guests, a tab, a delivery paid on arrival): pick <i>Pay later</i>. The
+                  order stays open under Orders → <i>Unpaid</i>, and a <b>bill</b> appears. Print it and present it to
+                  the guest: it shows what they owe and says it is not paid yet.
+                </>,
+                <>
+                  <b>When they pay,</b> open the order from Orders (or its table) and tap <i>Take payment</i>. Now the
+                  receipt prints. A bill can be reprinted as often as needed from the order&apos;s card.
+                </>,
+              ]}
+            />
+            <Tip>
+              Transfer is no longer a till payment: customers pay by Cash, MoMo or Card. Bank transfers to suppliers are
+              still recorded under Expenses.
+            </Tip>
+          </Section>
+
+          <Section id="editing" n={3} title="Changing an order">
+            <p>
+              Open the order (on the till: Orders; in the back office: Orders) and tap <b>Edit</b>. You can add dishes,
+              change quantities, remove lines, change the discount, and correct how it was paid. Give a short reason:
+              it is kept with the order.
+            </p>
+            <ul className="mt-3 list-disc space-y-1.5 pl-5">
+              <li>
+                <b>Unpaid orders:</b> anyone on the till can change them. The bill updates.
+              </li>
+              <li>
+                <b>Paid orders:</b> only a manager or the owner, and only while that order&apos;s shift is still open.
+                If the total goes up, the screen tells you how much more to collect; if it goes down, how much to give
+                back. Pick the payment method that covers the new total.
+              </li>
+              <li>
+                <b>Wrong payment method</b> (rung as Cash but paid by MoMo): edit the order and pick the right method.
+                The drawer count follows.
+              </li>
+              <li>
+                <b>Closed shifts are locked.</b> Their cash-up is already counted, so changing a sale would make it
+                wrong. Void the old order (with a reason) and ring a new one in today&apos;s shift instead.
+              </li>
+              <li>
+                Added dishes go back to the kitchen board as new. Every change gets an <b>Edited</b> tag, and the back
+                office Orders screen shows who changed what and when. Use the <i>Edited</i> filter to review them.
+              </li>
+            </ul>
+          </Section>
+
+          <Section id="online" n={4} title="Online orders">
+            <p>
+              Orders placed on the website land on the till straight away with an <b>Online</b> tag, the
+              customer&apos;s name and phone, pickup or delivery, the delivery address and any notes. The till shows a
+              banner when a new one arrives, and they appear on the kitchen board.
+            </p>
+            <Steps
+              items={[
+                <>Call or WhatsApp the customer from the number on the card if anything needs checking.</>,
+                <>Cook and pack it like any other order.</>,
+                <>
+                  When the customer pays (on pickup or delivery), open it in Orders and tap <i>Take payment</i>. Print
+                  the bill first if the rider needs one.
+                </>,
+                <>If they never come, void it with the reason &ldquo;Customer cancelled&rdquo;.</>,
+              ]}
+            />
+          </Section>
+
+          <Section id="dashboard" n={5} title="Reading the dashboard">
             <p>
               Switch between <b>Today</b>, <b>This week</b> and <b>This month</b> at the top. Every figure compares
               with the period before: today against all of yesterday, this week against last week so far, this month
@@ -99,7 +180,7 @@ export default function ManualPage() {
               </li>
               <li>
                 <b>Gross margin</b> is what is left after food cost, as a share of sales. It shows a dash until your
-                dishes are costed (see section 3).
+                dishes are costed (see <i>Costing a dish by hand</i>).
               </li>
               <li>
                 <b>Where the money went</b> splits every cedi of sales into food, staff, running costs and what you
@@ -119,14 +200,48 @@ export default function ManualPage() {
             </ul>
           </Section>
 
-          <Section id="costing" n={3} title="Costing a dish by hand">
+          <Section id="sizes" n={6} title="Dishes and sizes">
+            <p>
+              When the same plate comes in portions, make it <b>one dish with sizes</b>, not separate dishes. Sales and
+              costing then stay together, the website shows one card with size buttons, and the till asks which size.
+            </p>
+            <Steps
+              items={[
+                <>
+                  Go to{" "}
+                  <Link href="/admin/menu" className="font-bold underline" style={{ color: "var(--s-brand)" }}>
+                    Menu
+                  </Link>{" "}
+                  and tap the dish.
+                </>,
+                <>
+                  Under <b>Sizes</b>, tap <i>Sell in sizes</i>. Name each size (Small, Large…), give it a price and,
+                  if you know it, what it costs to make. Use the arrows to put them in order.
+                </>,
+                <>
+                  Untick <i>On sale</i> to pause one size (say, Large ran out) without touching the others.
+                </>,
+                <>
+                  Tap <b>Save changes</b>. The till and the website show the new sizes within a minute; the website
+                  card reads &ldquo;from&rdquo; the cheapest size.
+                </>,
+              ]}
+            />
+            <Tip>
+              To go back to one price, remove all the sizes and enter the dish&apos;s price. Past receipts keep the
+              size they were sold in.
+            </Tip>
+          </Section>
+
+          <Section id="costing" n={7} title="Costing a dish by hand">
             <p>
               Profit is only known once the till knows what each plate costs to make. You do this once per dish, then
               review it when market prices move. Start with your best sellers: the{" "}
               <Link href="/admin/menu?view=costing" className="font-bold underline" style={{ color: "var(--s-brand)" }}>
                 costing sheet
               </Link>{" "}
-              lists them first.
+              lists them first. A dish with sizes gets one line per size, because a large plate costs more to make
+              than a small one: cost each size.
             </p>
 
             <h3 className="mt-5 font-extrabold">You need</h3>
@@ -222,7 +337,7 @@ export default function ManualPage() {
             </Tip>
           </Section>
 
-          <Section id="payroll" n={4} title="Running payroll">
+          <Section id="payroll" n={8} title="Running payroll">
             <Steps
               items={[
                 <>
@@ -253,7 +368,7 @@ export default function ManualPage() {
             <Tip>A paid record can never be changed or deleted: it is part of the accounts. Fix mistakes before paying.</Tip>
           </Section>
 
-          <Section id="expenses" n={5} title="Expenses and deposits">
+          <Section id="expenses" n={9} title="Expenses and deposits">
             <ul className="list-disc space-y-1.5 pl-5">
               <li>
                 <b>Cash spent from the till</b> becomes an expense automatically, filed under the category the cashier
@@ -273,7 +388,7 @@ export default function ManualPage() {
             </ul>
           </Section>
 
-          <Section id="cash-up" n={6} title="Cash-up and shift reports">
+          <Section id="cash-up" n={10} title="Cash-up and shift reports">
             <p>
               Money → <b>Cash-up</b> shows every shift: what the till expected in the drawer, what was counted, and the
               difference. MoMo is checked the same way when the balance was entered at open and close.
@@ -292,7 +407,7 @@ export default function ManualPage() {
             </ul>
           </Section>
 
-          <Section id="month-end" n={7} title="Month-end checklist">
+          <Section id="month-end" n={11} title="Month-end checklist">
             <Steps
               items={[
                 <>Make sure every shift for the month is closed (Cash-up shows none open).</>,
@@ -307,7 +422,7 @@ export default function ManualPage() {
             />
           </Section>
 
-          <Section id="words" n={8} title="What the words mean">
+          <Section id="words" n={12} title="What the words mean">
             <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
               <Word term="Sales">What customers paid for completed sales, after discounts.</Word>
               <Word term="Food cost">What the dishes sold cost to make: ingredients, packaging, gas.</Word>
