@@ -197,7 +197,7 @@ export default async function AdminOverviewPage({
                 Sales {period === "today" ? "today" : `this ${period}`}
               </p>
               <div className="mt-1 flex flex-wrap items-baseline gap-3">
-                <p className="money text-[2.6rem] font-extrabold leading-none tracking-tight sm:text-5xl">
+                <p className="money text-[clamp(1.9rem,9.5vw,2.6rem)] font-extrabold leading-none tracking-tight sm:text-5xl">
                   {formatGHS(current.netSales)}
                 </p>
                 <Delta value={change(current.netSales, previous.netSales)} />

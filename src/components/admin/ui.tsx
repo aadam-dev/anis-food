@@ -196,7 +196,7 @@ export function Stat({
         )}
       </div>
       <div className="mt-2 flex flex-wrap items-baseline gap-2">
-        <p className="money text-[1.75rem] font-extrabold leading-tight tracking-tight">{value}</p>
+        <p className="money text-[clamp(1.2rem,5.2vw,1.75rem)] whitespace-nowrap font-extrabold leading-tight tracking-tight">{value}</p>
         {delta !== undefined && <Delta value={delta} invert={invertDelta} />}
       </div>
       {detail && (

@@ -67,6 +67,10 @@ body {
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+  /* Nothing may push the page sideways on a phone. clip, not hidden, so
+     sticky headers keep working. */
+  overflow-x: clip;
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -107,6 +111,54 @@ h1, h2, h3, h4, h5, h6 {
    remains available in Settings. Every colour below is a token rather than a
    literal so that switch still works.
    =========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   App behaviour for the till and back office. Installed to a home screen they
+   should feel like an app, not a web page you can drag around:
+   - no rubber-band bounce or pull-to-refresh on the page itself;
+   - no grey flash on tap, no double-tap zoom delay;
+   - phones never zoom into a field on focus (see the pointer: coarse rule);
+   - a grid cell can shrink to the screen, so one wide chart or table scrolls
+     inside its own card instead of widening the whole page.
+   --------------------------------------------------------------------------- */
+html:has(> body [data-surface]),
+body:has([data-surface]) {
+  overscroll-behavior: none;
+}
+
+[data-surface] {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  touch-action: manipulation;
+}
+
+[data-surface] ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+[data-surface] ::-webkit-scrollbar-track {
+  background: transparent;
+}
+[data-surface] ::-webkit-scrollbar-thumb {
+  background: var(--s-border-strong, rgb(0 0 0 / 0.2));
+  border-radius: 999px;
+}
+
+[data-surface] .grid > *,
+[data-surface] .flex > .min-w-0 {
+  min-width: 0;
+}
+
+/* Every form on a phone, the website's order form included: iOS zooms into
+   any field under 16px when it is tapped. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+}
 
 [data-surface] {
   --s-radius: 1.25rem;
