@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { SELLABLE_DISH } from "@/lib/menu-sizes";
 import { requireResource } from "@/lib/api-auth";
 import { ok, handlePrismaError } from "@/lib/api-utils";
 import { toMoney } from "@/lib/money";
@@ -27,7 +28,7 @@ export async function GET() {
         select: { id: true, name: true, sortOrder: true },
       }),
       prisma.menuItem.findMany({
-        where: { isAvailable: true, category: { isActive: true } },
+        where: SELLABLE_DISH,
         orderBy: [{ category: { sortOrder: "asc" } }, { sortOrder: "asc" }],
         select: {
           id: true,

@@ -23,14 +23,18 @@ export default async function AdminMenuPage({
   const { start, end } = periodBounds(addDays(today, -29), today);
 
   const [categories, items, sold] = await Promise.all([
-    prisma.menuCategory.findMany({ orderBy: { sortOrder: "asc" } }),
+    prisma.menuCategory.findMany({ orderBy: { sortOrder: "asc" }, include: { _count: { select: { items: true } } } }),
     prisma.menuItem.findMany({
       orderBy: [{ category: { sortOrder: "asc" } }, { sortOrder: "asc" }],
-      include: { category: { select: { name: true } } },
+      include: {
+        category: { select: { name: true } },
+        sizes: { orderBy: { sortOrder: "asc" } },
+        _count: { select: { orderItems: true } },
+      },
     }),
-    // What each dish sold in the last 30 days, so costing starts where the money is.
+    // What each dish (and size) sold in the last 30 days, so costing starts where the money is.
     prisma.orderItem.groupBy({
-      by: ["menuItemId"],
+      by: ["menuItemId", "sizeId"],
       where: {
         order: {
           isDemo: false,
@@ -42,12 +46,26 @@ export default async function AdminMenuPage({
       _sum: { quantity: true, lineTotal: true },
     }),
   ]);
-  const soldBy = new Map(sold.map((row) => [row.menuItemId, row._sum]));
+  const soldByDish = new Map<string, { quantity: number; revenue: number }>();
+  const soldBySize = new Map<string, { quantity: number; revenue: number }>();
+  for (const row of sold) {
+    const quantity = row._sum.quantity ?? 0;
+    const revenue = toMoney(row._sum.lineTotal ?? 0);
+    if (row.menuItemId) {
+      const dish = soldByDish.get(row.menuItemId) ?? { quantity: 0, revenue: 0 };
+      dish.quantity += quantity;
+      dish.revenue += revenue;
+      soldByDish.set(row.menuItemId, dish);
+    }
+    if (row.sizeId) soldBySize.set(row.sizeId, { quantity, revenue });
+  }
 
   const serializedCategories: AdminMenuCategory[] = categories.map((category) => ({
     id: category.id,
     name: category.name,
     sortOrder: category.sortOrder,
+    isActive: category.isActive,
+    count: category._count.items,
   }));
 
   const serializedItems: AdminMenuItem[] = items.map((item) => ({
@@ -62,8 +80,18 @@ export default async function AdminMenuPage({
     imageUrl: menuImage(item.imageUrl, item.categoryId, item.name),
     isPopular: item.isPopular,
     isAvailable: item.isAvailable,
-    sold30: soldBy.get(item.id)?.quantity ?? 0,
-    revenue30: toMoney(soldBy.get(item.id)?.lineTotal ?? 0),
+    timesSold: item._count.orderItems,
+    sold30: soldByDish.get(item.id)?.quantity ?? 0,
+    revenue30: soldByDish.get(item.id)?.revenue ?? 0,
+    sizes: item.sizes.map((size) => ({
+      id: size.id,
+      label: size.label,
+      price: toMoney(size.price),
+      costPrice: showCosts && size.costPrice !== null ? toMoney(size.costPrice) : null,
+      isAvailable: size.isAvailable,
+      sold30: soldBySize.get(size.id)?.quantity ?? 0,
+      revenue30: soldBySize.get(size.id)?.revenue ?? 0,
+    })),
   }));
 
   return (

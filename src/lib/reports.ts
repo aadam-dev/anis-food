@@ -174,6 +174,7 @@ export async function getLedger(from: string, to: string): Promise<Ledger> {
         quantity: true,
         lineTotal: true,
         unitCost: true,
+        size: { select: { costPrice: true } },
         menuItem: { select: { costPrice: true } },
       },
     }),
@@ -272,7 +273,7 @@ export async function getLedger(from: string, to: string): Promise<Ledger> {
     // The cost snapshotted at the sale wins. A sale rung before the dish was
     // costed falls back to the dish's cost now, so entering costs in Menu
     // corrects profit for the past as well as the future.
-    const unitCost = item.unitCost ?? item.menuItem?.costPrice ?? null;
+    const unitCost = item.unitCost ?? item.size?.costPrice ?? item.menuItem?.costPrice ?? null;
     if (unitCost !== null) {
       const lineCost = toMoney(unitCost) * item.quantity;
       cogs += lineCost;

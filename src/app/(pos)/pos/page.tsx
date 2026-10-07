@@ -2,6 +2,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { getSettings } from "@/lib/settings";
 import { currentSession } from "@/lib/pos-session";
 import { prisma } from "@/lib/db";
+import { SELLABLE_DISH } from "@/lib/menu-sizes";
 import { toMoney } from "@/lib/money";
 import { menuImage } from "@/lib/menu-image";
 import { canAccess, canEditPaidOrders, canVoidAtTill } from "@/lib/permissions";
@@ -27,7 +28,7 @@ export default async function PosPage() {
       select: { id: true, name: true, sortOrder: true },
     }),
     prisma.menuItem.findMany({
-      where: { isAvailable: true, category: { isActive: true } },
+      where: SELLABLE_DISH,
       orderBy: [{ category: { sortOrder: "asc" } }, { sortOrder: "asc" }],
       select: {
         id: true,

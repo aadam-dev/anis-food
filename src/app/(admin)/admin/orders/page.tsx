@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { SELLABLE_DISH } from "@/lib/menu-sizes";
 import { formatGHS, toMoney } from "@/lib/money";
 import { getSettings } from "@/lib/settings";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -122,7 +123,7 @@ export default async function OrdersPage({
       select: { id: true, name: true, sortOrder: true },
     }),
     prisma.menuItem.findMany({
-      where: { isAvailable: true, category: { isActive: true } },
+      where: SELLABLE_DISH,
       orderBy: [{ category: { sortOrder: "asc" } }, { sortOrder: "asc" }],
       select: {
         id: true,

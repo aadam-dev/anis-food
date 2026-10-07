@@ -1,3 +1,4 @@
+import type { Prisma } from "@/generated/prisma";
 import { roundMoney, toMoney } from "./money";
 
 /**
@@ -73,3 +74,13 @@ export function fromPrice(dish: { price: number; sizes: { price: number; isAvail
 export function lineName(name: string, sizeLabel?: string | null): string {
   return sizeLabel ? `${name} · ${sizeLabel}` : name;
 }
+
+/**
+ * Prisma filter for dishes that can be sold right now: on the menu, in a shown
+ * category, and either priced on their own or with at least one size on sale.
+ */
+export const SELLABLE_DISH: Prisma.MenuItemWhereInput = {
+  isAvailable: true,
+  category: { isActive: true },
+  OR: [{ sizes: { none: {} } }, { sizes: { some: { isAvailable: true } } }],
+};

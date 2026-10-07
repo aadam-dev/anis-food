@@ -243,33 +243,49 @@ function heroSeries(period: DashboardPeriod, current: Ledger, previous: Ledger) 
 export async function getCostingProgress(today = businessDay()): Promise<CostingProgress> {
   const from = addDays(today, -29);
   const [dishes, lines] = await Promise.all([
-    prisma.menuItem.findMany({ select: { id: true, name: true, costPrice: true } }),
+    prisma.menuItem.findMany({
+      select: {
+        id: true,
+        name: true,
+        costPrice: true,
+        sizes: { where: { isAvailable: true }, select: { id: true, costPrice: true } },
+      },
+    }),
     prisma.orderItem.groupBy({
-      by: ["menuItemId"],
+      by: ["menuItemId", "sizeId"],
       where: { order: { ...REVENUE_WHERE, createdAt: rangeOf(from, today) } },
       _sum: { lineTotal: true },
     }),
   ]);
-  const costed = new Set(dishes.filter((dish) => dish.costPrice !== null).map((dish) => dish.id));
-  const names = new Map(dishes.map((dish) => [dish.id, dish.name]));
+  // A dish with sizes is costed once every size it sells has a cost.
+  const costedDish = (dish: (typeof dishes)[number]) =>
+    dish.sizes.length > 0 ? dish.sizes.every((size) => size.costPrice !== null) : dish.costPrice !== null;
+  const costedSize = new Set(dishes.flatMap((dish) => dish.sizes.filter((size) => size.costPrice !== null).map((size) => size.id)));
+  const byId = new Map(dishes.map((dish) => [dish.id, dish]));
 
   let total = 0;
   let covered = 0;
-  const uncosted: { id: string; name: string; revenue: number }[] = [];
+  const uncosted = new Map<string, { id: string; name: string; revenue: number }>();
   for (const line of lines) {
     const revenue = toMoney(line._sum.lineTotal ?? 0);
     total += revenue;
-    if (line.menuItemId && costed.has(line.menuItemId)) covered += revenue;
-    else if (line.menuItemId && names.has(line.menuItemId)) {
-      uncosted.push({ id: line.menuItemId, name: names.get(line.menuItemId)!, revenue });
+    const dish = line.menuItemId ? byId.get(line.menuItemId) : undefined;
+    if (!dish) continue;
+    const lineCosted = line.sizeId ? costedSize.has(line.sizeId) : dish.costPrice !== null;
+    if (lineCosted) {
+      covered += revenue;
+    } else {
+      const entry = uncosted.get(dish.id) ?? { id: dish.id, name: dish.name, revenue: 0 };
+      entry.revenue += revenue;
+      uncosted.set(dish.id, entry);
     }
   }
 
   return {
     dishes: dishes.length,
-    costed: costed.size,
+    costed: dishes.filter(costedDish).length,
     salesCovered: total > 0 ? Math.round((covered / total) * 100) : 0,
-    priorities: uncosted
+    priorities: [...uncosted.values()]
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 6)
       .map((dish) => ({ ...dish, revenue: roundMoney(dish.revenue), share: total > 0 ? dish.revenue / total : 0 })),
