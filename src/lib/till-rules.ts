@@ -6,8 +6,8 @@
  */
 import { roundMoney, toMoney } from "./money";
 
-export type MovementKind = "IN" | "SPEND" | "DEPOSIT";
-export type DepositDestination = "MOMO" | "BANK";
+export type MovementKind = "IN" | "SPEND" | "DEPOSIT" | "WAGES";
+export type DepositDestination = "MOMO" | "BANK" | "SAFE";
 
 export function saleBooks(method: string): {
   paymentStatus: "PENDING" | "PAID";
@@ -120,6 +120,10 @@ export function movementBooks(kind: MovementKind): {
   }
   if (kind === "SPEND") {
     return { direction: "OUT", filesExpense: true, raisesMomo: () => false };
+  }
+  // Wages: payroll is the cost, so the drawer pays out without filing an expense.
+  if (kind === "WAGES") {
+    return { direction: "OUT", filesExpense: false, raisesMomo: () => false };
   }
   return {
     direction: "OUT",

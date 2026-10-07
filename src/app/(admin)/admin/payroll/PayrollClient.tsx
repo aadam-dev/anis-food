@@ -30,8 +30,10 @@ export interface PayableStaff {
   momoNumber: string | null;
   bankName: string | null;
   bankAccount: string | null;
-  /** Days the till saw them working this month: a suggestion for daily pay. */
-  daysWorked: number;
+  /** Registered with SSNIT (set on their Staff record). */
+  ssnit: boolean;
+  /** Days the till saw them working this month; null when they have no till login. */
+  daysWorked: number | null;
 }
 
 export interface PayrollRecordView {
@@ -48,7 +50,18 @@ export interface PayrollRecordView {
   paidAt: string | null;
   notes: string | null;
   payTo: string | null;
+  paidFrom: string | null;
 }
+
+/** Where wages can come from, best first. */
+const PAID_FROM = [
+  { value: "SAFE", label: "Cash (safe)", hint: "Cash kept outside the till. Count it out, get the payslip signed." },
+  { value: "MOMO", label: "MoMo", hint: "Sent to their MoMo number. Traceable, nothing to count." },
+  { value: "BANK", label: "Bank transfer", hint: "Paid into their account. Traceable, nothing to count." },
+  { value: "TILL", label: "From the till", hint: "Out of today's drawer. The Z report expects it; do it before counting." },
+] as const;
+type PaidFrom = (typeof PAID_FROM)[number]["value"];
+const PAID_FROM_LABEL: Record<string, string> = Object.fromEntries(PAID_FROM.map((entry) => [entry.value, entry.label]));
 
 const STATUS_TONE: Record<string, "neutral" | "good" | "warn"> = {
   DRAFT: "neutral",
@@ -77,12 +90,16 @@ export default function PayrollClient({
   runFrom,
   runTo,
   businessName,
+  tillOpen,
+  ssnitEnabled,
 }: {
   records: PayrollRecordView[];
   payable: PayableStaff[];
   runFrom: string;
   runTo: string;
   businessName: string;
+  tillOpen: boolean;
+  ssnitEnabled: boolean;
 }) {
   const router = useRouter();
   const [running, setRunning] = useState(false);
@@ -92,15 +109,21 @@ export default function PayrollClient({
   const [deleting, setDeleting] = useState<PayrollRecordView | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [paying, setPaying] = useState<PayrollRecordView[] | null>(null);
 
   const drafts = records.filter((record) => record.status === "DRAFT");
   const approved = records.filter((record) => record.status === "APPROVED");
 
-  async function advance(rows: PayrollRecordView[], status: "APPROVED" | "PAID" | "DRAFT", key: string) {
+  async function advance(
+    rows: PayrollRecordView[],
+    status: "APPROVED" | "PAID" | "DRAFT",
+    key: string,
+    extra: { paidFrom?: PaidFrom } = {},
+  ) {
     setBusy(key);
     setError(null);
     try {
-      for (const row of rows) await send(`/api/admin/payroll/${row.id}`, "PATCH", { status });
+      for (const row of rows) await send(`/api/admin/payroll/${row.id}`, "PATCH", { status, ...extra });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "That did not save.");
     } finally {
@@ -140,7 +163,7 @@ export default function PayrollClient({
               </AdminButton>
             )}
             {approved.length > 0 && (
-              <AdminButton variant="primary" onClick={() => advance(approved, "PAID", "pay-all")} loading={busy === "pay-all"}>
+              <AdminButton variant="primary" onClick={() => setPaying(approved)} loading={busy === "pay-all"}>
                 <BadgeCent className="h-4 w-4" /> Mark {approved.length} paid
               </AdminButton>
             )}
@@ -193,6 +216,7 @@ export default function PayrollClient({
                     {record.paidAt && (
                       <span className="mt-0.5 block text-xs" style={{ color: "var(--s-ink-faint)" }}>
                         {new Date(record.paidAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Africa/Accra" })}
+                        {record.paidFrom ? ` · ${PAID_FROM_LABEL[record.paidFrom] ?? record.paidFrom}` : ""}
                       </span>
                     )}
                   </td>
@@ -227,7 +251,7 @@ export default function PayrollClient({
                         <AdminButton
                           variant="primary"
                           className="!min-h-9 px-3 py-1.5"
-                          onClick={() => advance([record], "PAID", record.id)}
+                          onClick={() => setPaying([record])}
                           loading={busy === record.id}
                         >
                           Mark paid
@@ -247,6 +271,7 @@ export default function PayrollClient({
 
       {running && (
         <RunDialog
+          ssnitEnabled={ssnitEnabled}
           payable={payable}
           runFrom={runFrom}
           runTo={runTo}
@@ -273,6 +298,18 @@ export default function PayrollClient({
         />
       )}
       {slip && <Payslip record={slip} businessName={businessName} onClose={() => setSlip(null)} />}
+      {paying && (
+        <PayDialog
+          rows={paying}
+          tillOpen={tillOpen}
+          busy={busy === "pay"}
+          onClose={() => setPaying(null)}
+          onConfirm={async (paidFrom) => {
+            await advance(paying, "PAID", "pay", { paidFrom });
+            setPaying(null);
+          }}
+        />
+      )}
       <ConfirmDialog
         open={deleting !== null}
         title="Delete this draft?"
@@ -282,6 +319,90 @@ export default function PayrollClient({
         onCancel={() => setDeleting(null)}
       />
     </>
+  );
+}
+
+/**
+ * "Where did the money come from?" Every paid wage leaves one account, so the
+ * safe, MoMo, bank or drawer balance stays true. Cash from the safe is the
+ * default; MoMo and bank leave the clearest record.
+ */
+function PayDialog({
+  rows,
+  tillOpen,
+  busy,
+  onClose,
+  onConfirm,
+}: {
+  rows: PayrollRecordView[];
+  tillOpen: boolean;
+  busy: boolean;
+  onClose: () => void;
+  onConfirm: (paidFrom: PaidFrom) => void;
+}) {
+  const [paidFrom, setPaidFrom] = useState<PaidFrom>("SAFE");
+  const total = rows.reduce((sum, row) => sum + row.netAmount, 0);
+  const options = PAID_FROM.filter((option) => option.value !== "TILL" || tillOpen);
+
+  return (
+    <Dialog
+      open
+      title={rows.length === 1 ? `Pay ${rows[0].name}` : `Pay ${rows.length} people`}
+      description={`${formatGHS(total)} in total. It counts against profit today.`}
+      onClose={() => !busy && onClose()}
+      footer={
+        <>
+          <AdminButton variant="ghost" onClick={onClose} disabled={busy}>
+            Cancel
+          </AdminButton>
+          <AdminButton variant="primary" onClick={() => onConfirm(paidFrom)} loading={busy}>
+            Mark paid
+          </AdminButton>
+        </>
+      }
+    >
+      <p className="mb-2 text-sm font-bold">Paid from</p>
+      <div className="space-y-2" role="radiogroup" aria-label="Paid from">
+        {options.map((option) => {
+          const active = paidFrom === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              onClick={() => setPaidFrom(option.value)}
+              className="flex w-full items-start gap-3 rounded-2xl border-2 p-3 text-left"
+              style={{
+                borderColor: active ? "var(--s-brand)" : "var(--s-border)",
+                background: active ? "var(--s-brand-soft)" : "var(--s-panel)",
+              }}
+            >
+              <span
+                className="mt-1 h-4 w-4 shrink-0 rounded-full border-2"
+                style={{ borderColor: active ? "var(--s-brand)" : "var(--s-border-strong)", background: active ? "var(--s-brand)" : "transparent" }}
+              />
+              <span>
+                <span className="block font-bold">{option.label}</span>
+                <span className="block text-xs" style={{ color: "var(--s-ink-muted)" }}>
+                  {option.hint}
+                </span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {!tillOpen && (
+        <p className="mt-2 text-xs" style={{ color: "var(--s-ink-faint)" }}>
+          Paying from the till needs an open shift.
+        </p>
+      )}
+      {paidFrom === "TILL" && (
+        <p className="mt-3 rounded-2xl px-3 py-2 text-sm" style={{ background: "var(--s-warn-soft)", color: "var(--s-warn)" }}>
+          The cashier hands over {formatGHS(total)} from the drawer now. It shows as “Wages” on the Z report, so the count still balances.
+        </p>
+      )}
+    </Dialog>
   );
 }
 
@@ -312,6 +433,7 @@ interface RunLine {
 
 /** The month's pay for everyone on one sheet, with live totals. */
 function RunDialog({
+  ssnitEnabled,
   payable,
   runFrom,
   runTo,
@@ -319,6 +441,7 @@ function RunDialog({
   onOpenRates,
   onDone,
 }: {
+  ssnitEnabled: boolean;
   payable: PayableStaff[];
   runFrom: string;
   runTo: string;
@@ -330,12 +453,13 @@ function RunDialog({
   const missing = payable.length - withRate.length;
   const [from, setFrom] = useState(runFrom);
   const [to, setTo] = useState(runTo);
-  const [ssnit, setSsnit] = useState(false);
+  // On for anyone marked as registered with SSNIT on their Staff record.
+  const [ssnit, setSsnit] = useState(() => ssnitEnabled && withRate.some((person) => person.ssnit));
   const [lines, setLines] = useState<Record<string, RunLine>>(() =>
     Object.fromEntries(
       withRate.map((person) => [
         person.id,
-        { include: true, units: person.salaryType === "MONTHLY" ? "" : String(person.daysWorked || ""), bonuses: "", other: "" },
+        { include: true, units: person.salaryType === "MONTHLY" ? "" : String(person.daysWorked ?? ""), bonuses: "", other: "" },
       ]),
     ),
   );
@@ -356,13 +480,15 @@ function RunDialog({
         units: num(line.units),
         bonuses: num(line.bonuses),
         otherDeductions: num(line.other),
-        ssnit,
+        ssnit: ssnit && person.ssnit,
       }),
     };
   });
   const chosen = computed.filter((row) => row.line.include);
   const total = chosen.reduce((sum, row) => sum + row.pay.net, 0);
-  const employerSsnit = ssnit ? chosen.reduce((sum, row) => sum + row.pay.base * SSNIT_EMPLOYER_RATE, 0) : 0;
+  const employerSsnit = ssnit
+    ? chosen.filter((row) => row.person.ssnit).reduce((sum, row) => sum + row.pay.base * SSNIT_EMPLOYER_RATE, 0)
+    : 0;
 
   async function submit() {
     setBusy(true);
@@ -373,7 +499,8 @@ function RunDialog({
         periodEnd: to,
         ssnit,
         lines: chosen.map(({ person, line }) => ({
-          userId: person.id,
+          staffId: person.id,
+          ssnit: ssnit && person.ssnit,
           salaryType: person.salaryType,
           rate: person.rate,
           units: num(line.units),
@@ -423,16 +550,18 @@ function RunDialog({
         </Field>
       </div>
 
+      {ssnitEnabled && (
       <label className="mt-3 flex items-start gap-2 rounded-2xl px-3 py-2.5 text-sm" style={{ background: "var(--s-sunk)" }}>
         <input type="checkbox" checked={ssnit} onChange={(event) => setSsnit(event.target.checked)} className="mt-0.5 h-4 w-4" />
         <span>
           <span className="font-bold">Deduct SSNIT ({(SSNIT_EMPLOYEE_RATE * 100).toFixed(1)}% of basic pay)</span>
           <span className="block text-xs" style={{ color: "var(--s-ink-muted)" }}>
-            Only for staff registered with SSNIT. The business also owes {(SSNIT_EMPLOYER_RATE * 100).toFixed(0)}% on top
+            Only from staff marked as registered with SSNIT on the Staff page. The business also owes {(SSNIT_EMPLOYER_RATE * 100).toFixed(0)}% on top
             {ssnit && employerSsnit > 0 ? `: about ${formatGHS(employerSsnit)} this run` : ""}, paid to SSNIT, not taken from wages.
           </span>
         </span>
       </label>
+      )}
 
       {missing > 0 && (
         <p className="mt-3 text-sm" style={{ color: "var(--s-warn)" }}>
@@ -490,7 +619,7 @@ function RunDialog({
                             style={inputStyle}
                             aria-label={`${unit} for ${person.name}`}
                           />
-                          {person.salaryType === "DAILY" && person.daysWorked > 0 && (
+                          {person.salaryType === "DAILY" && (person.daysWorked ?? 0) > 0 && (
                             <span className="mt-0.5 block text-[11px]" style={{ color: "var(--s-ink-faint)" }}>
                               till saw {person.daysWorked} days
                             </span>
@@ -596,7 +725,7 @@ function RateRow({ person, onSaved }: { person: PayableStaff; onSaved: () => voi
     setMessage(null);
     try {
       await send("/api/admin/payroll/rates", "PUT", {
-        userId: person.id,
+        staffId: person.id,
         salaryType,
         salaryAmount: num(rate),
         phone: person.phone,
@@ -790,7 +919,8 @@ function Payslip({ record, businessName, onClose }: { record: PayrollRecordView;
               : PAYROLL_STATUS_LABELS[record.status]
           }
         />
-        {record.payTo && <SlipRow label="Paid to" value={record.payTo} />}
+        {record.paidFrom && <SlipRow label="Paid from" value={PAID_FROM_LABEL[record.paidFrom] ?? record.paidFrom} />}
+        {record.payTo && <SlipRow label="Pay to" value={record.payTo} />}
         <div className="r-rule" />
         <div className="r-small">Received by: ____________________</div>
       </div>

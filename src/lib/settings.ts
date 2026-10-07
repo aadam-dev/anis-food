@@ -34,6 +34,7 @@ export const SETTING_KEYS = [
   "receipt_footer",
   "default_opening_float",
   "bolt_commission_rate",
+  "ssnit_enabled",
   "pos_theme",
   "admin_theme",
 ] as const;
@@ -60,6 +61,9 @@ export const SETTING_DEFAULTS: Record<SettingKey, string> = {
   default_opening_float: "200",
   // Bolt Food keeps a commission on every order. Stored as a fraction (0.2 = 20%).
   bolt_commission_rate: "0.2",
+  // Anis is not deducting SSNIT yet. Switch on in Settings when it starts;
+  // until then payroll never deducts it and the option stays out of sight.
+  ssnit_enabled: "false",
   pos_theme: "light",
   admin_theme: "light",
 };

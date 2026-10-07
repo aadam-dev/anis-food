@@ -193,7 +193,9 @@ function ShiftCard({ shift, onReport }: { shift: CashUpShift; onReport: () => vo
                 <div key={movement.id} className="flex justify-between gap-3" title={`${movement.reason} · ${movement.by}`}>
                   <span className="min-w-0 truncate" style={{ color: "var(--s-ink-muted)" }}>
                     {movement.kind === "DEPOSIT"
-                      ? `Deposit${movement.destination ? ` to ${movement.destination === "MOMO" ? "MoMo" : "bank"}` : ""}`
+                      ? movement.destination === "SAFE"
+                        ? "Moved to the safe"
+                        : `Deposit${movement.destination ? ` to ${movement.destination === "MOMO" ? "MoMo" : "bank"}` : ""}`
                       : movement.reason}
                   </span>
                   <span

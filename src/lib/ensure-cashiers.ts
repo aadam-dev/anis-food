@@ -72,7 +72,7 @@ async function provision(): Promise<void> {
     const email = person.email.toLowerCase();
     const existing = await prisma.user.findUnique({
       where: { email },
-      select: { id: true, pinHash: true, staffProfile: { select: { id: true } } },
+      select: { id: true, pinHash: true },
     });
 
     if (!existing) {
@@ -87,16 +87,7 @@ async function provision(): Promise<void> {
           isActive: true,
         },
       });
-      if (person.salaryType || person.phone) {
-        await prisma.staffProfile.create({
-          data: {
-            userId: user.id,
-            salaryType: person.salaryType ?? SalaryType.MONTHLY,
-            phone: person.phone,
-            startedAt: new Date(),
-          },
-        });
-      }
+      if (person.salaryType || person.phone) await ensureStaffRecord(user.id, person);
       console.log(`Till staff provisioned: ${email}`);
       continue;
     }
@@ -113,26 +104,7 @@ async function provision(): Promise<void> {
       },
     });
 
-    if (person.salaryType || person.phone) {
-      if (existing.staffProfile) {
-        await prisma.staffProfile.update({
-          where: { userId: existing.id },
-          data: {
-            ...(person.phone ? { phone: person.phone } : {}),
-            ...(person.salaryType ? { salaryType: person.salaryType } : {}),
-          },
-        });
-      } else {
-        await prisma.staffProfile.create({
-          data: {
-            userId: existing.id,
-            salaryType: person.salaryType ?? SalaryType.MONTHLY,
-            phone: person.phone,
-            startedAt: new Date(),
-          },
-        });
-      }
-    }
+    if (person.salaryType || person.phone) await ensureStaffRecord(existing.id, person);
   }
 
   for (const email of LEGACY) {
@@ -150,4 +122,23 @@ async function provision(): Promise<void> {
     });
     console.log(`Till staff PINs synced (${STAFF_PINS_VERSION}).`);
   }
+}
+
+/**
+ * Till staff are also staff members. Created once, linked to their login, and
+ * never overwritten: from then on the Staff page owns their details.
+ */
+async function ensureStaffRecord(userId: string, person: (typeof STAFF)[number]): Promise<void> {
+  const existing = await prisma.staff.findUnique({ where: { userId }, select: { id: true } });
+  if (existing) return;
+  await prisma.staff.create({
+    data: {
+      userId,
+      name: person.name,
+      position: person.role === UserRole.MANAGER ? "Manager" : "Cashier",
+      phone: person.phone ?? null,
+      payType: person.salaryType ?? SalaryType.MONTHLY,
+      startedAt: new Date(),
+    },
+  });
 }

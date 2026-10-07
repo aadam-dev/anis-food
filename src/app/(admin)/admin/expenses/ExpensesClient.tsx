@@ -262,7 +262,7 @@ export default function ExpensesClient({
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">{deposit.reason}</p>
                   <p className="mt-0.5 text-xs" style={{ color: "var(--s-ink-faint)" }}>
-                    {deposit.destination === "MOMO" ? "Into MoMo" : "Into the bank"} ·{" "}
+                    {deposit.destination === "MOMO" ? "Into MoMo" : deposit.destination === "SAFE" ? "Into the safe" : "Into the bank"} ·{" "}
                     {new Date(deposit.at).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Africa/Accra" })}
                   </p>
                 </div>

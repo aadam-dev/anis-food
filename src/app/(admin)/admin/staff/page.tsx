@@ -1,55 +1,68 @@
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth/session";
-import { canAssignRole } from "@/lib/permissions";
+import { canAccess, canSeeCosts } from "@/lib/permissions";
+import { toMoney } from "@/lib/money";
+import { getSettings } from "@/lib/settings";
 import { PageHeader } from "@/components/admin/ui";
-import StaffClient, { type StaffMember } from "./StaffClient";
-import { UserRole } from "@/generated/prisma";
+import StaffClient, { type StaffRow } from "./StaffClient";
 
 export const metadata = { title: "Staff" };
 export const dynamic = "force-dynamic";
 
+const day = (value: Date | null) => (value ? value.toISOString().slice(0, 10) : null);
+
 export default async function StaffPage() {
   const me = await getCurrentUser();
+  const [staff, users, settings] = await Promise.all([
+    prisma.staff.findMany({
+      orderBy: [{ isActive: "desc" }, { name: "asc" }],
+      include: { user: { select: { id: true, name: true, role: true } } },
+    }),
+    prisma.user.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, role: true, staffMember: { select: { id: true } } },
+    }),
+    getSettings(),
+  ]);
 
-  const users = await prisma.user.findMany({
-    orderBy: [{ isActive: "desc" }, { role: "asc" }, { name: "asc" }],
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      isActive: true,
-      pinHash: true,
-      lastLoginAt: true,
-      passwordResetRequired: true,
-      staffProfile: { select: { phone: true } },
-    },
-  });
+  // Pay is private: only people who run payroll or see costs see the rates.
+  const showPay = canAccess(me?.role, "payroll") || canSeeCosts(me?.role);
 
-  const staff: StaffMember[] = users.map((user) => ({
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    isActive: user.isActive,
-    hasPin: user.pinHash !== null,
-    phone: user.staffProfile?.phone ?? null,
-    lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
-    mustChangePassword: user.passwordResetRequired,
-    // Which accounts this admin is allowed to touch, decided on the server.
-    editable: canAssignRole(me!.role, user.role as UserRole) || me!.sub === user.id,
-    isSelf: me!.sub === user.id,
+  const rows: StaffRow[] = staff.map((member) => ({
+    id: member.id,
+    name: member.name,
+    position: member.position,
+    phone: member.phone,
+    photoUrl: member.photoUrl,
+    payType: member.payType,
+    payRate: showPay ? toMoney(member.payRate) : null,
+    momoNumber: showPay ? member.momoNumber : null,
+    bankName: showPay ? member.bankName : null,
+    bankAccount: showPay ? member.bankAccount : null,
+    ssnit: member.ssnit,
+    startedAt: day(member.startedAt),
+    endedAt: day(member.endedAt),
+    isActive: member.isActive,
+    notes: member.notes,
+    userId: member.userId,
+    userName: member.user?.name ?? null,
   }));
-
-  // Roles this admin is allowed to hand out.
-  const assignableRoles = (
-    ["OWNER", "SUPER_ADMIN", "MANAGER", "ACCOUNTANT", "CASHIER"] as UserRole[]
-  ).filter((role) => canAssignRole(me!.role, role));
 
   return (
     <>
-      <PageHeader eyebrow="Manage" title="Staff" description="Who can sign in, and what they can do." />
-      <StaffClient staff={staff} assignableRoles={assignableRoles} />
+      <PageHeader
+        eyebrow="Manage"
+        title="Staff"
+        description="Everyone who works at Anis, with their photo, contact and pay. A login for the till is optional and managed under Users."
+      />
+      <StaffClient
+        staff={rows}
+        showPay={showPay}
+        ssnitEnabled={settings.ssnit_enabled === "true"}
+        canManageLogins={canAccess(me?.role, "users")}
+        logins={users.map((user) => ({ id: user.id, name: user.name, role: user.role, staffId: user.staffMember?.id ?? null }))}
+      />
     </>
   );
 }

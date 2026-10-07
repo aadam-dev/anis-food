@@ -19,8 +19,8 @@ export interface XReportMovement {
   direction: "IN" | "OUT";
   amount: number;
   reason: string;
-  kind?: "IN" | "SPEND" | "DEPOSIT" | null;
-  destination?: "MOMO" | "BANK" | null;
+  kind?: "IN" | "SPEND" | "DEPOSIT" | "WAGES" | null;
+  destination?: "MOMO" | "BANK" | "SAFE" | null;
 }
 
 export interface MoneyCount {
@@ -42,7 +42,9 @@ export interface XReport {
   deposits: {
     momo: number;
     bank: number;
-    lines: { destination: "MOMO" | "BANK"; reason: string; amount: number }[];
+    /** Cash moved into the safe (office cash). */
+    safe: number;
+    lines: { destination: "MOMO" | "BANK" | "SAFE"; reason: string; amount: number }[];
   };
   expectedCash: number;
   expectedMomo: number | null;
@@ -120,9 +122,13 @@ export function buildXReport(input: {
     .filter((movement) => movement.kind === "SPEND" || (movement.direction === "OUT" && movement.kind !== "DEPOSIT" && movement.kind !== "IN"))
     .map((movement) => ({ reason: movement.reason, amount: toMoney(movement.amount) }));
   const depositLines = input.movements
-    .filter((movement) => movement.kind === "DEPOSIT" && (movement.destination === "MOMO" || movement.destination === "BANK"))
+    .filter(
+      (movement) =>
+        movement.kind === "DEPOSIT" &&
+        (movement.destination === "MOMO" || movement.destination === "BANK" || movement.destination === "SAFE"),
+    )
     .map((movement) => ({
-      destination: movement.destination as "MOMO" | "BANK",
+      destination: movement.destination as "MOMO" | "BANK" | "SAFE",
       reason: movement.reason,
       amount: toMoney(movement.amount),
     }));
@@ -167,6 +173,7 @@ export function buildXReport(input: {
     deposits: {
       momo: roundMoney(depositLines.filter((line) => line.destination === "MOMO").reduce((sum, line) => sum + line.amount, 0)),
       bank: roundMoney(depositLines.filter((line) => line.destination === "BANK").reduce((sum, line) => sum + line.amount, 0)),
+      safe: roundMoney(depositLines.filter((line) => line.destination === "SAFE").reduce((sum, line) => sum + line.amount, 0)),
       lines: depositLines,
     },
     expectedCash: expectedCash({

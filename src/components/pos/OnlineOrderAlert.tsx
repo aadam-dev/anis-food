@@ -178,6 +178,7 @@ export default function OnlineOrderAlert({
   return (
     <div
       className="fixed inset-x-0 top-0 z-[60] flex justify-center p-3"
+      style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
       role="alertdialog"
       aria-live="assertive"
       aria-label={`${waiting} new online order${waiting === 1 ? "" : "s"}`}

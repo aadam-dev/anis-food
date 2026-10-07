@@ -136,6 +136,7 @@ export function SlipRows({ report }: { report: XReport }) {
       ))}
       <Row label="Deposited to MoMo" value={formatGHS(report.deposits.momo)} />
       <Row label="Deposited to bank" value={formatGHS(report.deposits.bank)} />
+      {report.deposits.safe > 0 && <Row label="Moved to the safe" value={formatGHS(report.deposits.safe)} />}
       {report.deposits.lines.map((line, index) => (
         <div className="r-note" key={`dep-${index}`}>
           {line.reason}

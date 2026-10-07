@@ -1,4 +1,4 @@
-import { Ban, Download, Percent, ReceiptText, Scale, Tag, TrendingUp, Undo2, Wallet } from "lucide-react";
+import { Ban, Percent, ReceiptText, Scale, Tag, TrendingUp, Undo2, Wallet } from "lucide-react";
 import { getLedgerWithComparison, getVatReturn, change, type Ledger, type VatReturn } from "@/lib/reports";
 import { getSettings, getTaxConfig } from "@/lib/settings";
 import { formatGHS } from "@/lib/money";
@@ -16,6 +16,7 @@ import {
   Term,
 } from "@/components/admin/ui";
 import PeriodPicker from "@/components/admin/PeriodPicker";
+import ExportMenu from "@/components/admin/ExportMenu";
 import { ColumnChart, TrendChart } from "@/components/admin/charts";
 import { PAYMENT_LABELS, VOID_REASON_LABELS } from "@/components/admin/labels";
 
@@ -64,19 +65,8 @@ export default async function ReportsPage({
         description={`${settings.business_name} · ${formatRange(period.from, period.to)}, compared with ${formatRange(prior.from, prior.to)}.`}
         actions={
           <div data-report-chrome className="flex items-center gap-2">
-            <a
-              href={`/api/admin/reports/export?${query}&format=xlsx`}
-              className="s-card inline-flex min-h-12 items-center gap-2 px-4 text-sm font-bold"
-            >
-              <Download className="h-4 w-4" /> Excel
-            </a>
-            <a
-              href={`/api/admin/reports/export?${query}&format=csv`}
-              className="inline-flex min-h-12 items-center px-3 text-sm font-bold"
-              style={{ color: "var(--s-ink-muted)" }}
-            >
-              CSV
-            </a>
+            <ExportMenu endpoint="/api/admin/reports/export" label="Report" title="Export the report" from={period.from} to={period.to} csv />
+            <ExportMenu endpoint="/api/admin/sales/export" label="Sales" title="Export sales" from={period.from} to={period.to} csv />
           </div>
         }
       />

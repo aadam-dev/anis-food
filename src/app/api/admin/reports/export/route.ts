@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import ExcelJS from "exceljs";
 import { requireResource } from "@/lib/api-auth";
+import { prisma } from "@/lib/db";
+import { Report, periodText } from "@/lib/excel";
 import { getLedger, getVatReturn } from "@/lib/reports";
 import { getShifts } from "@/lib/report-sessions";
 import { getSettings, getTaxConfig } from "@/lib/settings";
@@ -107,110 +108,101 @@ export async function GET(request: Request) {
     });
   }
 
-  const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Anis Back Office";
-  const money = "#,##0.00;[Red]-#,##0.00";
+  const me = await prisma.user.findUnique({ where: { id: auth.user.sub }, select: { name: true } });
+  const report = new Report({ business: settings.business_name, period: periodText(period.from, period.to), generatedBy: me?.name });
 
-  const pl = workbook.addWorksheet("P&L");
-  pl.columns = [{ width: 40 }, { width: 16 }, { width: 10 }];
-  pl.addRow([title]).font = { bold: true, size: 14 };
-  pl.addRow([]);
-  for (const [name, value, bold] of plRows) {
-    const row = pl.addRow([name, value]);
-    row.getCell(2).numFmt = money;
-    if (bold) row.font = { bold: true };
-  }
-  pl.addRow([`Cost price coverage: ${ledger.cogsCoverage}% of item sales`]).font = { italic: true };
-  pl.addRow([]);
-  pl.addRow(["Outside the profit figure", "Amount", "Count"]).font = { bold: true };
-  for (const [name, value, count] of memoRows) {
-    const row = pl.addRow([name, value, count ?? ""]);
-    row.getCell(2).numFmt = money;
-  }
+  report.summary("Profit & loss", {
+    title: "Profit & loss",
+    note: `Cost prices cover ${ledger.cogsCoverage}% of item sales.${ledger.profitKnown ? "" : " Profit is incomplete until dishes are costed."}`,
+    rows: [
+      "Sales",
+      ...plRows.slice(0, plRows.findIndex(([name]) => name === "Cost of items sold")).map(([name, value, strong]) => ({ label: name, value, strong })),
+      "Cost of sales",
+      ...plRows
+        .slice(plRows.findIndex(([name]) => name === "Cost of items sold"), plRows.findIndex(([name]) => name === "Gross profit") + 1)
+        .map(([name, value, strong]) => ({ label: name, value, strong })),
+      "Overheads",
+      ...plRows
+        .slice(plRows.findIndex(([name]) => name === "Gross profit") + 1)
+        .filter(([name, value]) => name === "Net profit" || value !== 0)
+        .map(([name, value, strong]) => ({ label: name, value, strong })),
+      "Outside the profit figure",
+      ...memoRows.map(([name, value, count]) => ({ label: name, value, detail: count !== undefined ? `${count} order${count === 1 ? "" : "s"}` : undefined })),
+    ],
+  });
 
-  const sales = workbook.addWorksheet("Daily sales");
-  sales.columns = [
-    { header: "Day", key: "day", width: 14 },
-    { header: "Orders", key: "orders", width: 10 },
-    { header: showTax ? "Net sales" : "Sales", key: "revenue", width: 16, style: { numFmt: money } },
-  ];
-  sales.getRow(1).font = { bold: true };
-  for (const day of ledger.daily) sales.addRow(day);
+  report.table("Daily sales", {
+    title: "Sales by day",
+    totals: true,
+    columns: [
+      { header: "Day", value: (day) => new Date(`${day.day}T12:00:00Z`), type: "date" },
+      { header: "Orders", value: (day) => day.orders, type: "number", total: true },
+      { header: showTax ? "Net sales" : "Sales", value: (day) => day.revenue, type: "money", total: true },
+      { header: "Average order", value: (day) => (day.orders ? day.revenue / day.orders : 0), type: "money" },
+    ],
+    rows: ledger.daily,
+  });
 
-  const items = workbook.addWorksheet("Top items");
-  items.columns = [
-    { header: "Item", key: "name", width: 36 },
-    { header: "Sold", key: "quantity", width: 10 },
-    { header: "Sales", key: "revenue", width: 16, style: { numFmt: money } },
-  ];
-  items.getRow(1).font = { bold: true };
-  for (const item of ledger.topItems) items.addRow(item);
+  report.table("Top items", {
+    title: "Best-selling items",
+    totals: true,
+    columns: [
+      { header: "Item", value: (item) => item.name },
+      { header: "Sold", value: (item) => item.quantity, type: "number", total: true },
+      { header: "Sales", value: (item) => item.revenue, type: "money", total: true },
+    ],
+    rows: ledger.topItems,
+  });
 
-  const payments = workbook.addWorksheet("Payments");
-  payments.columns = [
-    { header: "Method", key: "method", width: 20 },
-    { header: "Amount", key: "amount", width: 16, style: { numFmt: money } },
-  ];
-  payments.getRow(1).font = { bold: true };
-  for (const entry of ledger.paymentMix) {
-    payments.addRow({ method: PAYMENT_LABELS[entry.method] ?? entry.method, amount: entry.amount });
-  }
+  report.table("Payments", {
+    title: "How customers paid",
+    totals: true,
+    columns: [
+      { header: "Method", value: (entry) => PAYMENT_LABELS[entry.method] ?? entry.method },
+      { header: "Amount", value: (entry) => entry.amount, type: "money", total: true },
+      { header: "Share", value: (entry) => (ledger.takings ? entry.amount / ledger.takings : 0), type: "percent" },
+    ],
+    rows: ledger.paymentMix,
+  });
 
-  const refunds = workbook.addWorksheet("Refunds");
-  refunds.columns = [
-    { header: "Reason", key: "reason", width: 24 },
-    { header: "Orders", key: "count", width: 10 },
-    { header: "Value", key: "amount", width: 16, style: { numFmt: money } },
-  ];
-  refunds.getRow(1).font = { bold: true };
-  for (const row of ledger.refunds.byReason) {
-    refunds.addRow({ reason: VOID_REASON_LABELS[row.reason] ?? row.reason, count: row.count, amount: row.amount });
-  }
+  report.table("Refunds", {
+    title: "Refunds by reason",
+    totals: true,
+    empty: "No refunds in this period.",
+    columns: [
+      { header: "Reason", value: (row) => VOID_REASON_LABELS[row.reason] ?? row.reason },
+      { header: "Orders", value: (row) => row.count, type: "number", total: true },
+      { header: "Value", value: (row) => row.amount, type: "money", total: true },
+    ],
+    rows: ledger.refunds.byReason,
+  });
 
-  const cashUp = workbook.addWorksheet("Cash-up");
-  cashUp.columns = [
-    { header: "Day", key: "day", width: 14 },
-    { header: "Cashier", key: "cashier", width: 20 },
-    { header: "Closed by", key: "closedBy", width: 20 },
-    { header: "Float", key: "float", width: 12, style: { numFmt: money } },
-    { header: "Expected cash", key: "expected", width: 14, style: { numFmt: money } },
-    { header: "Counted cash", key: "counted", width: 14, style: { numFmt: money } },
-    { header: "Difference", key: "difference", width: 22 },
-    { header: "MoMo expected", key: "momoExpected", width: 14, style: { numFmt: money } },
-    { header: "MoMo counted", key: "momoCounted", width: 14, style: { numFmt: money } },
-  ];
-  cashUp.getRow(1).font = { bold: true };
-  for (const s of shifts) {
-    cashUp.addRow({
-      day: s.businessDay,
-      cashier: s.openedBy,
-      closedBy: s.closedBy ?? (s.status === "OPEN" ? "(still open)" : ""),
-      float: s.openingFloat,
-      expected: s.expectedCash ?? undefined,
-      counted: s.closingCash ?? undefined,
-      difference: s.differenceLabel,
-      momoExpected: s.expectedMomo ?? undefined,
-      momoCounted: s.closingMomo ?? undefined,
+  report.table("Cash-up", {
+    title: "Cash-up by shift",
+    columns: [
+      { header: "Day", value: (s) => new Date(`${s.businessDay}T12:00:00Z`), type: "date" },
+      { header: "Opened by", value: (s) => s.openedBy },
+      { header: "Closed by", value: (s) => s.closedBy ?? (s.status === "OPEN" ? "(still open)" : "") },
+      { header: "Float", value: (s) => s.openingFloat, type: "money" },
+      { header: "Expected cash", value: (s) => s.expectedCash, type: "money" },
+      { header: "Counted cash", value: (s) => s.closingCash, type: "money" },
+      { header: "Difference", value: (s) => s.differenceLabel },
+      { header: "MoMo expected", value: (s) => s.expectedMomo, type: "money" },
+      { header: "MoMo counted", value: (s) => s.closingMomo, type: "money" },
+    ],
+    rows: shifts,
+  });
+
+  if (showTax) {
+    report.summary("VAT return", {
+      title: "VAT return",
+      rows: [
+        { label: "Taxable sales (excl. tax)", value: vat.taxable },
+        ...vat.byLevy.map((levy) => ({ label: levy.label, value: levy.amount })),
+        { label: "Total tax collected", value: vat.taxTotal, strong: true },
+      ],
     });
   }
 
-  if (showTax) {
-    const vatSheet = workbook.addWorksheet("VAT return");
-    vatSheet.columns = [{ width: 28 }, { width: 16 }];
-    vatSheet.addRow([`VAT return — ${period.from} to ${period.to}`]).font = { bold: true, size: 14 };
-    vatSheet.addRow([]);
-    vatSheet.addRow(["Taxable sales (excl. tax)", vat.taxable]).getCell(2).numFmt = money;
-    for (const levy of vat.byLevy) vatSheet.addRow([levy.label, levy.amount]).getCell(2).numFmt = money;
-    const total = vatSheet.addRow(["Total tax collected", vat.taxTotal]);
-    total.getCell(2).numFmt = money;
-    total.font = { bold: true };
-  }
-
-  const buffer = await workbook.xlsx.writeBuffer();
-  return new NextResponse(buffer as ArrayBuffer, {
-    headers: {
-      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="anis-${label}.xlsx"`,
-    },
-  });
+  return report.response(`anis-report-${label}`);
 }

@@ -47,6 +47,7 @@ model User {
   updatedAt             DateTime  @updatedAt
 
   staffProfile   StaffProfile?
+  staffMember    Staff?
   openedSessions PosSession[]    @relation("SessionOpenedBy")
   closedSessions PosSession[]    @relation("SessionClosedBy")
   cashMovements  CashMovement[]
@@ -135,11 +136,16 @@ enum CashMovementKind {
   IN
   SPEND
   DEPOSIT
+  /// Wages paid out of the drawer. Payroll is already the cost, so this is
+  /// never counted again as a till spend.
+  WAGES
 }
 
 enum DepositDestination {
   MOMO
   BANK
+  /// Cash taken out of the drawer into the cash safe (office cash).
+  SAFE
 }
 
 /// Money entering or leaving the drawer that is not a sale — a gas refill, a
@@ -157,6 +163,9 @@ model CashMovement {
   reason      String
   expenseId   String?             @unique
   expense     Expense?            @relation(fields: [expenseId], references: [id])
+  /// Set when this movement paid someone's wages from the drawer.
+  payrollId   String?             @unique
+  payroll     PayrollRecord?      @relation(fields: [payrollId], references: [id])
   createdById String
   createdBy   User                @relation(fields: [createdById], references: [id])
   createdAt   DateTime            @default(now())
@@ -568,8 +577,11 @@ enum PayrollStatus {
 
 model PayrollRecord {
   id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
+  /// Who is paid. Older records were keyed by login; staffId replaces that.
+  staffId     String?
+  staff       Staff?   @relation(fields: [staffId], references: [id])
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
   /// First day of the pay period, e.g. 2026-08-01.
   periodStart DateTime @db.Date
   periodEnd   DateTime @db.Date
@@ -579,15 +591,92 @@ model PayrollRecord {
   deductions Decimal @default(0) @db.Decimal(10, 2)
   netAmount  Decimal @db.Decimal(10, 2)
 
-  status PayrollStatus @default(DRAFT)
-  paidAt DateTime?
-  notes  String?
+  status   PayrollStatus @default(DRAFT)
+  paidAt   DateTime?
+  /// Where the wages came from: the drawer, the cash safe, MoMo or the bank.
+  paidFrom MoneyAccount?
+  paidById String?
+  notes    String?
+  cashMovement CashMovement?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([userId, periodStart])
+  @@unique([staffId, periodStart])
   @@index([status, periodStart])
+}
+
+/// The people who work at Anis. Not the same as a login: a cook may never
+/// sign in, and an IT account is not staff. A staff member who uses the till
+/// is linked to their login by userId.
+model Staff {
+  id          String     @id @default(cuid())
+  name        String
+  position    String     @default("")
+  phone       String?
+  photoUrl    String?
+  payType     SalaryType @default(MONTHLY)
+  payRate     Decimal    @default(0) @db.Decimal(10, 2)
+  momoNumber  String?
+  bankName    String?
+  bankAccount String?
+  /// Registered with SSNIT, so payroll deducts 5.5% by default.
+  ssnit       Boolean    @default(false)
+  startedAt   DateTime?  @db.Date
+  endedAt     DateTime?  @db.Date
+  isActive    Boolean    @default(true)
+  notes       String?
+  userId      String?    @unique
+  user        User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  payrollRecords PayrollRecord[]
+
+  @@index([isActive, name])
+}
+
+/// Where money is held. The till is counted per shift; the others carry a
+/// running balance.
+enum MoneyAccount {
+  TILL
+  SAFE
+  MOMO
+  BANK
+}
+
+enum MoneyEntryKind {
+  /// Sets the account's balance from this date; earlier history is not counted.
+  OPENING_BALANCE
+  /// One leg of a move between two accounts (paired by transferId).
+  TRANSFER
+  /// Bolt Food paying out what it collected, net of commission.
+  BOLT_PAYOUT
+  /// Money the owner takes out of the business.
+  WITHDRAWAL
+  /// Money the owner puts in.
+  CAPITAL
+  /// Correction after counting or checking a statement.
+  ADJUSTMENT
+}
+
+/// Money movements recorded by hand. Sales, till deposits, expenses and wages
+/// are read from their own records, so they can never drift from them.
+model MoneyEntry {
+  id          String         @id @default(cuid())
+  account     MoneyAccount
+  direction   CashDirection
+  amount      Decimal        @db.Decimal(12, 2)
+  kind        MoneyEntryKind
+  reason      String
+  transferId  String?
+  occurredAt  DateTime
+  createdById String?
+  createdAt   DateTime       @default(now())
+
+  @@index([account, occurredAt])
+  @@index([transferId])
 }
 
 // ---------------------------------------------------------------------------

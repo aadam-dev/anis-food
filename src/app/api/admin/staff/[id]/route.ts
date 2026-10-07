@@ -1,103 +1,87 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
-import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/db";
 import { requireResource, logAudit, clientIp } from "@/lib/api-auth";
-import { ok, parseBody, handlePrismaError, notFound, badRequest } from "@/lib/api-utils";
-import { hashPassword } from "@/lib/auth/password";
-import { canModifyUser, canAssignRole } from "@/lib/permissions";
-import { UserRole } from "@/generated/prisma";
+import { canAccess, canSeeCosts } from "@/lib/permissions";
+import { ok, parseBody, badRequest, notFound, handlePrismaError } from "@/lib/api-utils";
+import { forbiddenStaffFields, staffUpdateSchema, toDate } from "@/lib/staff-schema";
+import { roundMoney, toMoney } from "@/lib/money";
 
-const updateSchema = z
-  .object({
-    name: z.string().min(1).max(120).optional(),
-    role: z.enum(["OWNER", "SUPER_ADMIN", "MANAGER", "ACCOUNTANT", "CASHIER"]).optional(),
-    isActive: z.boolean().optional(),
-    /** When true, issue a fresh one-time password and force a change. */
-    resetPassword: z.boolean().optional(),
-    /** When true, clear the till PIN so the cashier sets a new one. */
-    clearPin: z.boolean().optional(),
-  })
-  .refine((body) => Object.keys(body).length > 0, "Nothing to change");
-
-// Module scope on purpose: when the production minifier inlines
-// initialPassword() into the PATCH handler it drops a same-function `const`,
-// leaving a dangling reference ("alphabet is not defined") that only shows up
-// in the built output, never in dev. Hoisting the alphabet keeps it alive.
-const PASSWORD_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-
-function initialPassword(): string {
-  const bytes = randomBytes(12);
-  const chars = Array.from(bytes, (b) => PASSWORD_ALPHABET[b % PASSWORD_ALPHABET.length]);
-  return [0, 4, 8].map((i) => chars.slice(i, i + 4).join("")).join("-");
-}
-
+/** Edit a staff member: details, photo, pay, login link, or leaving. */
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const auth = await requireResource("staff");
   if (auth instanceof NextResponse) return auth;
-
   const { id } = await context.params;
-  const parsed = await parseBody(request, updateSchema);
+  const parsed = await parseBody(request, staffUpdateSchema);
   if (parsed instanceof NextResponse) return parsed;
   const body = parsed.data;
+  const refused = forbiddenStaffFields(body, {
+    pay: canAccess(auth.user.role, "payroll") || canSeeCosts(auth.user.role),
+    logins: canAccess(auth.user.role, "users"),
+  });
+  if (refused) return NextResponse.json({ error: refused }, { status: 403 });
 
   try {
-    const target = await prisma.user.findUnique({ where: { id } });
-    if (!target) return notFound("That account no longer exists.");
-
-    // The privilege-escalation guard: only an owner or super-admin may touch an
-    // owner or super-admin. Without it, a manager could reset an owner's password
-    // and lock them out of their own business.
-    if (!canModifyUser(auth.user.role, target.role)) {
-      return NextResponse.json(
-        { error: "Only an owner can change that account." },
-        { status: 403 },
-      );
+    const before = await prisma.staff.findUnique({ where: { id } });
+    if (!before) return notFound("That staff member no longer exists.");
+    if (body.userId) {
+      const taken = await prisma.staff.findFirst({ where: { userId: body.userId, id: { not: id } }, select: { name: true } });
+      if (taken) return badRequest(`That login already belongs to ${taken.name}.`);
     }
+    const data = {
+      ...body,
+      ...(body.payRate !== undefined && { payRate: roundMoney(body.payRate) }),
+      startedAt: toDate(body.startedAt),
+      endedAt: toDate(body.endedAt),
+    };
+    const staff = await prisma.staff.update({ where: { id }, data });
 
-    if (body.role && !canAssignRole(auth.user.role, body.role as UserRole)) {
-      return badRequest("You cannot assign that role.");
+    // Record what changed in words a reader can follow later.
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    for (const key of Object.keys(body) as (keyof typeof body)[]) {
+      const show = (value: unknown) =>
+        value instanceof Date ? value.toISOString().slice(0, 10) : typeof value === "object" && value !== null ? toMoney(value) : value;
+      const from = show(before[key as keyof typeof before]);
+      const to = show(staff[key as keyof typeof staff]);
+      if (from !== to) changes[key] = { from, to };
     }
-
-    // Nobody may deactivate their own account and lock themselves out mid-task.
-    if (body.isActive === false && id === auth.user.sub) {
-      return badRequest("You cannot deactivate your own account.");
+    if (Object.keys(changes).length > 0) {
+      await logAudit({
+        actorId: auth.user.sub,
+        action: "staff.update",
+        resource: "Staff",
+        resourceId: id,
+        detail: { name: staff.name, changes },
+        ip: clientIp(request),
+      });
     }
-
-    const data: Record<string, unknown> = {};
-    if (body.name) data.name = body.name;
-    if (body.role) data.role = body.role;
-    if (body.isActive !== undefined) data.isActive = body.isActive;
-    if (body.clearPin) data.pinHash = null;
-
-    let newPassword: string | undefined;
-    if (body.resetPassword) {
-      newPassword = initialPassword();
-      data.passwordHash = await hashPassword(newPassword);
-      data.passwordResetRequired = true;
-    }
-
-    const user = await prisma.user.update({ where: { id }, data });
-
-    await logAudit({
-      actorId: auth.user.sub,
-      action: "staff.update",
-      resource: "User",
-      resourceId: id,
-      detail: {
-        changed: Object.keys(body),
-        target: user.email,
-      },
-      ip: clientIp(request),
-    });
-
-    return ok({
-      id: user.id,
-      isActive: user.isActive,
-      role: user.role,
-      ...(newPassword ? { initialPassword: newPassword } : {}),
-    });
+    return ok({ id: staff.id });
   } catch (error) {
     return handlePrismaError(error, "admin/staff/[id] PATCH");
+  }
+}
+
+/** Remove a staff member entered by mistake. Anyone with payslips is kept and marked as left instead. */
+export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
+  const auth = await requireResource("staff");
+  if (auth instanceof NextResponse) return auth;
+  const { id } = await context.params;
+  try {
+    const staff = await prisma.staff.findUnique({ where: { id }, include: { _count: { select: { payrollRecords: true } } } });
+    if (!staff) return notFound("That staff member no longer exists.");
+    if (staff._count.payrollRecords > 0) {
+      return badRequest(`${staff.name} has payslips on record, so they cannot be deleted. Mark them as left instead.`);
+    }
+    await prisma.staff.delete({ where: { id } });
+    await logAudit({
+      actorId: auth.user.sub,
+      action: "staff.delete",
+      resource: "Staff",
+      resourceId: id,
+      detail: { name: staff.name },
+      ip: clientIp(request),
+    });
+    return ok({ deleted: true });
+  } catch (error) {
+    return handlePrismaError(error, "admin/staff/[id] DELETE");
   }
 }

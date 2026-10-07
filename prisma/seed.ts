@@ -113,20 +113,7 @@ async function seedUsers() {
           isActive: true,
         },
       });
-      if (seed.salaryType || seed.phone) {
-        await prisma.staffProfile.upsert({
-          where: { userId: existing.id },
-          update: {
-            ...(seed.salaryType ? { salaryType: seed.salaryType } : {}),
-            ...(seed.phone ? { phone: seed.phone } : {}),
-          },
-          create: {
-            userId: existing.id,
-            salaryType: seed.salaryType ?? SalaryType.MONTHLY,
-            phone: seed.phone,
-          },
-        });
-      }
+      if (seed.salaryType || seed.phone) await ensureStaff(existing.id, seed);
       created.push({ email, role: seed.role, password: SEED_PASSWORD, pin: seed.pin });
       console.log(
         seed.pin
@@ -147,16 +134,7 @@ async function seedUsers() {
       },
     });
 
-    if (seed.salaryType || seed.phone) {
-      await prisma.staffProfile.create({
-        data: {
-          userId: user.id,
-          salaryType: seed.salaryType ?? SalaryType.MONTHLY,
-          phone: seed.phone,
-          startedAt: new Date(),
-        },
-      });
-    }
+    if (seed.salaryType || seed.phone) await ensureStaff(user.id, seed);
 
     created.push({ email, role: seed.role, password: SEED_PASSWORD, pin: seed.pin });
     console.log(seed.pin ? `  + ${email} (${seed.role}) — PIN ${seed.pin}` : `  + ${email} (${seed.role})`);
@@ -277,3 +255,22 @@ main()
     process.exitCode = 1;
   })
   .finally(() => prisma.$disconnect());
+
+/** Seeded till staff are staff members too, linked to their login. */
+async function ensureStaff(
+  userId: string,
+  seed: { name: string; role: UserRole; phone?: string; salaryType?: SalaryType },
+): Promise<void> {
+  const existing = await prisma.staff.findUnique({ where: { userId }, select: { id: true } });
+  if (existing) return;
+  await prisma.staff.create({
+    data: {
+      userId,
+      name: seed.name,
+      position: seed.role === UserRole.MANAGER ? "Manager" : "Cashier",
+      phone: seed.phone ?? null,
+      payType: seed.salaryType ?? SalaryType.MONTHLY,
+      startedAt: new Date(),
+    },
+  });
+}

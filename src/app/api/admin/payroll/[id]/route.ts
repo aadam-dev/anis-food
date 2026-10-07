@@ -5,6 +5,7 @@ import { requireResource, logAudit, clientIp } from "@/lib/api-auth";
 import { ok, parseBody, handlePrismaError, notFound, badRequest } from "@/lib/api-utils";
 import { roundMoney } from "@/lib/money";
 import { PayrollStatus } from "@/generated/prisma";
+import { summariseSession } from "@/lib/pos-session";
 
 /**
  * Advancing a payroll record: DRAFT → APPROVED → PAID.
@@ -21,6 +22,8 @@ const patchSchema = z
     bonuses: z.number().min(0).max(1_000_000).optional(),
     deductions: z.number().min(0).max(1_000_000).optional(),
     notes: z.string().trim().max(300).nullish(),
+    /** Where the wages came from. Required to mark a record paid. */
+    paidFrom: z.enum(["SAFE", "MOMO", "BANK", "TILL"]).optional(),
   })
   .refine((body) => Object.keys(body).length > 0, { message: "Nothing to change" });
 
@@ -82,12 +85,61 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       );
     }
 
+    if (body.status === "PAID") {
+      const paidFrom = body.paidFrom ?? "SAFE";
+      // Wages from the drawer go through the till's books, so the expected cash
+      // and the Z report both show them. Payroll is the cost; the drawer
+      // movement only says where the money came from.
+      const shift =
+        paidFrom === "TILL" ? await prisma.posSession.findFirst({ where: { status: "OPEN" }, select: { id: true } }) : null;
+      if (paidFrom === "TILL" && !shift) {
+        return badRequest("No shift is open, so wages cannot come from the till. Pay from the safe, MoMo or the bank.");
+      }
+      if (shift) {
+        const holds = (await summariseSession(shift.id))?.expectedCash ?? 0;
+        if (Number(record.netAmount) > holds + 0.01) {
+          return badRequest(
+            `The drawer should only hold GH₵${holds.toFixed(2)}, not enough for GH₵${Number(record.netAmount).toFixed(2)}. Pay from the safe, MoMo or the bank.`,
+          );
+        }
+      }
+      const person = record.staffId
+        ? await prisma.staff.findUnique({ where: { id: record.staffId }, select: { name: true } })
+        : null;
+      const who = person?.name ?? "staff";
+      await prisma.$transaction(async (tx) => {
+        await tx.payrollRecord.update({
+          where: { id },
+          data: { status: PayrollStatus.PAID, paidAt: new Date(), paidFrom, paidById: auth.user.sub },
+        });
+        if (shift) {
+          await tx.cashMovement.create({
+            data: {
+              sessionId: shift.id,
+              direction: "OUT",
+              kind: "WAGES",
+              amount: record.netAmount,
+              reason: `Wages: ${who}, ${record.periodStart.toISOString().slice(0, 7)}`,
+              payrollId: id,
+              createdById: auth.user.sub,
+            },
+          });
+        }
+      });
+      await logAudit({
+        actorId: auth.user.sub,
+        action: "payroll.paid",
+        resource: "PayrollRecord",
+        resourceId: id,
+        detail: { name: who, amount: Number(record.netAmount), paidFrom },
+        ip: clientIp(request),
+      });
+      return ok({ id, status: "PAID" });
+    }
+
     const updated = await prisma.payrollRecord.update({
       where: { id },
-      data: {
-        status: body.status as PayrollStatus,
-        paidAt: body.status === "PAID" ? new Date() : record.paidAt,
-      },
+      data: { status: body.status as PayrollStatus },
     });
 
     await logAudit({

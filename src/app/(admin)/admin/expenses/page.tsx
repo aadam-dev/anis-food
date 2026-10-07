@@ -5,6 +5,7 @@ import { addDays, resolvePeriod } from "@/lib/period";
 import { periodBounds } from "@/lib/reports";
 import { PageHeader, Stat } from "@/components/admin/ui";
 import PeriodPicker from "@/components/admin/PeriodPicker";
+import ExportMenu from "@/components/admin/ExportMenu";
 import ExpensesClient, {
   type AdminDeposit,
   type AdminExpense,
@@ -95,7 +96,12 @@ export default async function ExpensesPage({
         eyebrow={`Money · ${period.label}`}
         title="Expenses"
         description="What the business spent. Spends from the till land here on their own; deposits are transfers, not costs."
-        actions={<PeriodPicker period={period} presets={["today", "week", "month", "last-month"]} />}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <PeriodPicker period={period} presets={["today", "week", "month", "last-month"]} />
+            <ExportMenu endpoint="/api/admin/expenses/export" from={period.from} to={period.to} title="Export expenses" />
+          </div>
+        }
       />
 
       <div className="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-4">

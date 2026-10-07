@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { requireResource, logAudit, clientIp } from "@/lib/api-auth";
 import { ok, parseBody, badRequest, handlePrismaError } from "@/lib/api-utils";
 import { payLine } from "@/lib/payroll";
+import { getSettings } from "@/lib/settings";
 
 /**
  * A pay run: drafts for many people at once. Amounts are recomputed here from
@@ -18,7 +19,9 @@ const runSchema = z.object({
   lines: z
     .array(
       z.object({
-        userId: z.string().min(1),
+        staffId: z.string().min(1),
+        /** Per person; falls back to the run's setting. */
+        ssnit: z.boolean().optional(),
         rate: z.number().min(0).max(1_000_000),
         units: z.number().min(0).max(744),
         salaryType: z.enum(["MONTHLY", "DAILY", "HOURLY"]),
@@ -39,23 +42,35 @@ export async function POST(request: Request) {
   const body = parsed.data;
   if (body.periodEnd < body.periodStart) return badRequest("The period ends before it starts.");
 
+  // SSNIT is only deducted once it is switched on in Settings.
+  const ssnitOn = (await getSettings()).ssnit_enabled === "true";
   const periodStart = new Date(`${body.periodStart}T12:00:00Z`);
   const periodEnd = new Date(`${body.periodEnd}T12:00:00Z`);
 
   try {
     const existing = await prisma.payrollRecord.findMany({
-      where: { periodStart, userId: { in: body.lines.map((line) => line.userId) } },
-      select: { userId: true },
+      where: { periodStart, staffId: { in: body.lines.map((line) => line.staffId) } },
+      select: { staffId: true },
     });
-    const skip = new Set(existing.map((row) => row.userId));
+    const skip = new Set(existing.map((row) => row.staffId ?? ""));
 
-    const toCreate = body.lines.filter((line) => !skip.has(line.userId));
+    const people = await prisma.staff.findMany({
+      where: { id: { in: body.lines.map((line) => line.staffId) } },
+      select: { id: true, userId: true },
+    });
+    const loginOf = new Map(people.map((person) => [person.id, person.userId]));
+    if (people.length !== new Set(body.lines.map((line) => line.staffId)).size) {
+      return badRequest("One of those people is no longer on the staff list.");
+    }
+
+    const toCreate = body.lines.filter((line) => !skip.has(line.staffId));
     const created = await prisma.$transaction(
       toCreate.map((line) => {
-        const pay = payLine({ ...line, ssnit: body.ssnit });
+        const pay = payLine({ ...line, ssnit: ssnitOn && (line.ssnit ?? body.ssnit) });
         return prisma.payrollRecord.create({
           data: {
-            userId: line.userId,
+            staffId: line.staffId,
+            userId: loginOf.get(line.staffId) ?? null,
             periodStart,
             periodEnd,
             baseAmount: pay.base,

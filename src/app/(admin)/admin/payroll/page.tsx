@@ -7,6 +7,7 @@ import { getSettings } from "@/lib/settings";
 import { businessDay } from "@/lib/session-utils";
 import { PageHeader, Stat } from "@/components/admin/ui";
 import PeriodPicker from "@/components/admin/PeriodPicker";
+import ExportMenu from "@/components/admin/ExportMenu";
 import { ROLE_LABELS } from "@/components/admin/labels";
 import PayrollClient, { type PayrollRecordView, type PayableStaff } from "./PayrollClient";
 
@@ -34,7 +35,7 @@ export default async function PayrollPage({
   const activityTo = runTo < today ? runTo : today;
   const activity = periodBounds(runFrom, activityTo);
 
-  const [records, staff, settings, orderDays, shiftDays] = await Promise.all([
+  const [records, staff, settings, orderDays, shiftDays, openShift] = await Promise.all([
     prisma.payrollRecord.findMany({
       // A pay run shows in the period it covers or the one it was paid in, and
       // anything not yet paid always shows — money owed must not scroll away.
@@ -52,34 +53,14 @@ export default async function PayrollPage({
       },
       orderBy: [{ periodStart: "desc" }, { createdAt: "desc" }],
       include: {
-        user: {
-          select: {
-            name: true,
-            role: true,
-            staffProfile: { select: { momoNumber: true, bankName: true, bankAccount: true } },
-          },
-        },
+        staff: { select: { name: true, position: true, momoNumber: true, bankName: true, bankAccount: true } },
+        user: { select: { name: true, role: true } },
       },
       take: 300,
     }),
-    prisma.user.findMany({
+    prisma.staff.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
-      select: {
-        id: true,
-        name: true,
-        role: true,
-        staffProfile: {
-          select: {
-            salaryType: true,
-            salaryAmount: true,
-            phone: true,
-            momoNumber: true,
-            bankName: true,
-            bankAccount: true,
-          },
-        },
-      },
     }),
     getSettings(),
     // Days each person worked, as the till saw it: days they rang a sale…
@@ -92,6 +73,7 @@ export default async function PayrollPage({
       where: { openedAt: { gte: activity.start, lt: activity.end } },
       select: { openedById: true, openedAt: true },
     }),
+    prisma.posSession.findFirst({ where: { status: "OPEN" }, select: { id: true } }),
   ]);
 
   const daysWorked = new Map<string, Set<string>>();
@@ -106,8 +88,8 @@ export default async function PayrollPage({
 
   const serialized: PayrollRecordView[] = records.map((record) => ({
     id: record.id,
-    name: record.user.name,
-    role: ROLE_LABELS[record.user.role] ?? record.user.role,
+    name: record.staff?.name ?? record.user?.name ?? "Former staff",
+    role: record.staff?.position || (record.user ? (ROLE_LABELS[record.user.role] ?? record.user.role) : ""),
     periodStart: record.periodStart.toISOString().slice(0, 10),
     periodEnd: record.periodEnd.toISOString().slice(0, 10),
     baseAmount: toMoney(record.baseAmount),
@@ -117,24 +99,27 @@ export default async function PayrollPage({
     status: record.status,
     paidAt: record.paidAt?.toISOString() ?? null,
     notes: record.notes,
-    payTo: record.user.staffProfile?.momoNumber
-      ? `MoMo ${record.user.staffProfile.momoNumber}`
-      : record.user.staffProfile?.bankAccount
-        ? `${record.user.staffProfile.bankName ?? "Bank"} ${record.user.staffProfile.bankAccount}`
+    paidFrom: record.paidFrom,
+    payTo: record.staff?.momoNumber
+      ? `MoMo ${record.staff.momoNumber}`
+      : record.staff?.bankAccount
+        ? `${record.staff.bankName ?? "Bank"} ${record.staff.bankAccount}`
         : null,
   }));
 
-  const payable: PayableStaff[] = staff.map((user) => ({
-    id: user.id,
-    name: user.name,
-    role: ROLE_LABELS[user.role] ?? user.role,
-    salaryType: user.staffProfile?.salaryType ?? "MONTHLY",
-    rate: user.staffProfile ? toMoney(user.staffProfile.salaryAmount) : 0,
-    phone: user.staffProfile?.phone ?? null,
-    momoNumber: user.staffProfile?.momoNumber ?? null,
-    bankName: user.staffProfile?.bankName ?? null,
-    bankAccount: user.staffProfile?.bankAccount ?? null,
-    daysWorked: daysWorked.get(user.id)?.size ?? 0,
+  const payable: PayableStaff[] = staff.map((person) => ({
+    id: person.id,
+    name: person.name,
+    role: person.position,
+    salaryType: person.payType,
+    rate: toMoney(person.payRate),
+    phone: person.phone,
+    momoNumber: person.momoNumber,
+    bankName: person.bankName,
+    bankAccount: person.bankAccount,
+    ssnit: person.ssnit,
+    // Only staff with a till login have days the till could see.
+    daysWorked: person.userId ? (daysWorked.get(person.userId)?.size ?? 0) : null,
   }));
 
   const sum = (rows: typeof records) => roundMoney(rows.reduce((total, row) => total + toMoney(row.netAmount), 0));
@@ -149,7 +134,12 @@ export default async function PayrollPage({
         eyebrow={`Money · ${period.label}`}
         title="Payroll"
         description="Set each person's pay once, run payroll for the month, approve, then mark paid. Wages count against profit on the day they are paid."
-        actions={<PeriodPicker period={period} presets={["month", "last-month"]} />}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <PeriodPicker period={period} presets={["month", "last-month"]} />
+            <ExportMenu endpoint="/api/admin/payroll/export" from={period.from} to={period.to} title="Export payroll" />
+          </div>
+        }
       />
       <div className="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
         <Stat label="Paid in this period" value={formatGHS(paidInPeriod)} icon={<CircleCheck />} tint="good" detail="What the P&L counts" />
@@ -169,6 +159,8 @@ export default async function PayrollPage({
         runFrom={runFrom}
         runTo={runTo}
         businessName={settings.business_name}
+        tillOpen={openShift !== null}
+        ssnitEnabled={settings.ssnit_enabled === "true"}
       />
     </>
   );

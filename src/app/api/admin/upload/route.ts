@@ -14,7 +14,8 @@ import { uploadMenuImage, storageConfigured } from "@/lib/storage";
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MB — a phone photo, before we shrink it
 
 export async function POST(request: Request) {
-  const auth = await requireResource("menu");
+  // Dish photos and staff photos: anyone who manages either may upload.
+  const auth = await requireResource("admin");
   if (auth instanceof NextResponse) return auth;
 
   if (!storageConfigured()) {
@@ -45,12 +46,14 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await uploadMenuImage(await file.arrayBuffer());
+    // Staff photos are kept apart from dish photos.
+    const forStaff = form.get("purpose") === "staff";
+    const result = await uploadMenuImage(await file.arrayBuffer(), forStaff ? "staff" : undefined);
 
     await logAudit({
       actorId: auth.user.sub,
-      action: "menu.image.upload",
-      resource: "MenuItem",
+      action: forStaff ? "staff.photo.upload" : "menu.image.upload",
+      resource: forStaff ? "Staff" : "MenuItem",
       detail: { path: result.path },
       ip: clientIp(request),
     });

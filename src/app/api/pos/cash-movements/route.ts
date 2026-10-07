@@ -6,6 +6,7 @@ import { ok, parseBody, badRequest, conflict, handlePrismaError } from "@/lib/ap
 import { roundMoney, toMoney } from "@/lib/money";
 import { businessDay } from "@/lib/session-utils";
 import { movementBooks } from "@/lib/till-rules";
+import { summariseSession } from "@/lib/pos-session";
 import { SessionStatus } from "@/generated/prisma";
 
 /**
@@ -27,7 +28,7 @@ const movementSchema = z.object({
     .min(3, "Say what this was for — a blank reason is a hole in the day's takings")
     .max(200),
   expenseCategoryId: z.string().min(1).optional(),
-  destination: z.enum(["MOMO", "BANK"]).optional(),
+  destination: z.enum(["MOMO", "BANK", "SAFE"]).optional(),
 });
 
 export async function POST(request: Request) {
@@ -43,7 +44,7 @@ export async function POST(request: Request) {
     return badRequest("Choose what the money was spent on.");
   }
   if (body.kind === "DEPOSIT" && !body.destination) {
-    return badRequest("Say whether the cash went to MoMo or the bank.");
+    return badRequest("Say whether the cash went to MoMo, the bank or the safe.");
   }
   if (body.kind !== "SPEND" && body.expenseCategoryId) {
     return badRequest("Only a spend is filed as an expense.");
@@ -66,6 +67,15 @@ export async function POST(request: Request) {
 
     const amount = roundMoney(body.amount);
     const direction = books.direction;
+
+    // Cash cannot leave a drawer that does not hold it.
+    if (direction === "OUT") {
+      const summary = await summariseSession(session.id);
+      const holds = summary ? summary.expectedCash : 0;
+      if (amount > holds + 0.01) {
+        return badRequest(`The drawer should only hold GH₵${holds.toFixed(2)}, so GH₵${amount.toFixed(2)} cannot come out of it.`);
+      }
+    }
 
     const result = await prisma.$transaction(async (tx) => {
       let expenseId: string | null = null;

@@ -110,8 +110,8 @@ export function countedTotal(counts: DenominationCount | null | undefined): numb
 export interface CashMovementLike {
   direction: "IN" | "OUT";
   amount: number;
-  kind?: "IN" | "SPEND" | "DEPOSIT";
-  destination?: "MOMO" | "BANK" | null;
+  kind?: "IN" | "SPEND" | "DEPOSIT" | "WAGES";
+  destination?: "MOMO" | "BANK" | "SAFE" | null;
 }
 
 /** Cash deposited from the drawer into the MoMo wallet. */
