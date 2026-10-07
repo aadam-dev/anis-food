@@ -12,6 +12,7 @@
 import "server-only";
 import { unstable_cache, revalidateTag, revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
+import { SELLABLE_DISH } from "@/lib/menu-sizes";
 import { toMoney } from "@/lib/money";
 import seed from "@/data/menu.json";
 import type { SerializedMenuCategory, SerializedMenuItem } from "./menu-data";
@@ -59,6 +60,7 @@ function seedItems(): SerializedMenuItem[] {
       popular: "popular" in item ? Boolean(item.popular) : false,
       available: true,
       tags: "tags" in item ? ((item.tags as string[]) ?? []) : [],
+      sizes: [],
     }));
 }
 
@@ -105,7 +107,7 @@ export const dbGetMenuItems = unstable_cache(
     let items;
     try {
       items = await prisma.menuItem.findMany({
-        where: { isAvailable: true, category: { isActive: true } },
+        where: SELLABLE_DISH,
         orderBy: [{ category: { sortOrder: "asc" } }, { sortOrder: "asc" }],
         select: {
           slug: true,
@@ -117,6 +119,11 @@ export const dbGetMenuItems = unstable_cache(
           isAvailable: true,
           tags: true,
           category: { select: { id: true, name: true } },
+          sizes: {
+            where: { isAvailable: true },
+            orderBy: { sortOrder: "asc" },
+            select: { id: true, label: true, price: true },
+          },
         },
       });
     } catch (error) {
@@ -130,7 +137,8 @@ export const dbGetMenuItems = unstable_cache(
       id: item.slug,
       name: item.name,
       description: item.description || null,
-      price: toMoney(item.price),
+      // A dish with sizes shows its cheapest size on sale ("from").
+      price: item.sizes.length > 0 ? Math.min(...item.sizes.map((size) => toMoney(size.price))) : toMoney(item.price),
       categorySlug: item.category.id,
       categoryName: item.category.name,
       categoryId: item.category.id,
@@ -138,6 +146,7 @@ export const dbGetMenuItems = unstable_cache(
       popular: item.isPopular,
       available: item.isAvailable,
       tags: item.tags,
+      sizes: item.sizes.map((size) => ({ id: size.id, label: size.label, price: toMoney(size.price) })),
     }));
   },
   ["menu-items"],

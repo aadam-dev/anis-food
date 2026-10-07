@@ -12,7 +12,7 @@ import PageHeader from "@/components/public/PageHeader";
 import Input from "@/components/ui/Input";
 import type { SerializedMenuCategory, SerializedMenuItem } from "@/lib/menu-data";
 import { MenuItem as MenuItemType, DietaryTag, MenuCategoryData } from "@/types";
-import { useCart } from "@/contexts/CartContext";
+import { useCart, cartLineKey } from "@/contexts/CartContext";
 import { useToast } from "@/contexts/ToastContext";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +21,8 @@ const DIETARY_FILTERS: { value: DietaryTag | null; label: string }[] = [
   { value: "vegetarian", label: "Vegetarian" },
   { value: "spicy", label: "Spicy" },
 ];
+
+type MenuSize = NonNullable<MenuItemType["sizes"]>[number];
 
 interface Props {
   categories: SerializedMenuCategory[];
@@ -39,6 +41,7 @@ function toMenuItem(item: SerializedMenuItem): MenuItemType {
     popular: item.popular,
     available: item.available,
     tags: item.tags as DietaryTag[],
+    sizes: item.sizes,
   };
 }
 
@@ -80,22 +83,23 @@ export default function MenuPageClient({ categories, items }: Props) {
     return filtered.map(toMenuItem);
   }, [items, activeCategory, activeDietaryTag, searchQuery]);
 
-  const handleAddToOrder = (item: MenuItemType, quantity = 1) => {
-    addItem(item, quantity);
+  const handleAddToOrder = (item: MenuItemType, quantity = 1, size?: MenuSize) => {
+    addItem(item, quantity, size);
     const newCount = cartCount + quantity;
     toast({
-      message: `${item.name} added — ${newCount} item${newCount !== 1 ? "s" : ""} in cart`,
+      message: `${item.name}${size ? ` (${size.label})` : ""} added — ${newCount} item${newCount !== 1 ? "s" : ""} in cart`,
       action: { label: "View cart", href: "/order" },
     });
   };
 
-  const handleDecrease = (item: MenuItemType) => {
-    const entry = cartItems.find((i) => i.menuItem.id === item.id);
+  const handleDecrease = (item: MenuItemType, size?: MenuSize) => {
+    const key = cartLineKey({ menuItem: item, size });
+    const entry = cartItems.find((i) => cartLineKey(i) === key);
     if (!entry) return;
     if (entry.quantity <= 1) {
-      removeItem(item.id);
+      removeItem(key);
     } else {
-      updateQuantity(item.id, entry.quantity - 1);
+      updateQuantity(key, entry.quantity - 1);
     }
   };
 

@@ -105,7 +105,7 @@ const Receipt = forwardRef<HTMLDivElement, ReceiptProps>(function Receipt(
             </thead>
             <tbody>
               {data.items.map((item) => (
-                <tr key={item.menuItem.id} className="border-b border-gray-100">
+                <tr key={`${item.menuItem.id}:${item.size?.id ?? ""}`} className="border-b border-gray-100">
                   <td className="py-2">{item.menuItem.name}</td>
                   <td className="py-2 text-right">{item.quantity}</td>
                   <td className="py-2 text-right">{formatPrice(item.menuItem.price)}</td>

@@ -24,6 +24,7 @@ export default async function Home() {
     name: item.name,
     description: item.description,
     price: item.price,
+    fromPrice: item.sizes.length > 1,
     categorySlug: item.categorySlug,
     categoryName: item.categoryName,
     imageUrl: item.imageUrl,
@@ -32,7 +33,7 @@ export default async function Home() {
   const heroDish: HeroDish | undefined = featured[0]
     ? {
         name: featured[0].name,
-        priceDisplay: formatPrice(featured[0].price),
+        priceDisplay: `${featured[0].fromPrice ? "from " : ""}${formatPrice(featured[0].price)}`,
         image: featured[0].imageUrl || "/images/menu/jollof-chicken-serving.jpg",
       }
     : undefined;

@@ -13,6 +13,7 @@ import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import type { MenuItem } from "@/types";
 import { OrderFormData } from "@/types";
+import { cartLineKey } from "@/contexts/CartContext";
 import {
   generateWhatsAppOrderMessage,
   formatPrice,
@@ -22,7 +23,7 @@ import {
 import { BUSINESS_INFO, ORDER_CONFIG } from "@/lib/constants";
 
 interface OrderFormProps {
-  items: Array<{ menuItem: { id: string; name: string; price: number }; quantity: number }>;
+  items: Array<{ menuItem: { id: string; name: string; price: number }; size?: { id: string; label: string }; quantity: number }>;
   onSubmit?: (data: OrderFormData) => void;
   /** Optional order ref to include in WhatsApp message (set by parent at payment step). */
   orderRef?: string;
@@ -88,6 +89,7 @@ export default function OrderForm({
           notes: data.notes,
           lines: items.map((item) => ({
             menuItemId: item.menuItem.id,
+            sizeId: item.size?.id,
             quantity: item.quantity,
           })),
         }),
@@ -113,6 +115,7 @@ export default function OrderForm({
             description: "",
             category: "local",
           } as MenuItem,
+          size: item.size,
           quantity: item.quantity,
         })),
       };
@@ -249,7 +252,7 @@ export default function OrderForm({
           <h3 className="font-semibold mb-2">Order Total</h3>
           <div className="space-y-1 text-sm">
             {items.map((item) => (
-              <div key={item.menuItem.id} className="flex justify-between">
+              <div key={cartLineKey(item)} className="flex justify-between">
                 <span>
                   {item.quantity}x {item.menuItem.name}
                 </span>

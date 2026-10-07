@@ -14,6 +14,8 @@ export interface FeaturedItem {
   name: string;
   description: string | null;
   price: number;
+  /** True when the dish comes in sizes, so the price reads "from". */
+  fromPrice?: boolean;
   categorySlug: string;
   categoryName: string;
   imageUrl: string | null;
@@ -61,7 +63,7 @@ export default function FeaturedMenu({ items = [] }: { items?: FeaturedItem[] })
                         {item.categoryName}
                       </span>
                       <span className="text-lg font-bold text-primary-red-ui tabular-nums shrink-0">
-                        {formatPrice(item.price)}
+                        {item.fromPrice ? `from ${formatPrice(item.price)}` : formatPrice(item.price)}
                       </span>
                     </div>
                     <h3 className="text-xl font-heading font-bold text-neutral-black mb-2 leading-tight group-hover:text-primary-red-ui transition-colors line-clamp-2">
