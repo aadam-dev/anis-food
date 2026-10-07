@@ -1,7 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { Maximize2, Minimize2 } from "lucide-react";
+
+function canFullscreen(): boolean {
+  const root = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> };
+  const standalone =
+    window.matchMedia("(display-mode: standalone)").matches ||
+    ("standalone" in navigator && Boolean((navigator as Navigator & { standalone?: boolean }).standalone));
+  return !standalone && (typeof root.requestFullscreen === "function" || typeof root.webkitRequestFullscreen === "function");
+}
+
+const subscribe = (onChange: () => void) => {
+  document.addEventListener("fullscreenchange", onChange);
+  return () => document.removeEventListener("fullscreenchange", onChange);
+};
+const noop = () => () => {};
 
 /**
  * Enter / leave browser fullscreen. On a till in a windowed Chrome session the
@@ -9,28 +23,11 @@ import { Maximize2, Minimize2 } from "lucide-react";
  * height. Standalone PWA installs are already chrome-less, so the control hides.
  */
 export default function FullscreenToggle({ className = "" }: { className?: string }) {
-  const [active, setActive] = useState(false);
-  const [supported, setSupported] = useState(false);
-  const [standalone, setStandalone] = useState(false);
+  // Hidden on the server and on first paint; shown once the browser says it can.
+  const available = useSyncExternalStore(noop, canFullscreen, () => false);
+  const active = useSyncExternalStore(subscribe, () => Boolean(document.fullscreenElement), () => false);
 
-  useEffect(() => {
-    const root = document.documentElement;
-    const can =
-      typeof root.requestFullscreen === "function" ||
-      typeof (root as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> })
-        .webkitRequestFullscreen === "function";
-    setSupported(can);
-    setStandalone(
-      window.matchMedia("(display-mode: standalone)").matches ||
-        ("standalone" in navigator && Boolean((navigator as Navigator & { standalone?: boolean }).standalone)),
-    );
-    const sync = () => setActive(Boolean(document.fullscreenElement));
-    document.addEventListener("fullscreenchange", sync);
-    sync();
-    return () => document.removeEventListener("fullscreenchange", sync);
-  }, []);
-
-  if (!supported || standalone) return null;
+  if (!available) return null;
 
   async function toggle() {
     try {

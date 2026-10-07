@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Plus, Copy, Check } from "lucide-react";
-import { Panel, Chip, AdminButton, Field, inputClass, inputStyle } from "@/components/admin/ui";
+import { Loader2, Plus, Copy, Check, Pencil } from "lucide-react";
+import { Panel, Chip, AdminButton, Field, Dialog, ConfirmDialog, inputClass, inputStyle } from "@/components/admin/ui";
 import { ROLE_LABELS } from "@/components/admin/labels";
 import { staffAvatarTint, staffInitials } from "@/lib/staff-avatar";
 
@@ -91,18 +91,35 @@ function StaffRow({
   onPasswordReset: (password: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState(false);
+  const [confirming, setConfirming] = useState<"deactivate" | "reset" | null>(null);
 
-  async function patch(body: Record<string, unknown>) {
+  /** Returns the error, or null when it saved. The row shows what the server says, so a refused change never looks done. */
+  async function patch(body: Record<string, unknown>): Promise<string | null> {
     setBusy(true);
-    const response = await fetch(`/api/admin/staff/${member.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const data = await response.json().catch(() => ({}));
-    setBusy(false);
-    if (data.initialPassword) onPasswordReset(data.initialPassword);
-    onChanged();
+    setError(null);
+    try {
+      const response = await fetch(`/api/admin/staff/${member.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message = data.error ?? "Could not save that change.";
+        setError(message);
+        return message;
+      }
+      if (data.initialPassword) onPasswordReset(data.initialPassword);
+      onChanged();
+      return null;
+    } catch {
+      setError("No connection. Try again.");
+      return "No connection. Try again.";
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -118,6 +135,18 @@ function StaffRow({
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium flex items-center gap-2 flex-wrap">
             {member.name}
+            {member.editable && (
+              <button
+                type="button"
+                onClick={() => setRenaming(true)}
+                className="grid h-8 w-8 place-items-center rounded-lg !min-h-0"
+                style={{ color: "var(--s-ink-faint)" }}
+                aria-label={`Rename ${member.name}`}
+                title="Rename"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+            )}
             {!member.isActive && <Chip tone="bad">Deactivated</Chip>}
             {member.mustChangePassword && member.isActive && (
               <Chip tone="warn">Hasn&apos;t set password</Chip>
@@ -155,7 +184,7 @@ function StaffRow({
       {member.editable && !member.isSelf && (
         <div className="mt-2 flex flex-wrap gap-2">
           <AdminButton
-            onClick={() => patch({ resetPassword: true })}
+            onClick={() => setConfirming("reset")}
             disabled={busy}
             className="text-xs !min-h-9 !py-1.5"
           >
@@ -172,7 +201,7 @@ function StaffRow({
           )}
           <AdminButton
             variant={member.isActive ? "danger" : "secondary"}
-            onClick={() => patch({ isActive: !member.isActive })}
+            onClick={() => (member.isActive ? setConfirming("deactivate") : patch({ isActive: true }))}
             disabled={busy}
             className="text-xs !min-h-9 !py-1.5"
           >
@@ -180,7 +209,99 @@ function StaffRow({
           </AdminButton>
         </div>
       )}
+
+      {error && (
+        <p className="mt-2 text-xs" style={{ color: "var(--s-bad)" }} role="alert">
+          {error}
+        </p>
+      )}
+
+      {renaming && (
+        <RenameDialog
+          name={member.name}
+          onClose={() => setRenaming(false)}
+          onSave={async (name) => {
+            const failed = await patch({ name });
+            if (!failed) setRenaming(false);
+            return failed;
+          }}
+        />
+      )}
+
+      <ConfirmDialog
+        open={confirming !== null}
+        title={confirming === "reset" ? `Reset ${member.name}'s password?` : `Deactivate ${member.name}?`}
+        message={
+          confirming === "reset"
+            ? "Their current password stops working at once. You get a one-time password to hand them."
+            : "They can no longer sign in to the till or the back office. Their sales history stays. You can reactivate them later."
+        }
+        confirmLabel={confirming === "reset" ? "Reset password" : "Deactivate"}
+        busy={busy}
+        onConfirm={async () => {
+          await patch(confirming === "reset" ? { resetPassword: true } : { isActive: false });
+          setConfirming(null);
+        }}
+        onCancel={() => setConfirming(null)}
+      />
     </li>
+  );
+}
+
+function RenameDialog({
+  name: initial,
+  onClose,
+  onSave,
+}: {
+  name: string;
+  onClose: () => void;
+  onSave: (name: string) => Promise<string | null>;
+}) {
+  const [name, setName] = useState(initial);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (busy) return;
+    const trimmed = name.trim();
+    if (!trimmed) return setError("Enter a name.");
+    if (trimmed === initial) return onClose();
+    setBusy(true);
+    setError(null);
+    const failed = await onSave(trimmed);
+    setBusy(false);
+    if (failed) setError(failed);
+  }
+
+  return (
+    <Dialog
+      open
+      title="Rename"
+      description="This is the name on the till sign-in, receipts and reports."
+      onClose={() => !busy && onClose()}
+      footer={
+        <>
+          <AdminButton variant="ghost" onClick={onClose} disabled={busy}>
+            Cancel
+          </AdminButton>
+          <AdminButton type="submit" form="rename-staff" variant="primary" loading={busy}>
+            Save
+          </AdminButton>
+        </>
+      }
+    >
+      <form id="rename-staff" onSubmit={submit} className="space-y-2">
+        <Field label="Name">
+          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} className={inputClass} style={inputStyle} autoFocus />
+        </Field>
+        {error && (
+          <p className="text-sm" style={{ color: "var(--s-bad)" }} role="alert">
+            {error}
+          </p>
+        )}
+      </form>
+    </Dialog>
   );
 }
 
@@ -199,7 +320,9 @@ function AddDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function submit() {
+  async function submit(event?: React.FormEvent) {
+    event?.preventDefault();
+    if (busy || !name.trim() || !email.trim()) return;
     setBusy(true);
     setError(null);
     try {
@@ -222,7 +345,22 @@ function AddDialog({
   }
 
   return (
-    <Dialog onClose={onClose} title="Add someone">
+    <Dialog
+      open
+      onClose={() => !busy && onClose()}
+      title="Add someone"
+      footer={
+        <>
+          <AdminButton variant="ghost" onClick={onClose} disabled={busy}>
+            Cancel
+          </AdminButton>
+          <AdminButton type="submit" form="add-staff" variant="primary" loading={busy} disabled={!name.trim() || !email.trim()}>
+            Create
+          </AdminButton>
+        </>
+      }
+    >
+      <form id="add-staff" onSubmit={submit} className="space-y-3">
       <Field label="Name">
         <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} style={inputStyle} />
       </Field>
@@ -245,19 +383,8 @@ function AddDialog({
           ))}
         </select>
       </Field>
-      {error && <p className="text-sm" style={{ color: "var(--s-bad)" }}>{error}</p>}
-      <div className="flex gap-2 pt-1">
-        <AdminButton onClick={onClose} className="flex-1">Cancel</AdminButton>
-        <button
-          onClick={submit}
-          disabled={busy || !name.trim() || !email.trim()}
-          className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold text-white min-h-11 disabled:opacity-50"
-          style={{ background: "var(--s-brand)" }}
-        >
-          {busy && <Loader2 className="w-4 h-4 animate-spin" />}
-          Create
-        </button>
-      </div>
+      {error && <p className="text-sm" style={{ color: "var(--s-bad)" }} role="alert">{error}</p>}
+      </form>
     </Dialog>
   );
 }
@@ -273,7 +400,8 @@ function PasswordDialog({
 }) {
   const [copied, setCopied] = useState(false);
   return (
-    <Dialog onClose={onClose} title="One-time password">
+    <Dialog open onClose={onClose} title="One-time password">
+      <div className="space-y-3">
       <p className="text-sm" style={{ color: "var(--s-ink-muted)" }}>
         Give this to <strong>{email}</strong> directly. It is shown once and is not stored —
         they must change it the first time they sign in.
@@ -297,29 +425,7 @@ function PasswordDialog({
       <AdminButton variant="primary" onClick={onClose} className="w-full justify-center">
         Done
       </AdminButton>
-    </Dialog>
-  );
-}
-
-function Dialog({
-  title,
-  onClose,
-  children,
-}: {
-  title: string;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center p-0 sm:p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden />
-      <div
-        className="relative w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl border p-5 space-y-3"
-        style={{ background: "var(--s-panel)", borderColor: "var(--s-border)" }}
-      >
-        <h2 className="font-bold">{title}</h2>
-        {children}
       </div>
-    </div>
+    </Dialog>
   );
 }

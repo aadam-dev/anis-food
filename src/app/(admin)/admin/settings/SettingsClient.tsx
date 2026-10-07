@@ -1,14 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Check } from "lucide-react";
-import { Panel, Field, inputClass, inputStyle } from "@/components/admin/ui";
+import { Check } from "lucide-react";
+import { Panel, Field, AdminButton, inputClass, inputStyle } from "@/components/admin/ui";
 import type { SettingKey } from "@/lib/settings";
 
 export default function SettingsClient({ settings }: { settings: Record<SettingKey, string> }) {
   const router = useRouter();
   const [values, setValues] = useState(settings);
+  // What the server last confirmed, so "unsaved changes" means exactly that.
+  const [savedValues, setSavedValues] = useState(settings);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -18,14 +20,28 @@ export default function SettingsClient({ settings }: { settings: Record<SettingK
     setSaved(false);
   }
 
-  async function save() {
+  const changed = (Object.keys(values) as SettingKey[]).filter((key) => values[key] !== savedValues[key]);
+  const dirty = changed.length > 0;
+
+  // Leaving with unsaved settings asks first.
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+
+  async function save(event?: React.FormEvent) {
+    event?.preventDefault();
+    if (saving || !dirty) return;
     setSaving(true);
     setError(null);
     try {
       const response = await fetch("/api/admin/settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
+        // Only what changed, so two people saving different sections never undo each other.
+        body: JSON.stringify(Object.fromEntries(changed.map((key) => [key, values[key]]))),
       });
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
@@ -33,6 +49,7 @@ export default function SettingsClient({ settings }: { settings: Record<SettingK
         setSaving(false);
         return;
       }
+      setSavedValues(values);
       setSaved(true);
       setSaving(false);
       // The theme is applied by the layouts on the server, so a refresh repaints
@@ -45,7 +62,7 @@ export default function SettingsClient({ settings }: { settings: Record<SettingK
   }
 
   return (
-    <div className="space-y-4 max-w-2xl">
+    <form onSubmit={save} className="space-y-4 max-w-2xl pb-24">
       <Panel title="Business" className="p-5 space-y-3">
         <Field label="Name">
           <input value={values.business_name} onChange={(e) => set("business_name", e.target.value)} className={inputClass} style={inputStyle} />
@@ -110,6 +127,15 @@ export default function SettingsClient({ settings }: { settings: Record<SettingK
               ]}
               onChange={(v) => set("tax_pricing", v)}
             />
+            <Field label="Tax name on receipts" hint="The word printed next to the tax line, for example VAT.">
+              <input
+                value={values.tax_label}
+                onChange={(e) => set("tax_label", e.target.value)}
+                maxLength={20}
+                className={`${inputClass} max-w-48`}
+                style={inputStyle}
+              />
+            </Field>
             <div
               className="rounded-lg border p-3 text-xs space-y-1"
               style={{ borderColor: "var(--s-border)", color: "var(--s-ink-muted)" }}
@@ -139,29 +165,32 @@ export default function SettingsClient({ settings }: { settings: Record<SettingK
         />
       </Panel>
 
-      <div className="flex items-center gap-3">
-        <button
-          onClick={save}
-          disabled={saving}
-          className="inline-flex items-center gap-2 rounded-lg px-5 py-2.5 font-semibold text-white min-h-11 disabled:opacity-50"
-          style={{ background: "var(--s-brand)" }}
-        >
-          {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-          {saved ? (
-            <>
-              <Check className="w-4 h-4" /> Saved
-            </>
-          ) : (
-            "Save changes"
-          )}
-        </button>
-        {error && (
-          <span className="text-sm" style={{ color: "var(--s-bad)" }}>
-            {error}
-          </span>
+      <div
+        className="sticky bottom-3 z-10 flex flex-wrap items-center gap-3 rounded-2xl px-4 py-3"
+        style={{ background: "var(--s-panel)", boxShadow: "var(--s-shadow)" }}
+      >
+        <AdminButton type="submit" variant="primary" loading={saving} disabled={!dirty}>
+          Save changes
+        </AdminButton>
+        {dirty && (
+          <AdminButton type="button" variant="ghost" onClick={() => { setValues(savedValues); setError(null); }} disabled={saving}>
+            Undo
+          </AdminButton>
         )}
+        <span className="text-sm" aria-live="polite" style={{ color: error ? "var(--s-bad)" : "var(--s-ink-muted)" }}>
+          {error ??
+            (dirty ? (
+              `${changed.length} unsaved change${changed.length === 1 ? "" : "s"}`
+            ) : saved ? (
+              <span className="inline-flex items-center gap-1" style={{ color: "var(--s-good)" }}>
+                <Check className="h-4 w-4" /> Saved
+              </span>
+            ) : (
+              "Everything is saved"
+            ))}
+        </span>
       </div>
-    </div>
+    </form>
   );
 }
 
@@ -212,12 +241,16 @@ function Segmented({
         </p>
       </div>
       <div
+        role="group"
+        aria-label={label}
         className="inline-flex rounded-2xl border p-1 shrink-0"
         style={{ borderColor: "var(--s-border)", background: "var(--s-panel-alt)" }}
       >
         {options.map((option) => (
           <button
             key={option.value}
+            type="button"
+            aria-pressed={value === option.value}
             onClick={() => onChange(option.value)}
             className="rounded-xl px-3 py-1.5 text-sm font-semibold whitespace-nowrap"
             style={{
