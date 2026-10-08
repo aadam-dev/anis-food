@@ -58,7 +58,7 @@ export const SETTING_DEFAULTS: Record<SettingKey, string> = {
   tax_components: JSON.stringify(GHANA_STANDARD_COMPONENTS),
   receipt_header: "Anis Food and Drink",
   receipt_footer: "Thank you. Please come again!",
-  default_opening_float: "200",
+  default_opening_float: "0",
   // Bolt Food keeps a commission on every order. Stored as a fraction (0.2 = 20%).
   bolt_commission_rate: "0.2",
   // Anis is not deducting SSNIT yet. Switch on in Settings when it starts;
