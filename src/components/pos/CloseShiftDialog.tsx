@@ -62,7 +62,8 @@ export default function CloseShiftDialog({
     : ["count", "momo", "review"];
 
   const [step, setStep] = useState<Step>(steps[0]);
-  const [mode, setMode] = useState<"notes" | "total">("notes");
+  // Default to a single typed total; note-by-note is there for anyone who wants it.
+  const [mode, setMode] = useState<"notes" | "total">("total");
   const [counts, setCounts] = useState<DenominationCount>({});
   const [typedTotal, setTypedTotal] = useState("");
   const [momo, setMomo] = useState("");
